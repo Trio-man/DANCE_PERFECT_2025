@@ -1,8 +1,9 @@
 # backend.py
 
-# --- Imports: Flask for web server, CORS for cross-origin, Supabase for DB, dotenv for env vars, bcrypt for hashing, os for env access ---
+# --- Imports: Flask for web server, CORS for cross-origin, Supabase for DB, dotenv for env vars, bcrypt for hashing, os for env access, JWT for tokens ---
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from supabase import create_client
 from dotenv import load_dotenv
 import bcrypt
@@ -29,6 +30,10 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 # --- Create Flask app and enable CORS for frontend-backend communication ---
 app = Flask(__name__)
 CORS(app)  # Allow frontend calls
+
+# --- Configure JWT ---
+app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'your-secret-key-change-in-production')  # Change this in production!
+jwt = JWTManager(app)
 
 # --- Route: Test database connection ---
 @app.route('/test-connection')
@@ -145,18 +150,48 @@ def login():
         
         # Verify password
         if bcrypt.checkpw(password.encode('utf-8'), stored_password_hash.encode('utf-8')):
-            # Password is correct - return user info (excluding password hash)
+            # Password is correct - create JWT token
+            access_token = create_access_token(identity=user.get("id"))
+            
+            # Return user info and token (excluding password hash)
             user_info = {
                 "id": user.get("id"),
                 "email": user.get("email"),
                 "role": user.get("role")
             }
-            return jsonify({"message": "Login successful", "user": user_info}), 200
+            return jsonify({
+                "message": "Login successful", 
+                "user": user_info,
+                "access_token": access_token
+            }), 200
         else:
             return jsonify({"error": "Invalid email or password"}), 401
             
     except Exception as e:
         # Return error if database query fails
+        return jsonify({"error": str(e)}), 500
+
+# --- Route: Protected endpoint that requires JWT token ---
+@app.route('/profile', methods=['GET'])
+@jwt_required()
+def get_profile():
+    # Get the current user's ID from the JWT token
+    current_user_id = get_jwt_identity()
+    
+    try:
+        # Fetch user data from database
+        response = supabase.table("users").select("id, email, role").eq("id", current_user_id).execute()
+        
+        if not response.data:
+            return jsonify({"error": "User not found"}), 404
+        
+        user = response.data[0]
+        return jsonify({
+            "message": "Profile retrieved successfully",
+            "user": user
+        }), 200
+        
+    except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 # --- Run the Flask app if this file is executed directly ---
