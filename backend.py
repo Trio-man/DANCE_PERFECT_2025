@@ -19,6 +19,10 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 print(f"SUPABASE_URL loaded: {'Yes' if SUPABASE_URL else 'No'}")
 print(f"SUPABASE_KEY loaded: {'Yes' if SUPABASE_KEY else 'No'}")
 
+# --- Validate environment variables ---
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise ValueError("SUPABASE_URL and SUPABASE_KEY must be set in environment variables")
+
 # --- Initialize Supabase client for database operations ---
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
@@ -41,6 +45,29 @@ def test_connection():
 @app.route('/')
 def home():
     return "DancePerfect backend is running!"
+
+# --- Route: Test login with sample data ---
+@app.route('/test-login')
+def test_login():
+    return """
+    <h2>Test Login Endpoints</h2>
+    <p>Use these curl commands to test:</p>
+    
+    <h3>1. Register a new user:</h3>
+    <pre>curl -X POST http://localhost:5000/register \\
+    -H "Content-Type: application/json" \\
+    -d '{"email": "test@example.com", "password": "password123"}'</pre>
+    
+    <h3>2. Login with the user:</h3>
+    <pre>curl -X POST http://localhost:5000/login \\
+    -H "Content-Type: application/json" \\
+    -d '{"email": "test@example.com", "password": "password123"}'</pre>
+    
+    <h3>3. Test with wrong password:</h3>
+    <pre>curl -X POST http://localhost:5000/login \\
+    -H "Content-Type: application/json" \\
+    -d '{"email": "test@example.com", "password": "wrongpassword"}'</pre>
+    """
 
 # --- Route: User registration endpoint ---
 @app.route('/register', methods=['POST'])
@@ -81,6 +108,55 @@ def register():
         
     except Exception as e:
         # Return error if insertion fails
+        return jsonify({"error": str(e)}), 500
+
+# --- Route: User login endpoint ---
+@app.route('/login', methods=['POST'])
+def login():
+    # Parse JSON data from request
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "No JSON data provided"}), 400
+    
+    email = data.get("email")
+    password = data.get("password")
+    
+    # Debug: Print received credentials (remove this in production!)
+    print(f"Received login attempt for email: {email}")
+    print(f"Password length: {len(password) if password else 0} characters")
+
+    # Validate input
+    if not email or not password:
+        return jsonify({"error": "Email and password are required"}), 400
+
+    # Find user in database
+    try:
+        response = supabase.table("users").select("*").eq("email", email).execute()
+        
+        if not response.data:
+            return jsonify({"error": "Invalid email or password"}), 401
+        
+        user = response.data[0]
+        stored_password_hash = user.get("password_hash")
+        
+        # Check if password hash exists
+        if not stored_password_hash:
+            return jsonify({"error": "Invalid email or password"}), 401
+        
+        # Verify password
+        if bcrypt.checkpw(password.encode('utf-8'), stored_password_hash.encode('utf-8')):
+            # Password is correct - return user info (excluding password hash)
+            user_info = {
+                "id": user.get("id"),
+                "email": user.get("email"),
+                "role": user.get("role")
+            }
+            return jsonify({"message": "Login successful", "user": user_info}), 200
+        else:
+            return jsonify({"error": "Invalid email or password"}), 401
+            
+    except Exception as e:
+        # Return error if database query fails
         return jsonify({"error": str(e)}), 500
 
 # --- Run the Flask app if this file is executed directly ---
