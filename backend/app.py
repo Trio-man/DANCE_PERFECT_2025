@@ -9,5 +9,4 @@ app.register_blueprint(upload_bp, url_prefix='/api')
 
 if __name__ == '__main__':
     print("Flask app starting...")
-    app.run(debug=True, port=5000)
-
+    app.run(debug=True, port=3000)
