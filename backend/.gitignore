@@ -1,0 +1,26 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Flask debug logs
+*.log
+
+# Environment variables
+.env
+
+# Python virtual environment
+venv/
+ENV/
+env/
+.venv/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# VSCode settings (optional)
+.vscode/
+
+# Uploads or temporary files
+uploads/

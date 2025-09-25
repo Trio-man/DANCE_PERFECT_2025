@@ -1,10 +1,9 @@
-from flask import Blueprint, request, jsonify
-import os
-from services.analysis_service import compare_kinematics
+from flask import jsonify, request
 
-upload_bp = Blueprint('upload_bp', __name__)
+from backend.services.analysis_service import compare_kinematics
 
-@upload_bp.route('/upload-kinematics', methods=['POST'])
+
+@upload_bp.route('/upload-kinematics', methods=['POST']) # type: ignore
 def upload_kinematics():
     ref_file = request.files.get('reference')
     user_file = request.files.get('performance')
@@ -12,10 +11,7 @@ def upload_kinematics():
     if not ref_file or not user_file:
         return jsonify({'error': 'Missing files'}), 400
 
-    if not ref_file.filename.endswith('.csv') or not user_file.filename.endswith('.csv'):
-        return jsonify({'error': 'Files must be .csv format'}), 400
-
-    os.makedirs("uploads", exist_ok=True)
+    # Save to temp
     ref_path = f"uploads/{ref_file.filename}"
     user_path = f"uploads/{user_file.filename}"
     ref_file.save(ref_path)

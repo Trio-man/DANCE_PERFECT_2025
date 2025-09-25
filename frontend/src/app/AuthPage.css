@@ -1,0 +1,94 @@
+/* AuthPage.css */
+
+/* General page container */
+.container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background: linear-gradient(135deg, #e6f0ff, #ffffff);
+  font-family: Arial, sans-serif;
+  color: black;
+}
+
+/* Card styling */
+.card {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+  padding: 2rem;
+  width: 380px;
+  text-align: center;
+}
+
+/* Title */
+.title {
+  font-size: 1.8rem;
+  font-weight: bold;
+  margin-bottom: 1.5rem;
+  color: #003366;
+}
+
+/* Input fields */
+.input {
+  width: 100%;
+  padding: 0.8rem;
+  margin-bottom: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-size: 1rem;
+  outline: none;
+  transition: border 0.3s ease;
+}
+
+.input:focus {
+  border: 1px solid #0066cc;
+  box-shadow: 0 0 5px rgba(0, 102, 204, 0.3);
+}
+
+/* File input */
+.fileInput {
+  margin: 1rem 0;
+  padding: 0.5rem;
+  border: 2px dashed #0066cc;
+  border-radius: 8px;
+  cursor: pointer;
+  background: #f0f8ff;
+  transition: background 0.3s ease;
+}
+
+.fileInput:hover {
+  background: #e6f2ff;
+}
+
+/* Buttons */
+.button {
+  background: #0066cc;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 0.8rem 1.2rem;
+  cursor: pointer;
+  font-size: 1rem;
+  margin: 0.5rem 0;
+  width: 100%;
+  transition: background 0.3s ease;
+}
+
+.button:hover {
+  background: #004c99;
+}
+
+/* Toggle button (login/signup switch) */
+.toggleButton {
+  background: transparent;
+  color: #0066cc;
+  border: none;
+  cursor: pointer;
+  margin-top: 1rem;
+  font-size: 0.95rem;
+}
+
+.toggleButton:hover {
+  text-decoration: underline;
+}

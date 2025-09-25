@@ -5,6 +5,7 @@ def compare_kinematics(ref_path, user_path):
     ref_df = pd.read_csv(ref_path)
     user_df = pd.read_csv(user_path)
 
+    # Extract joint columns (e.g., 'hip_x', 'hip_y', 'hip_z')
     joints = ['hip', 'knee', 'ankle', 'shoulder', 'elbow']
     axes = ['x', 'y', 'z']
 
