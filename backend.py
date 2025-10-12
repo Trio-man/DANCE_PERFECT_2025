@@ -20,6 +20,8 @@ import requests
 import zipfile
 import io
 from pathlib import Path
+import pandas as pd
+import json
 
 # --- Load environment variables from .env file ---
 load_dotenv()
@@ -317,16 +319,72 @@ def fetch_mot_files_from_cloud_drive(cloud_drive_url, output_dir=None):
         print(f"Error fetching files from cloud drive: {e}")
         return []
 
-def read_mot_file(file_path):
+def read_mot_file_pandas(file_path):
+    """Read a .mot file and return it as a pandas DataFrame."""
+    with open(file_path) as f:
+        lines = f.readlines()
+    # Find where the 'time' header starts
+    start_index = next(i for i, line in enumerate(lines) if line.strip().startswith("time"))
+    # Read file from 'time' line onward
+    df = pd.read_csv(file_path, sep=r'\s+', skiprows=start_index)
+    return df
+
+def check_sync(file1, file2, tolerance=0.001):
+    """Check if two .mot files are synchronized based on their time columns."""
+    df1 = read_mot_file_pandas(file1)
+    df2 = read_mot_file_pandas(file2)
+
+    t1 = df1['time']
+    t2 = df2['time']
+
+    # Exact match check
+    if t1.equals(t2):
+        result = {
+            "synced": True,
+            "message": "✅ Files are perfectly synchronized.",
+            "time_diff": 0.0
+        }
+    else:
+        # Measure differences
+        start_diff = abs(t1.iloc[0] - t2.iloc[0])
+        end_diff = abs(t1.iloc[-1] - t2.iloc[-1])
+        sampling_diff = abs((t1[1] - t1[0]) - (t2[1] - t2[0]))
+
+        synced = all(diff < tolerance for diff in [start_diff, end_diff, sampling_diff])
+
+        result = {
+            "synced": synced,
+            "start_diff": start_diff,
+            "end_diff": end_diff,
+            "sampling_diff": sampling_diff,
+            "message": "✅ Files are effectively synced within tolerance."
+            if synced else "⚠️ Files are NOT synchronized."
+        }
+
+    return result
+
+def align_mot_files(file1, file2, output_path="aligned_file2.mot"):
+    """Interpolate file2 to match file1's time base if unsynced."""
+    df1 = read_mot_file_pandas(file1)
+    df2 = read_mot_file_pandas(file2)
+
+    df2_interp = df2.set_index('time').reindex(df1['time']).interpolate().reset_index()
+    df2_interp.to_csv(output_path, sep='\t', index=False)
+    print(f"✅ File '{file2}' aligned to '{file1}' and saved as '{output_path}'.")
+
+def read_mot_file(file_path, use_pandas=False):
     """
     Read and parse a .mot file into structured data for comparison
     
     Args:
         file_path (str): Path to the .mot file
+        use_pandas (bool): If True, use pandas for faster reading (returns DataFrame)
     
     Returns:
-        dict: Parsed .mot file data with structured frames and joints
+        dict or DataFrame: Parsed .mot file data with structured frames and joints, or pandas DataFrame if use_pandas=True
     """
+    if use_pandas:
+        return read_mot_file_pandas(file_path)
     try:
         print(f"Reading .mot file: {file_path}")
         
@@ -896,10 +954,79 @@ def get_algorithm_status():
                 "description": "Analyzes dance performance from video files",
                 "supported_formats": [".mp4", ".avi", ".mov", ".mot"],
                 "parameters": ["sensitivity", "output_format"]
+            },
+            {
+                "name": "MOT File Synchronization",
+                "version": "1.0",
+                "description": "Checks synchronization and aligns .mot files",
+                "supported_formats": [".mot"],
+                "parameters": ["tolerance", "align"],
+                "endpoints": ["/api/sync-mot-files"]
             }
         ],
         "system_status": "operational"
     }), 200
+
+@app.route('/api/sync-mot-files', methods=['POST'])
+@jwt_required()
+def sync_mot_files_endpoint():
+    """
+    Endpoint for checking synchronization and aligning .mot files
+    Returns synchronization status and optionally creates aligned files
+    """
+    try:
+        # Check if files are present in request
+        if 'file1' not in request.files or 'file2' not in request.files:
+            return jsonify({"error": "Both file1 and file2 are required for synchronization"}), 400
+        
+        file1 = request.files['file1']
+        file2 = request.files['file2']
+        
+        if file1.filename == '' or file2.filename == '':
+            return jsonify({"error": "Both files must have names"}), 400
+        
+        # Check if files are .mot files
+        if not (file1.filename.lower().endswith('.mot') and file2.filename.lower().endswith('.mot')):
+            return jsonify({"error": "Both files must be .mot files"}), 400
+        
+        # Get tolerance parameter from form data
+        tolerance = float(request.form.get('tolerance', 0.001))
+        align_files = request.form.get('align', 'false').lower() == 'true'
+        
+        # Save uploaded files to temporary storage
+        file1_path = save_uploaded_file(file1.read(), '.mot')
+        file2_path = save_uploaded_file(file2.read(), '.mot')
+        
+        # Check synchronization
+        sync_result = check_sync(file1_path, file2_path, tolerance)
+        
+        result = {
+            "status": "success",
+            "sync_check": sync_result,
+            "files": {
+                "file1": file1.filename,
+                "file2": file2.filename
+            },
+            "tolerance_used": tolerance
+        }
+        
+        # Align files if requested and not synced
+        if align_files and not sync_result["synced"]:
+            aligned_path = os.path.join(tempfile.gettempdir(), f"aligned_{file2.filename}")
+            align_mot_files(file1_path, file2_path, aligned_path)
+            result["aligned_file"] = {
+                "path": aligned_path,
+                "filename": f"aligned_{file2.filename}",
+                "message": "File has been aligned and saved"
+            }
+        
+        # Clean up temporary files
+        cleanup_temp_files(file1_path, file2_path)
+        
+        return jsonify(result), 200
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/compare-mot-files', methods=['POST'])
 @jwt_required()
