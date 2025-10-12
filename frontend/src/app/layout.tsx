@@ -1,25 +1,16 @@
-
-import type { Metadata } from "next";
-import { GeistSans, GeistMono } from "geist/font";
-import "./globals.css";
-
-export const metadata: Metadata = {
-  title: "DancePerfect",
-  description: "Analyze your hip-hop dance performance with AI-powered kinematic feedback.",
-};
-
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body
-        className={`${GeistSans.variable} ${GeistMono.variable} antialiased`}
-        suppressHydrationWarning={true} // Suppress hydration warnings for browser extension attributes
-      >
-        {children}
+      <body>
+        <header style={{ padding: '20px', backgroundColor: '#0070f3', color: '#fff', textAlign: 'center' }}>
+          <h1>DancePerfect</h1>
+        </header>
+
+        <main style={{ minHeight: '80vh', padding: '20px' }}>{children}</main>
+
+        <footer style={{ padding: '20px', backgroundColor: '#f1f1f1', textAlign: 'center' }}>
+          &copy; 2025 DancePerfect. All rights reserved.
+        </footer>
       </body>
     </html>
   );
