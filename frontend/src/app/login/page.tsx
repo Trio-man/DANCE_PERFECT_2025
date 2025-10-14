@@ -73,7 +73,7 @@ export default function LoginPage() {
           onClick={() => router.push('/signup')}
           className="mt-6 w-full text-blue-600 hover:underline font-semibold"
         >
-          Create Account
+          SignUp
         </motion.button>
       </motion.div>
     </div>
