@@ -1,16 +1,18 @@
+import './globals.css';
+
+export const metadata = {
+  title: 'DancePerfect',
+  description: 'Markerless motion capture dance analysis app',
+};
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body>
-        <header style={{ padding: '20px', backgroundColor: '#0070f3', color: '#fff', textAlign: 'center' }}>
-          <h1>DancePerfect</h1>
-        </header>
-
-        <main style={{ minHeight: '80vh', padding: '20px' }}>{children}</main>
-
-        <footer style={{ padding: '20px', backgroundColor: '#f1f1f1', textAlign: 'center' }}>
-          &copy; 2025 DancePerfect. All rights reserved.
-        </footer>
+    <html lang="en" suppressHydrationWarning>
+      <body
+        className="min-h-screen bg-white text-slate-800"
+        suppressHydrationWarning
+      >
+        {children}
       </body>
     </html>
   );
