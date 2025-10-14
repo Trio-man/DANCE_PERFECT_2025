@@ -14,8 +14,10 @@ const supabase = createClient(
 export default function UploadPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
-  const [file, setFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [dancerVideo, setDancerVideo] = useState<File | null>(null);
+  const [choreoVideo, setChoreoVideo] = useState<File | null>(null);
+  const [previewDancer, setPreviewDancer] = useState<string | null>(null);
+  const [previewChoreo, setPreviewChoreo] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [fileList, setFileList] = useState<string[]>([]);
@@ -28,44 +30,67 @@ export default function UploadPage() {
     };
     checkUser();
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session: Session | null) => {
-      if (!session?.user) router.push('/login');
-      else setUser(session.user);
-    });
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, session: Session | null) => {
+        if (!session?.user) router.push('/login');
+        else setUser(session.user);
+      }
+    );
 
     return () => listener.subscription.unsubscribe();
   }, [router]);
 
+  // Preview dancer video
   useEffect(() => {
-    if (!file) {
-      setPreviewUrl(null);
+    if (!dancerVideo) {
+      setPreviewDancer(null);
       return;
     }
-    const url = URL.createObjectURL(file);
-    setPreviewUrl(url);
+    const url = URL.createObjectURL(dancerVideo);
+    setPreviewDancer(url);
     return () => URL.revokeObjectURL(url);
-  }, [file]);
+  }, [dancerVideo]);
 
-  const handleUpload = async () => {
-    if (!file || !user) {
-      setStatus('Please select a file and log in first.');
+  // Preview choreographer video
+  useEffect(() => {
+    if (!choreoVideo) {
+      setPreviewChoreo(null);
       return;
     }
+    const url = URL.createObjectURL(choreoVideo);
+    setPreviewChoreo(url);
+    return () => URL.revokeObjectURL(url);
+  }, [choreoVideo]);
+
+  // Upload both videos
+  const handleUpload = async () => {
+    if (!dancerVideo || !choreoVideo || !user) {
+      setStatus('Please select both videos and make sure you are logged in.');
+      return;
+    }
+
     setLoading(true);
-    setStatus('Uploading...');
+    setStatus('Uploading videos...');
+
     try {
-      const filePath = `${user.id}/${encodeURIComponent(file.name)}`;
-      const { error } = await supabase.storage
+      // Upload Dancer video
+      const dancerPath = `${user.id}/dancer_${encodeURIComponent(dancerVideo.name)}`;
+      const { error: dancerError } = await supabase.storage
         .from('videos')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: true,
-        });
-      if (error) throw error;
-      setStatus('Upload successful! Click "List Files" to verify.');
+        .upload(dancerPath, dancerVideo, { cacheControl: '3600', upsert: true });
+      if (dancerError) throw dancerError;
+
+      // Upload Choreographer video
+      const choreoPath = `${user.id}/choreo_${encodeURIComponent(choreoVideo.name)}`;
+      const { error: choreoError } = await supabase.storage
+        .from('videos')
+        .upload(choreoPath, choreoVideo, { cacheControl: '3600', upsert: true });
+      if (choreoError) throw choreoError;
+
+      setStatus('✅ Both videos uploaded successfully! Click "List Files" to verify.');
     } catch (err) {
       console.error(err);
-      setStatus('Upload failed.');
+      setStatus('❌ Upload failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -77,9 +102,9 @@ export default function UploadPage() {
       return;
     }
     try {
-      const { data, error } = await supabase.storage
-        .from('videos')
-        .list(user.id, { limit: 100 });
+      const { data, error } = await supabase.storage.from('videos').list(user.id, {
+        limit: 100,
+      });
       if (error) throw error;
       const files = data.map((file) => file.name);
       setFileList(files);
@@ -117,34 +142,61 @@ export default function UploadPage() {
           <FiLogOut size={24} />
         </button>
 
-        <h1 className="text-3xl font-bold text-blue-600 mb-2">Upload Video 🎥</h1>
+        <h1 className="text-3xl font-bold text-blue-600 mb-2">Upload Videos 🎥</h1>
         <p className="text-slate-500 mb-6">Welcome {user?.email || 'User'}</p>
 
-        {/* File input */}
-        <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:border-gray-400">
+        {/* Dancer video input */}
+        <label className="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:border-gray-400 mb-4">
           <FiUploadCloud size={48} className="text-gray-400" />
           <span className="mt-2 text-gray-600">
-            {file ? file.name : 'Click or drag file to upload'}
+            {dancerVideo ? dancerVideo.name : "Upload Dancer's Video"}
           </span>
           <input
             type="file"
             accept="video/*"
             className="hidden"
-            onChange={(e) => setFile(e.target.files ? e.target.files[0] : null)}
+            onChange={(e) =>
+              setDancerVideo(e.target.files ? e.target.files[0] : null)
+            }
           />
         </label>
 
-        {/* Video preview */}
-        {previewUrl && (
+        {/* Dancer video preview */}
+        {previewDancer && (
           <video
-            src={previewUrl}
+            src={previewDancer}
             controls
-            className="w-full rounded-lg border border-slate-300 mt-4"
+            className="w-full rounded-lg border border-slate-300 mb-4"
+          />
+        )}
+
+        {/* Choreographer video input */}
+        <label className="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:border-gray-400 mb-4">
+          <FiUploadCloud size={48} className="text-gray-400" />
+          <span className="mt-2 text-gray-600">
+            {choreoVideo ? choreoVideo.name : "Upload Choreographer's Video"}
+          </span>
+          <input
+            type="file"
+            accept="video/*"
+            className="hidden"
+            onChange={(e) =>
+              setChoreoVideo(e.target.files ? e.target.files[0] : null)
+            }
+          />
+        </label>
+
+        {/* Choreographer video preview */}
+        {previewChoreo && (
+          <video
+            src={previewChoreo}
+            controls
+            className="w-full rounded-lg border border-slate-300 mb-4"
           />
         )}
 
         {/* Status message */}
-        {status && <p className="text-center text-gray-600 mt-4">{status}</p>}
+        {status && <p className="text-center text-gray-600 mt-2">{status}</p>}
 
         {/* Upload button */}
         <motion.button
@@ -154,7 +206,7 @@ export default function UploadPage() {
           onClick={handleUpload}
           className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition mt-4"
         >
-          {loading ? 'Uploading...' : 'Upload'}
+          {loading ? 'Uploading...' : 'Upload Both Videos'}
         </motion.button>
 
         {/* List files button */}
@@ -174,7 +226,9 @@ export default function UploadPage() {
             <h3 className="text-lg font-semibold text-gray-700">Uploaded Files:</h3>
             <ul className="text-left text-gray-600">
               {fileList.map((fileName, index) => (
-                <li key={index} className="mt-1">{fileName}</li>
+                <li key={index} className="mt-1">
+                  {fileName}
+                </li>
               ))}
             </ul>
           </div>

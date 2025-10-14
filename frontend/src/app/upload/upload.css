@@ -62,3 +62,22 @@ button:hover {
     color: red;
     margin-bottom: 10px;
 }
+
+/* New sections for dancer and choreographer */
+.section-title {
+    color: #d84315;
+    font-size: 20px;
+    margin-top: 30px;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    font-weight: bold;
+    border-bottom: 2px solid #e65100;
+    display: inline-block;
+    padding-bottom: 5px;
+}
+
+.dual-upload {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}

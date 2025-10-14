@@ -16,10 +16,12 @@ export default function HomePage() {
 
   useEffect(() => {
     const timer = setTimeout(async () => {
+      setShowIntro(false); // hide intro after timeout
       const { data } = await supabase.auth.getUser();
       if (data.user) router.push('/upload');
       else router.push('/login');
-    }, 2500); // intro shows for 3 seconds
+    }, 2500); // show intro for 2.5 seconds
+
     return () => clearTimeout(timer);
   }, [router]);
 
