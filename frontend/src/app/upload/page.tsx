@@ -45,9 +45,7 @@ export default function UploadPage() {
       const url = URL.createObjectURL(dancerVideo);
       setPreviewDancer(url);
       return () => URL.revokeObjectURL(url);
-    } else {
-      setPreviewDancer(null);
-    }
+    } else setPreviewDancer(null);
   }, [dancerVideo]);
 
   useEffect(() => {
@@ -55,9 +53,7 @@ export default function UploadPage() {
       const url = URL.createObjectURL(choreoVideo);
       setPreviewChoreo(url);
       return () => URL.revokeObjectURL(url);
-    } else {
-      setPreviewChoreo(null);
-    }
+    } else setPreviewChoreo(null);
   }, [choreoVideo]);
 
   const handleUpload = async () => {
@@ -169,9 +165,7 @@ export default function UploadPage() {
 
           {/* RIGHT: Choreographer Upload + File List */}
           <div className="flex-1 border rounded-xl p-6 bg-gray-50">
-            <h2 className="text-lg font-semibold mb-3 text-center">
-              Choreographer Video
-            </h2>
+            <h2 className="text-lg font-semibold mb-3 text-center">Choreographer Video</h2>
             <label className="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:border-gray-400 mb-4">
               <FiUploadCloud size={48} className="text-gray-400" />
               <span className="mt-2 text-gray-600">
@@ -194,24 +188,6 @@ export default function UploadPage() {
               />
             )}
 
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              disabled={loading || !user}
-              onClick={handleUpload}
-              className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition mb-4"
-            >
-              {loading ? 'Uploading...' : 'Upload Both Videos'}
-            </motion.button>
-
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              disabled={!user}
-              onClick={handleListFiles}
-              className="w-full bg-gray-600 text-white py-3 rounded-lg font-semibold hover:bg-gray-700 transition"
-            >
-              <FiList className="inline mr-2" /> List Files
-            </motion.button>
-
             {status && <p className="text-center text-gray-600 mt-3">{status}</p>}
 
             {fileList.length > 0 && (
@@ -221,14 +197,33 @@ export default function UploadPage() {
                 </h3>
                 <ul className="text-left text-gray-600 max-h-48 overflow-y-auto border-t pt-2">
                   {fileList.map((fileName, index) => (
-                    <li key={index} className="mt-1">
-                      {fileName}
-                    </li>
+                    <li key={index} className="mt-1">{fileName}</li>
                   ))}
                 </ul>
               </div>
             )}
           </div>
+        </div>
+
+        {/* Centered Buttons Below Both Boxes */}
+        <div className="flex flex-col md:flex-row gap-4 justify-center mt-6">
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            disabled={loading || !user}
+            onClick={handleUpload}
+            className="bg-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-700 transition"
+          >
+            {loading ? 'Uploading...' : 'Upload Both Videos'}
+          </motion.button>
+
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            disabled={!user}
+            onClick={handleListFiles}
+            className="bg-gray-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-gray-700 transition"
+          >
+            <FiList className="inline mr-2" /> List Files
+          </motion.button>
         </div>
       </div>
     </div>
