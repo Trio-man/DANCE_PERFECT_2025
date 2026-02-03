@@ -22,6 +22,50 @@ export default function UploadPage() {
   const [status, setStatus] = useState<string | null>(null);
   const [fileList, setFileList] = useState<string[]>([]);
 
+  const handleAnalyze = async () => {
+  setLoading(true);
+  setStatus("Sending MOT file to backend...");
+
+  // TEMP: manual MOT upload (integration test)
+  const fileInput = document.createElement("input");
+  fileInput.type = "file";
+  fileInput.accept = ".mot";
+
+  fileInput.onchange = async () => {
+    if (!fileInput.files?.[0]) {
+      setLoading(false);
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("mot_file", fileInput.files[0]);
+
+    try {
+      const response = await fetch("http://localhost:5000/analyze", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Analysis failed");
+      }
+
+      setStatus(`✅ MOT received: ${data.filename}`);
+      console.log("Backend response:", data);
+
+    } catch (err) {
+      console.error(err);
+      setStatus("❌ Failed to analyze MOT file");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  fileInput.click();
+};
+
   useEffect(() => {
     const checkUser = async () => {
       const { data } = await supabase.auth.getUser();
@@ -209,21 +253,25 @@ export default function UploadPage() {
         <div className="flex flex-col md:flex-row gap-4 justify-center mt-6">
           <motion.button
             whileTap={{ scale: 0.97 }}
-            disabled={loading || !user}
-            onClick={handleUpload}
-            className="bg-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-700 transition"
-          >
-            {loading ? 'Uploading...' : 'Upload Both Videos'}
-          </motion.button>
-
-          <motion.button
-            whileTap={{ scale: 0.97 }}
             disabled={!user}
             onClick={handleListFiles}
             className="bg-gray-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-gray-700 transition"
           >
             <FiList className="inline mr-2" /> List Files
           </motion.button>
+
+          <motion.button
+  whileTap={{ scale: 0.97 }}
+  disabled={loading || !user}
+  onClick={handleAnalyze}
+  className="bg-green-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-green-700 transition"
+>
+  Analyze 🎯
+</motion.button>
+
+
+          
+          
         </div>
       </div>
     </div>

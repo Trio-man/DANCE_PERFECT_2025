@@ -41,7 +41,11 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # --- Create Flask app and enable CORS for frontend-backend communication ---
 app = Flask(__name__)
-CORS(app)  # Allow frontend calls
+from flask_cors import CORS
+CORS(app, supports_credentials=True)
+
+from flask import request, jsonify
+print("ANALYZE HIT")
 
 # --- Configure JWT ---
 app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'your-secret-key-change-in-production')  # Change this in production!
@@ -63,28 +67,7 @@ def test_connection():
 def home():
     return "DancePerfect backend is running!"
 
-# --- Route: Test login with sample data ---
-@app.route('/test-login')
-def test_login():
-    return """
-    <h2>Test Login Endpoints</h2>
-    <p>Use these curl commands to test:</p>
-    
-    <h3>1. Register a new user:</h3>
-    <pre>curl -X POST http://localhost:5000/register \\
-    -H "Content-Type: application/json" \\
-    -d '{"email": "test@example.com", "password": "password123"}'</pre>
-    
-    <h3>2. Login with the user:</h3>
-    <pre>curl -X POST http://localhost:5000/login \\
-    -H "Content-Type: application/json" \\
-    -d '{"email": "test@example.com", "password": "password123"}'</pre>
-    
-    <h3>3. Test with wrong password:</h3>
-    <pre>curl -X POST http://localhost:5000/login \\
-    -H "Content-Type: application/json" \\
-    -d '{"email": "test@example.com", "password": "wrongpassword"}'</pre>
-    """
+
 
 # --- Route: User registration endpoint ---
 @app.route('/register', methods=['POST'])
@@ -811,45 +794,29 @@ def process_two_files(file1_path, file2_path, algorithm_params=None):
 
 # --- COMPUTATIONAL ALGORITHM API ENDPOINTS ---
 
-@app.route('/api/upload-files', methods=['POST'])
-@jwt_required()
-def upload_files():
-    """
-    Endpoint for uploading two files for computational processing
-    Requires authentication (JWT token)
-    """
-    try:
-        # Check if files are present in request
-        if 'file1' not in request.files or 'file2' not in request.files:
-            return jsonify({"error": "Both file1 and file2 are required"}), 400
-        
-        file1 = request.files['file1']
-        file2 = request.files['file2']
-        
-        if file1.filename == '' or file2.filename == '':
-            return jsonify({"error": "Both files must have names"}), 400
-        
-        # Get algorithm parameters from form data
-        algorithm_params = {
-            'sensitivity': request.form.get('sensitivity', 'medium'),
-            'output_format': request.form.get('output_format', 'json'),
-            # Add more parameters as needed
-        }
-        
-        # Save uploaded files to temporary storage
-        file1_path = save_uploaded_file(file1.read(), os.path.splitext(file1.filename)[1])
-        file2_path = save_uploaded_file(file2.read(), os.path.splitext(file2.filename)[1])
-        
-        # Process files with computational algorithm
-        results = process_two_files(file1_path, file2_path, algorithm_params)
-        
-        # Clean up temporary files
-        cleanup_temp_files(file1_path, file2_path)
-        
-        return jsonify(results), 200
-        
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+@app.route("/analyze", methods=["POST"])
+def analyze():
+    if "mot_file" not in request.files:
+        return jsonify({"error": "No MOT file received"}), 400
+
+    mot_file = request.files["mot_file"]
+
+    if mot_file.filename == "":
+        return jsonify({"error": "Empty filename"}), 400
+
+    if not mot_file.filename.lower().endswith(".mot"):
+        return jsonify({"error": "Invalid file type"}), 400
+
+    # Test read only
+    file_bytes = mot_file.read()
+
+    return jsonify({
+        "status": "success",
+        "filename": mot_file.filename,
+        "size_bytes": len(file_bytes)
+    }), 200
+
+
 
 @app.route('/api/process-algorithm', methods=['POST'])
 @jwt_required()
@@ -1000,6 +967,8 @@ def compare_mot_files_endpoint():
 # END OF COMPUTATIONAL ALGORITHM SECTION
 # ================================================================================================
 
-# --- Run the Flask app if this file is executed directly ---
+    # Fallback if nothing was sent
+    return jsonify({"error": "No data received"}), 400
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
