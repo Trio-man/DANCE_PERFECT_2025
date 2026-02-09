@@ -63,14 +63,16 @@ export default function ResultsTestPage() {
           </p>
         )}
 
-        {result && (
-          <div className="mt-4 bg-gray-50 border rounded-lg p-4">
-            <h2 className="font-semibold mb-2">Backend Response:</h2>
-            <pre className="text-sm overflow-x-auto">
-              {JSON.stringify(result, null, 2)}
-            </pre>
-          </div>
-        )}
+       {result && (
+  <div className="mt-4 bg-gray-50 border rounded-lg p-4">
+    <h2 className="font-semibold mb-2">Backend Response:</h2>
+    <pre className="text-sm overflow-x-auto">
+      {typeof result === 'string' 
+        ? result 
+        : JSON.stringify(result, null, 2)}
+    </pre>
+  </div>
+)}
       </div>
     </div>
   );
