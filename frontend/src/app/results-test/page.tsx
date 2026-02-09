@@ -4,7 +4,7 @@ import { useState } from 'react';
 
 export default function ResultsTestPage() {
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<unknown>(null);
   const [error, setError] = useState<string | null>(null);
 
   const testAnalyze = async () => {
@@ -30,7 +30,7 @@ export default function ResultsTestPage() {
       }
 
       setResult(data);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       setError(err.message || 'Failed to connect to backend');
     } finally {
