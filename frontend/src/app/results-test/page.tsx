@@ -31,11 +31,15 @@ export default function ResultsTestPage() {
 
       setResult(data);
     } catch (err: unknown) {
-      console.error(err);
-      setError(err.message || 'Failed to connect to backend');
-    } finally {
-      setLoading(false);
-    }
+       // ✅ Type guard for unknown errors
+  if (err instanceof Error) {
+    setError(err.message);
+  } else {
+    setError('Failed to connect to backend');
+  }
+} finally {
+  setLoading(false);
+}
   };
 
   return (
