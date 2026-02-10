@@ -16,9 +16,6 @@ import pandas as pd
 import numpy as np
 from scipy.signal import correlate
 import json
-# --- MediaPipe / video processing (used in MEDIAPIPE INTEGRATION section below) ---
-import cv2
-import mediapipe as mp
 
 # --- Load environment variables from .env file ---
 load_dotenv()
@@ -97,7 +94,6 @@ def register():
     password = data.get("password")
     
     # Debug: Print received credentials (remove this in production!)
-    #frontend
     print(f"Received registration attempt for email: {email}")
     print(f"Password length: {len(password) if password else 0} characters")
 
@@ -153,7 +149,7 @@ def login():
         if not response.data:
             return jsonify({"error": "Invalid email or password"}), 401
         
-        user = response.data[0] 
+        user = response.data[0]
         stored_password_hash = user.get("password_hash")
         
         # Check if password hash exists
@@ -483,83 +479,6 @@ def get_dance_alignment_status():
 # ================================================================================================
 # END OF DANCE ALIGNMENT ALGORITHM SECTION
 # ================================================================================================
-
-# -----MEDIAPIPE INTEGRATION------
-# This section uses MediaPipe Pose to extract body landmark coordinates from video frames.
-# Output is a CSV with columns: frame, landmark_id, x, y, z, visibility (for downstream dance analysis).
-# -----MEDIAPIPE INTEGRATION------
-
-# Access MediaPipe's pose solution (body landmark detection).
-mp_pose = mp.solutions.pose
-
-
-def extract_motion_from_video(video_path, output_csv):
-    """
-    Read a video file, run MediaPipe Pose on each frame, and save all landmark
-    coordinates (x, y, z, visibility) per frame to a CSV file.
-    """
-    # Open the video file for reading; cv2.VideoCapture returns a capture object.
-    cap = cv2.VideoCapture(video_path)
-
-    # Create the Pose estimator: process video (not single images), normal complexity,
-    # with smoothing and confidence thresholds for detection/tracking.
-    pose = mp_pose.Pose(
-        static_image_mode=False,   # False = optimize for video (tracking across frames).
-        model_complexity=1,        # 0=fast/light, 1=default, 2=most accurate/heavy.
-        smooth_landmarks=True,     # Reduce jitter by smoothing landmark positions over time.
-        min_detection_confidence=0.5,  # Minimum confidence to consider pose "detected" in a frame.
-        min_tracking_confidence=0.5    # Minimum confidence to keep tracking (after initial detection).
-    )
-
-    # List to collect one row per (frame, landmark): will hold frame_num, landmark_id, x, y, z, visibility.
-    data = []
-    # Current frame index (1-based for readability in the CSV).
-    frame_num = 0
-
-    # Loop until the video has no more frames or the capture is closed.
-    while cap.isOpened():
-        # Read one frame: success=True if a frame was read, frame is the image (BGR).
-        success, frame = cap.read()
-        # If no frame was read (end of video or error), exit the loop.
-        if not success:
-            break
-
-        # Increment frame counter so we know which frame each landmark row belongs to.
-        frame_num += 1
-        # MediaPipe expects RGB; OpenCV gives BGR, so convert for correct color channels.
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        # Run the pose pipeline on this frame; results contain pose_landmarks if a person was detected.
-        results = pose.process(rgb)
-
-        # Only record landmarks when at least one person was detected in this frame.
-        if results.pose_landmarks:
-            # idx = landmark index (0–32 in MediaPipe Pose), lm = single landmark with x, y, z, visibility.
-            for idx, lm in enumerate(results.pose_landmarks.landmark):
-                # Append one row: frame number, landmark id, normalized x/y/z, and visibility (0–1).
-                data.append([
-                    frame_num,   # Which frame this landmark came from.
-                    idx,         # Which of the 33 body landmarks (e.g. nose, shoulders).
-                    lm.x,        # Normalized x (0–1 relative to image width).
-                    lm.y,        # Normalized y (0–1 relative to image height).
-                    lm.z,        # Relative depth (smaller = closer to camera).
-                    lm.visibility  # Likelihood this landmark is visible (0–1).
-                ])
-
-    # Release the video file so it is not left open.
-    cap.release()
-    # Free MediaPipe Pose resources (e.g. GPU/CPU buffers).
-    pose.close()
-
-    # Build a DataFrame from the list of rows for easy CSV export and later analysis.
-    df = pd.DataFrame(
-        data,
-        columns=["frame", "landmark_id", "x", "y", "z", "visibility"]
-    )
-    # Write the table to CSV; index=False avoids writing row numbers as a column.
-    df.to_csv(output_csv, index=False)
-
-
-# -----MEDIAPIPE INTEGRATION------
 
 # --- Run the Flask app if this file is executed directly ---
 if __name__ == '__main__':
