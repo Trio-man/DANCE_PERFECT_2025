@@ -1,0 +1,26 @@
+============================================================
+MOTION CAPTURE RUN RESULT
+============================================================
+Timestamp: 2026-02-15T01:44:49.757925
+
+Input videos:
+  Reference: (reference CSV)
+  User:      (user CSV)
+
+Output CSVs:
+  Reference motion: motion_outputs\reference_motion.csv
+  User motion:      motion_outputs\user_motion.csv
+
+Comparison:
+  Similarity score (0-100):  85.61
+  Mean landmark distance:   0.143891
+  Frames compared:          707
+
+Full comparison (JSON):
+{
+  "similarity_score": 85.61,
+  "mean_landmark_distance": 0.143891,
+  "frames_compared": 707
+}
+
+============================================================
