@@ -14,6 +14,7 @@ const supabase = createClient(
 export default function UploadPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [dancerVideo, setDancerVideo] = useState<File | null>(null);
   const [choreoVideo, setChoreoVideo] = useState<File | null>(null);
   const [previewDancer, setPreviewDancer] = useState<string | null>(null);
@@ -22,61 +23,25 @@ export default function UploadPage() {
   const [status, setStatus] = useState<string | null>(null);
   const [fileList, setFileList] = useState<string[]>([]);
 
-  const handleAnalyze = async () => {
-  setLoading(true);
-  setStatus("Sending MOT file to backend...");
-
-  // TEMP: manual MOT upload (integration test)
-  const fileInput = document.createElement("input");
-  fileInput.type = "file";
-  fileInput.accept = ".mot";
-
-  fileInput.onchange = async () => {
-    if (!fileInput.files?.[0]) {
-      setLoading(false);
-      return;
-    }
-
-    const formData = new FormData();
-    formData.append("mot_file", fileInput.files[0]);
-
-    try {
-      const response = await fetch("http://localhost:5000/analyze", {
-        method: "POST",
-        body: formData,
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Analysis failed");
-      }
-
-      setStatus(`✅ MOT received: ${data.filename}`);
-      console.log("Backend response:", data);
-
-    } catch (err) {
-      console.error(err);
-      setStatus("❌ Failed to analyze MOT file");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  fileInput.click();
-};
-
+  // ============================
+  // AUTH CHECK
+  // ============================
   useEffect(() => {
     const checkUser = async () => {
+      setAuthLoading(true);
       const { data } = await supabase.auth.getUser();
-      if (!data.user) router.push('/login');
-      else setUser(data.user);
+      if (!data.user) {
+        router.replace('/login');
+      } else {
+        setUser(data.user);
+      }
+      setAuthLoading(false);
     };
     checkUser();
 
     const { data: listener } = supabase.auth.onAuthStateChange(
       (_event, session: Session | null) => {
-        if (!session?.user) router.push('/login');
+        if (!session?.user) router.replace('/login');
         else setUser(session.user);
       }
     );
@@ -84,22 +49,38 @@ export default function UploadPage() {
     return () => listener.subscription.unsubscribe();
   }, [router]);
 
+  // ============================
+  // VIDEO PREVIEWS
+  // ============================
   useEffect(() => {
+    let url: string | null = null;
     if (dancerVideo) {
-      const url = URL.createObjectURL(dancerVideo);
+      url = URL.createObjectURL(dancerVideo);
       setPreviewDancer(url);
-      return () => URL.revokeObjectURL(url);
-    } else setPreviewDancer(null);
+    } else {
+      setPreviewDancer(null);
+    }
+    return () => {
+      if (url) URL.revokeObjectURL(url);
+    };
   }, [dancerVideo]);
 
   useEffect(() => {
+    let url: string | null = null;
     if (choreoVideo) {
-      const url = URL.createObjectURL(choreoVideo);
+      url = URL.createObjectURL(choreoVideo);
       setPreviewChoreo(url);
-      return () => URL.revokeObjectURL(url);
-    } else setPreviewChoreo(null);
+    } else {
+      setPreviewChoreo(null);
+    }
+    return () => {
+      if (url) URL.revokeObjectURL(url);
+    };
   }, [choreoVideo]);
 
+  // ============================
+  // UPLOAD & LIST FILES
+  // ============================
   const handleUpload = async () => {
     if (!dancerVideo || !choreoVideo || !user) {
       setStatus('Please select both videos and make sure you are logged in.');
@@ -150,11 +131,59 @@ export default function UploadPage() {
     }
   };
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push('/login');
+  // ============================
+  // ANALYSIS
+  // ============================
+  const handleAnalyze = async () => {
+    if (!user) {
+      setStatus("User not authenticated.");
+      return;
+    }
+
+    setLoading(true);
+    setStatus("Requesting analysis from backend...");
+
+    try {
+      const response = await fetch("http://localhost:5000/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: user.id }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Analysis failed");
+
+      setStatus(`✅ Analysis complete! Score: ${data.score}`);
+      console.log("Backend response:", data);
+    } catch (err: any) {
+      console.error(err);
+      setStatus(`❌ ${err.message || "Analysis failed"}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.replace('/login');
+  };
+
+  // ============================
+  // BLOCK UI UNTIL AUTH CHECK
+  // ============================
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-gray-500">Checking authentication...</p>
+      </div>
+    );
+  }
+
+  if (!user) return null; // safety
+
+  // ============================
+  // MAIN UI
+  // ============================
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-4">
       <div className="w-full max-w-6xl bg-white border border-slate-200 shadow-md rounded-2xl p-8 relative">
@@ -179,9 +208,8 @@ export default function UploadPage() {
           Welcome {user?.email || 'User'}
         </p>
 
-        {/* Two-column layout */}
         <div className="flex flex-col md:flex-row gap-8">
-          {/* LEFT: Dancer Upload */}
+          {/* Dancer Video */}
           <div className="flex-1 border rounded-xl p-6 bg-gray-50">
             <h2 className="text-lg font-semibold mb-3 text-center">Dancer Video</h2>
             <label className="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:border-gray-400 mb-4">
@@ -193,9 +221,7 @@ export default function UploadPage() {
                 type="file"
                 accept="video/*"
                 className="hidden"
-                onChange={(e) =>
-                  setDancerVideo(e.target.files ? e.target.files[0] : null)
-                }
+                onChange={(e) => setDancerVideo(e.target.files ? e.target.files[0] : null)}
               />
             </label>
             {previewDancer && (
@@ -207,7 +233,7 @@ export default function UploadPage() {
             )}
           </div>
 
-          {/* RIGHT: Choreographer Upload + File List */}
+          {/* Choreo Video */}
           <div className="flex-1 border rounded-xl p-6 bg-gray-50">
             <h2 className="text-lg font-semibold mb-3 text-center">Choreographer Video</h2>
             <label className="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:border-gray-400 mb-4">
@@ -219,9 +245,7 @@ export default function UploadPage() {
                 type="file"
                 accept="video/*"
                 className="hidden"
-                onChange={(e) =>
-                  setChoreoVideo(e.target.files ? e.target.files[0] : null)
-                }
+                onChange={(e) => setChoreoVideo(e.target.files ? e.target.files[0] : null)}
               />
             </label>
             {previewChoreo && (
@@ -249,7 +273,6 @@ export default function UploadPage() {
           </div>
         </div>
 
-        {/* Centered Buttons Below Both Boxes */}
         <div className="flex flex-col md:flex-row gap-4 justify-center mt-6">
           <motion.button
             whileTap={{ scale: 0.97 }}
@@ -261,17 +284,13 @@ export default function UploadPage() {
           </motion.button>
 
           <motion.button
-  whileTap={{ scale: 0.97 }}
-  disabled={loading || !user}
-  onClick={handleAnalyze}
-  className="bg-green-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-green-700 transition"
->
-  Analyze 🎯
-</motion.button>
-
-
-          
-          
+            whileTap={{ scale: 0.97 }}
+            disabled={loading || !user}
+            onClick={handleAnalyze}
+            className="bg-green-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-green-700 transition"
+          >
+            Analyze 🎯
+          </motion.button>
         </div>
       </div>
     </div>

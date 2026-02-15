@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@supabase/supabase-js';
 import { motion } from 'framer-motion';
+import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -20,11 +20,27 @@ export default function LoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
+    setError(null);
 
-    if (error) setError('Invalid login credentials');
-    else router.push('/upload');
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) throw error;
+
+      if (data?.user) {
+        // Redirect to upload page after successful login
+        router.replace('/upload');
+      } else {
+        setError('Login failed. Please try again.');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Something went wrong.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -73,7 +89,7 @@ export default function LoginPage() {
           onClick={() => router.push('/signup')}
           className="mt-6 w-full text-blue-600 hover:underline font-semibold"
         >
-          SignUp
+          Sign Up
         </motion.button>
       </motion.div>
     </div>
