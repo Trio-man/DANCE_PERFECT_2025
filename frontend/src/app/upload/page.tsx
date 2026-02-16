@@ -79,39 +79,8 @@ export default function UploadPage() {
   }, [choreoVideo]);
 
   // ============================
-  // UPLOAD & LIST FILES
+  // LIST FILES
   // ============================
-  const handleUpload = async () => {
-    if (!dancerVideo || !choreoVideo || !user) {
-      setStatus('Please select both videos and make sure you are logged in.');
-      return;
-    }
-
-    setLoading(true);
-    setStatus('Uploading videos...');
-
-    try {
-      const dancerPath = `${user.id}/dancer_${encodeURIComponent(dancerVideo.name)}`;
-      const { error: dancerError } = await supabase.storage
-        .from('videos')
-        .upload(dancerPath, dancerVideo, { cacheControl: '3600', upsert: true });
-      if (dancerError) throw dancerError;
-
-      const choreoPath = `${user.id}/choreo_${encodeURIComponent(choreoVideo.name)}`;
-      const { error: choreoError } = await supabase.storage
-        .from('videos')
-        .upload(choreoPath, choreoVideo, { cacheControl: '3600', upsert: true });
-      if (choreoError) throw choreoError;
-
-      setStatus('✅ Both videos uploaded successfully! Click "List Files" to verify.');
-    } catch (err) {
-      console.error(err);
-      setStatus('❌ Upload failed. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleListFiles = async () => {
     if (!user) {
       setStatus('Please log in to view files.');
@@ -135,42 +104,37 @@ export default function UploadPage() {
   // ANALYSIS
   // ============================
   const handleAnalyze = async () => {
-    if (!user) {
-      setStatus("User not authenticated.");
+    if (!dancerVideo || !choreoVideo) {
+      setStatus("Please upload both videos first.");
       return;
     }
 
     setLoading(true);
-    setStatus("Requesting analysis from backend...");
+    setStatus("Preparing videos...");
 
-    try {
-      const response = await fetch("http://localhost:5000/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: user.id }),
+    const toDataUrl = (file: File) =>
+      new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
       });
 
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Analysis failed");
+    try {
+      const dancerDataUrl = await toDataUrl(dancerVideo);
+      const choreoDataUrl = await toDataUrl(choreoVideo);
 
-      setStatus(`✅ Analysis complete! Score: ${data.score}`);
-      console.log("Backend response:", data);
+      sessionStorage.setItem("dp_dancer", dancerDataUrl);
+      sessionStorage.setItem("dp_choreo", choreoDataUrl);
+
+      router.push("/loading");
     } catch (err: any) {
       console.error(err);
-      setStatus(`❌ ${err.message || "Analysis failed"}`);
-    } finally {
+      setStatus("❌ Failed to prepare videos.");
       setLoading(false);
     }
   };
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.replace('/login');
-  };
-
-  // ============================
-  // BLOCK UI UNTIL AUTH CHECK
-  // ============================
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -179,25 +143,22 @@ export default function UploadPage() {
     );
   }
 
-  if (!user) return null; // safety
+  if (!user) return null;
 
-  // ============================
-  // MAIN UI
-  // ============================
+  async function handleLogout(): Promise<void> {
+    await supabase.auth.signOut();
+    router.replace('/login');
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-4">
       <div className="w-full max-w-6xl bg-white border border-slate-200 shadow-md rounded-2xl p-8 relative">
-        <button
-          onClick={() => router.back()}
-          className="absolute top-4 left-4 text-gray-600 hover:text-gray-800"
-        >
+
+        <button onClick={() => router.back()} className="absolute top-4 left-4 text-gray-600 hover:text-gray-800">
           <FiArrowLeft size={24} />
         </button>
 
-        <button
-          onClick={handleLogout}
-          className="absolute top-4 right-4 text-red-600 hover:text-red-800"
-        >
+        <button onClick={handleLogout} className="absolute top-4 right-4 text-red-600 hover:text-red-800">
           <FiLogOut size={24} />
         </button>
 
@@ -209,74 +170,69 @@ export default function UploadPage() {
         </p>
 
         <div className="flex flex-col md:flex-row gap-8">
+
           {/* Dancer Video */}
           <div className="flex-1 border rounded-xl p-6 bg-gray-50">
             <h2 className="text-lg font-semibold mb-3 text-center">Dancer Video</h2>
-            <label className="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:border-gray-400 mb-4">
-              <FiUploadCloud size={48} className="text-gray-400" />
-              <span className="mt-2 text-gray-600">
-                {dancerVideo ? dancerVideo.name : "Upload Dancer's Video"}
-              </span>
-              <input
-                type="file"
-                accept="video/*"
-                className="hidden"
-                onChange={(e) => setDancerVideo(e.target.files ? e.target.files[0] : null)}
-              />
-            </label>
-            {previewDancer && (
-              <video
-                src={previewDancer}
-                controls
-                className="w-full rounded-lg border border-slate-300"
-              />
+
+            {previewDancer ? (
+              <div className="w-full h-36 md:h-80 rounded-lg overflow-hidden border border-slate-300 bg-black">
+                <video
+                  src={previewDancer}
+                  controls
+                  className="w-full h-full object-contain"
+                />
+              </div>
+            ) : (
+              <label className="flex flex-col items-center justify-center w-full h-36 md:h-80 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:border-gray-400">
+                <FiUploadCloud size={48} className="text-gray-400" />
+                <span className="mt-2 text-gray-600">Upload Dancer's Video</span>
+                <input
+                  type="file"
+                  accept="video/*"
+                  className="hidden"
+                  disabled={loading}
+                  onChange={(e) => setDancerVideo(e.target.files ? e.target.files[0] : null)}
+                />
+              </label>
             )}
           </div>
 
-          {/* Choreo Video */}
+          {/* Choreographer Video */}
           <div className="flex-1 border rounded-xl p-6 bg-gray-50">
             <h2 className="text-lg font-semibold mb-3 text-center">Choreographer Video</h2>
-            <label className="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:border-gray-400 mb-4">
-              <FiUploadCloud size={48} className="text-gray-400" />
-              <span className="mt-2 text-gray-600">
-                {choreoVideo ? choreoVideo.name : "Upload Choreographer's Video"}
-              </span>
-              <input
-                type="file"
-                accept="video/*"
-                className="hidden"
-                onChange={(e) => setChoreoVideo(e.target.files ? e.target.files[0] : null)}
-              />
-            </label>
-            {previewChoreo && (
-              <video
-                src={previewChoreo}
-                controls
-                className="w-full rounded-lg border border-slate-300 mb-4"
-              />
+
+            {previewChoreo ? (
+              <div className="w-full h-36 md:h-80 rounded-lg overflow-hidden border border-slate-300 bg-black">
+                <video
+                  src={previewChoreo}
+                  controls
+                  className="w-full h-full object-contain"
+                />
+              </div>
+            ) : (
+              <label className="flex flex-col items-center justify-center w-full h-36 md:h-80 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:border-gray-400">
+                <FiUploadCloud size={48} className="text-gray-400" />
+                <span className="mt-2 text-gray-600">Upload Choreographer's Video</span>
+                <input
+                  type="file"
+                  accept="video/*"
+                  className="hidden"
+                  disabled={loading}
+                  onChange={(e) => setChoreoVideo(e.target.files ? e.target.files[0] : null)}
+                />
+              </label>
             )}
 
             {status && <p className="text-center text-gray-600 mt-3">{status}</p>}
-
-            {fileList.length > 0 && (
-              <div className="mt-4">
-                <h3 className="text-lg font-semibold text-gray-700 mb-2 text-center">
-                  Uploaded Files
-                </h3>
-                <ul className="text-left text-gray-600 max-h-48 overflow-y-auto border-t pt-2">
-                  {fileList.map((fileName, index) => (
-                    <li key={index} className="mt-1">{fileName}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
           </div>
+
         </div>
 
         <div className="flex flex-col md:flex-row gap-4 justify-center mt-6">
           <motion.button
             whileTap={{ scale: 0.97 }}
-            disabled={!user}
+            disabled={!user || loading}
             onClick={handleListFiles}
             className="bg-gray-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-gray-700 transition"
           >
@@ -292,6 +248,7 @@ export default function UploadPage() {
             Analyze 🎯
           </motion.button>
         </div>
+
       </div>
     </div>
   );
