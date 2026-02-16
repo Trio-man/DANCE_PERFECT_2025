@@ -21,7 +21,6 @@ export default function UploadPage() {
   const [previewChoreo, setPreviewChoreo] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
-  const [fileList, setFileList] = useState<string[]>([]);
 
   // ============================
   // AUTH CHECK
@@ -91,9 +90,8 @@ export default function UploadPage() {
         limit: 100,
       });
       if (error) throw error;
-      const files = data.map((file) => file.name);
-      setFileList(files);
-      setStatus(files.length > 0 ? 'Files retrieved.' : 'No files found.');
+    const files = data.map((file) => file.name);
+    setStatus(files.length > 0 ? 'Files retrieved.' : 'No files found.');
     } catch (err) {
       console.error(err);
       setStatus('Failed to list files.');
