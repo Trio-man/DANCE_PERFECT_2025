@@ -33,10 +33,11 @@ export default function LoadingPage() {
         formData.append("video1", choreoBlob, "choreo.mp4");
         formData.append("video2", dancerBlob, "dancer.mp4");
 
-       const response = await fetch("http://127.0.0.1:5000/analyze", {
+       const response = await fetch("/api/analyze", {
   method: "POST",
   body: formData,
 });
+
 
         const data = await response.json();
 
