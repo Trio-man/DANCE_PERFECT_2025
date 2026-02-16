@@ -184,7 +184,9 @@ export default function UploadPage() {
             ) : (
               <label className="flex flex-col items-center justify-center w-full h-36 md:h-80 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:border-gray-400">
                 <FiUploadCloud size={48} className="text-gray-400" />
-                <span className="mt-2 text-gray-600">Upload Dancer's Video</span>
+                <span className="mt-2 text-gray-600">
+                  {"Upload Dancer's Video"}
+                </span>
                 <input
                   type="file"
                   accept="video/*"
@@ -211,7 +213,9 @@ export default function UploadPage() {
             ) : (
               <label className="flex flex-col items-center justify-center w-full h-36 md:h-80 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:border-gray-400">
                 <FiUploadCloud size={48} className="text-gray-400" />
-                <span className="mt-2 text-gray-600">Upload Choreographer's Video</span>
+                <span className="mt-2 text-gray-600">
+                  {"Upload Choreographer's Video"}
+                </span>
                 <input
                   type="file"
                   accept="video/*"
