@@ -3,12 +3,26 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
+type Feedback = {
+  summary?: string;
+  timing?: string;
+  body_part_comments?: string[];
+  top_errors?: string[];
+};
+
+type AnalysisResult = {
+  score: number;
+  comparison?: {
+    feedback?: Feedback;
+  };
+};
+
 export default function ResultsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const errorParam = searchParams.get('error'); // ✅ handle error route
-  const [result, setResult] = useState<any | null>(null);
+  const [result, setResult] = useState<AnalysisResult | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -24,7 +38,8 @@ export default function ResultsPage() {
         router.replace('/upload');
         return;
       }
-      setResult(JSON.parse(stored));
+  const parsed: AnalysisResult = JSON.parse(stored);
+  setResult(parsed);
     } catch (e) {
       console.error(e);
       router.replace('/upload');
