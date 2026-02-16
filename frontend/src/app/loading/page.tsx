@@ -52,11 +52,14 @@ export default function LoadingPage() {
         sessionStorage.setItem("dp_result", JSON.stringify(data));
 
         router.replace("/results");
-      } catch (err: any) {
-        // ✅ avoid showing old results if analysis fails
-        sessionStorage.removeItem("dp_result");
-        router.replace(`/results?error=${encodeURIComponent(err.message)}`);
-      }
+} catch (err: unknown) {
+  sessionStorage.removeItem("dp_result");
+
+  const message =
+    err instanceof Error ? err.message : "Analysis failed.";
+
+  router.replace(`/results?error=${encodeURIComponent(message)}`);
+}
     };
 
     analyze();
