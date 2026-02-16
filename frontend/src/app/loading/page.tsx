@@ -33,17 +33,16 @@ export default function LoadingPage() {
         formData.append("video1", choreoBlob, "choreo.mp4");
         formData.append("video2", dancerBlob, "dancer.mp4");
 
-       const response = await fetch("/api/analyze", {
+   const response = await fetch("/api/analyze", {
   method: "POST",
   body: formData,
 });
 
+const data = await response.json().catch(() => ({ error: "Analysis failed" }));
 
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.error || "Analysis failed.");
-        }
+if (!response.ok) {
+  throw new Error(data.error || "Analysis failed.");
+}
 
         // cleanup storage so it doesn't reuse old videos
         sessionStorage.removeItem("dp_dancer");
