@@ -128,7 +128,7 @@ export default function UploadPage() {
       sessionStorage.setItem("dp_choreo", choreoDataUrl);
 
       router.push("/loading");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       setStatus("❌ Failed to prepare videos.");
       setLoading(false);
