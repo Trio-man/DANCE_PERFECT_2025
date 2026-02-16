@@ -33,16 +33,16 @@ export default function LoadingPage() {
         formData.append("video1", choreoBlob, "choreo.mp4");
         formData.append("video2", dancerBlob, "dancer.mp4");
 
-       const response = await fetch("http://127.0.0.1:5000/analyze", {
+ const response = await fetch("https://dance-perfect-backend-service.onrender.com", {
   method: "POST",
   body: formData,
 });
 
-        const data = await response.json();
+const data = await response.json().catch(() => ({ error: "Analysis failed" }));
 
-        if (!response.ok) {
-          throw new Error(data.error || "Analysis failed.");
-        }
+if (!response.ok) {
+  throw new Error(data.error || "Analysis failed.");
+}
 
         // cleanup storage so it doesn't reuse old videos
         sessionStorage.removeItem("dp_dancer");
@@ -52,11 +52,14 @@ export default function LoadingPage() {
         sessionStorage.setItem("dp_result", JSON.stringify(data));
 
         router.replace("/results");
-      } catch (err: any) {
-        // ✅ avoid showing old results if analysis fails
-        sessionStorage.removeItem("dp_result");
-        router.replace(`/results?error=${encodeURIComponent(err.message)}`);
-      }
+} catch (err: unknown) {
+  sessionStorage.removeItem("dp_result");
+
+  const message =
+    err instanceof Error ? err.message : "Analysis failed.";
+
+  router.replace(`/results?error=${encodeURIComponent(message)}`);
+}
     };
 
     analyze();

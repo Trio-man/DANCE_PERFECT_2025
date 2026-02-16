@@ -21,7 +21,6 @@ export default function UploadPage() {
   const [previewChoreo, setPreviewChoreo] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
-  const [fileList, setFileList] = useState<string[]>([]);
 
   // ============================
   // AUTH CHECK
@@ -91,9 +90,8 @@ export default function UploadPage() {
         limit: 100,
       });
       if (error) throw error;
-      const files = data.map((file) => file.name);
-      setFileList(files);
-      setStatus(files.length > 0 ? 'Files retrieved.' : 'No files found.');
+    const files = data.map((file) => file.name);
+    setStatus(files.length > 0 ? 'Files retrieved.' : 'No files found.');
     } catch (err) {
       console.error(err);
       setStatus('Failed to list files.');
@@ -128,7 +126,7 @@ export default function UploadPage() {
       sessionStorage.setItem("dp_choreo", choreoDataUrl);
 
       router.push("/loading");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       setStatus("❌ Failed to prepare videos.");
       setLoading(false);
@@ -186,7 +184,9 @@ export default function UploadPage() {
             ) : (
               <label className="flex flex-col items-center justify-center w-full h-36 md:h-80 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:border-gray-400">
                 <FiUploadCloud size={48} className="text-gray-400" />
-                <span className="mt-2 text-gray-600">Upload Dancer's Video</span>
+                <span className="mt-2 text-gray-600">
+                  {"Upload Dancer's Video"}
+                </span>
                 <input
                   type="file"
                   accept="video/*"
@@ -213,7 +213,9 @@ export default function UploadPage() {
             ) : (
               <label className="flex flex-col items-center justify-center w-full h-36 md:h-80 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:border-gray-400">
                 <FiUploadCloud size={48} className="text-gray-400" />
-                <span className="mt-2 text-gray-600">Upload Choreographer's Video</span>
+                <span className="mt-2 text-gray-600">
+                  {"Upload Choreographer's Video"}
+                </span>
                 <input
                   type="file"
                   accept="video/*"

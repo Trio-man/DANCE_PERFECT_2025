@@ -13,7 +13,7 @@ export default function ResultsTestPage() {
     setResult(null);
 
     try {
-      const response = await fetch('http://localhost:5000/analyze', {
+      const response = await fetch('https://dance-perfect-backend-service.onrender.com', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
