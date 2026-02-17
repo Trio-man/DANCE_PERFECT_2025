@@ -75,23 +75,36 @@ export default function UploadPage() {
   // -------------------------
   // VIDEO PREVIEWS
   // -------------------------
-  useEffect(() => {
-    let url: string | null = null;
-    if (dancerVideo) {
-      url = URL.createObjectURL(dancerVideo);
-      setPreviewDancer(url);
-    } else setPreviewDancer(null);
-    return () => url && URL.revokeObjectURL(url);
-  }, [dancerVideo]);
+ useEffect(() => {
+  let url: string | null = null;
 
-  useEffect(() => {
-    let url: string | null = null;
-    if (choreoVideo) {
-      url = URL.createObjectURL(choreoVideo);
-      setPreviewChoreo(url);
-    } else setPreviewChoreo(null);
-    return () => url && URL.revokeObjectURL(url);
-  }, [choreoVideo]);
+  if (dancerVideo) {
+    url = URL.createObjectURL(dancerVideo);
+    setPreviewDancer(url);
+  } else {
+    setPreviewDancer(null);
+  }
+
+  // Cleanup function always returns void
+  return () => {
+    if (url) URL.revokeObjectURL(url);
+  };
+}, [dancerVideo]);
+
+ useEffect(() => {
+  let url: string | null = null;
+
+  if (choreoVideo) {
+    url = URL.createObjectURL(choreoVideo);
+    setPreviewChoreo(url);
+  } else {
+    setPreviewChoreo(null);
+  }
+
+  return () => {
+    if (url) URL.revokeObjectURL(url);
+  };
+}, [choreoVideo]);
 
   // -------------------------
   // LIST FILES
