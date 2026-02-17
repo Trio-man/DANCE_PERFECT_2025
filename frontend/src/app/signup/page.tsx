@@ -1,10 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 import { motion } from 'framer-motion';
-
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -20,8 +19,11 @@ export default function SignupPage() {
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     setLoading(true);
+
     const { error } = await supabase.auth.signUp({ email, password });
+
     setLoading(false);
 
     if (error) setError(error.message);
@@ -29,19 +31,32 @@ export default function SignupPage() {
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.8 }}
-      className="min-h-screen flex flex-col items-center justify-center bg-white"
-    >
+    <div className="relative min-h-screen flex items-center justify-center overflow-hidden px-4">
+      {/* Animated Gradient Background */}
       <motion.div
-        initial={{ y: 30, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.6 }}
-        className="bg-white shadow-md rounded-xl p-8 w-full max-w-md border border-slate-200"
+        className="absolute inset-0"
+        style={{
+          background: 'linear-gradient(135deg, #fbc2eb, #a6c1ee, #fbc2eb)',
+          backgroundSize: '400% 400%',
+        }}
+        animate={{ backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] }}
+        transition={{ duration: 15, repeat: Infinity, ease: 'easeInOut' }}
+      />
+
+      {/* Signup Form */}
+      <motion.div
+        initial={{ y: 30, opacity: 0, scale: 0.98 }}
+        animate={{ y: 0, opacity: 1, scale: 1 }}
+        transition={{ duration: 0.6, ease: 'easeOut' }}
+        className="relative z-10 bg-white/80 backdrop-blur-md shadow-md rounded-xl p-8 w-full max-w-md border border-slate-200"
       >
-        <h2 className="text-2xl font-bold text-blue-600 mb-6 text-center">Sign Up 👤</h2>
+        <h2 className="text-2xl font-bold text-blue-600 mb-2 text-center">
+          Sign Up 👤
+        </h2>
+
+        <p className="text-slate-600 text-center mb-6">
+          Create your DancePerfect account
+        </p>
 
         {error && <p className="text-red-600 mb-4 text-center">{error}</p>}
 
@@ -51,22 +66,24 @@ export default function SignupPage() {
             placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="border border-slate-300 rounded-lg w-full p-2"
+            className="border border-slate-300 rounded-lg w-full p-3"
             required
           />
+
           <input
             type="password"
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="border border-slate-300 rounded-lg w-full p-2"
+            className="border border-slate-300 rounded-lg w-full p-3"
             required
           />
+
           <motion.button
             whileTap={{ scale: 0.97 }}
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold hover:bg-blue-700 transition"
+            className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition"
           >
             {loading ? 'Signing up...' : 'Sign Up'}
           </motion.button>
@@ -75,11 +92,11 @@ export default function SignupPage() {
         <motion.button
           whileTap={{ scale: 0.97 }}
           onClick={() => router.push('/login')}
-          className="mt-4 w-full text-blue-600 hover:underline font-semibold"
+          className="mt-5 w-full text-blue-600 hover:underline font-semibold"
         >
           ← Back to Login
         </motion.button>
       </motion.div>
-    </motion.div>
+    </div>
   );
 }
