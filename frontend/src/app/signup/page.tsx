@@ -39,7 +39,7 @@ export default function SignupPage() {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.8 }}
-      className="min-h-screen flex items-center justify-center px-4 bg-gradient-to-br from-[#e0f7fa] via-[#ffe4e6] to-[#dbeafe] animate-gradient"
+      className="min-h-screen flex items-center justify-center px-4 bg-gradient-to-br from-white via-[#cde7ff] to-[#d6c1ff] animate-gradient"
     >
       <motion.div
         initial={{ scale: 0.95, opacity: 0, y: 20 }}
@@ -47,7 +47,7 @@ export default function SignupPage() {
         transition={{ duration: 0.5 }}
         className="w-full max-w-md p-10 bg-white/85 backdrop-blur-lg rounded-xl shadow-md text-center"
       >
-        <h2 className="text-2xl font-bold text-blue-700 mb-2">Sign Up 👤</h2>
+        <h2 className="text-2xl font-bold text-purple-700 mb-2">Sign Up 👤</h2>
         <p className="text-slate-600 mb-6">Create your DancePerfect account</p>
 
         {error && <p className="text-red-600 mb-4 font-medium">{error}</p>}
@@ -58,7 +58,7 @@ export default function SignupPage() {
             placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="border border-slate-300 rounded-lg w-full p-3 outline-none focus:ring-2 focus:ring-pink-300"
+            className="border border-slate-300 rounded-lg w-full p-3 outline-none focus:ring-2 focus:ring-purple-300"
             required
           />
           <input
@@ -66,7 +66,7 @@ export default function SignupPage() {
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="border border-slate-300 rounded-lg w-full p-3 outline-none focus:ring-2 focus:ring-pink-300"
+            className="border border-slate-300 rounded-lg w-full p-3 outline-none focus:ring-2 focus:ring-purple-300"
             required
           />
 
@@ -74,7 +74,7 @@ export default function SignupPage() {
             whileTap={{ scale: 0.97 }}
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-60"
+            className="w-full bg-purple-600 text-white py-3 rounded-lg font-semibold hover:bg-purple-700 transition disabled:opacity-60"
           >
             {loading ? 'Signing up...' : 'Sign Up'}
           </motion.button>
@@ -83,7 +83,7 @@ export default function SignupPage() {
         <motion.button
           whileTap={{ scale: 0.97 }}
           onClick={() => router.push('/login')}
-          className="mt-5 w-full text-blue-700 hover:underline font-semibold"
+          className="mt-5 w-full text-purple-700 hover:underline font-semibold"
         >
           ← Back to Login
         </motion.button>
