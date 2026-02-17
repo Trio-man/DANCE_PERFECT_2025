@@ -41,10 +41,10 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden px-4">
-      {/* Animated Gradient Background */}
+    <div className="relative min-h-screen flex items-center justify-center overflow-hidden px-4">
+      {/* Gradient Background */}
       <motion.div
-        className="absolute inset-0 -z-10"
+        className="absolute inset-0"
         style={{
           background: 'linear-gradient(135deg, #fbc2eb, #a6c1ee, #fbc2eb)',
           backgroundSize: '400% 400%',
@@ -58,10 +58,10 @@ export default function LoginPage() {
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ duration: 0.5 }}
-        className="bg-white border border-slate-200 shadow-md rounded-xl p-10 w-full max-w-md text-center relative z-10"
+        className="relative z-10 bg-white/80 backdrop-blur-md border border-slate-200 shadow-md rounded-xl p-10 w-full max-w-md text-center"
       >
         <h1 className="text-3xl font-bold text-blue-600 mb-2">Welcome Back 👋</h1>
-        <p className="text-slate-500 mb-8">Sign in to continue</p>
+        <p className="text-slate-700 mb-8">Sign in to continue</p>
 
         {error && <p className="text-red-600 mb-4">{error}</p>}
 
