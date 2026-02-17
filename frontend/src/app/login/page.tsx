@@ -41,7 +41,7 @@ export default function LoginPage() {
       animate={{ opacity: 1 }}
       transition={{ duration: 0.8 }}
       className="min-h-screen flex items-center justify-center px-4
-                 bg-gradient-to-br from-[#c7baff] via-[#d6e9ff] to-white
+                 bg-gradient-to-br from-[#d6c1ff] via-[#cde7ff] to-white
                  animate-gradient bg-[length:400%_400%]"
     >
       <motion.div
@@ -61,7 +61,8 @@ export default function LoginPage() {
             placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full p-3 rounded-lg outline-none focus:ring-2 focus:ring-[#4b0082] bg-white/60 placeholder:text-gray-400"
+            className="w-full p-3 rounded-lg border border-slate-300 outline-none
+                       focus:ring-2 focus:ring-[#4b0082] bg-white/60 placeholder:text-gray-400"
             required
           />
           <input
@@ -69,7 +70,8 @@ export default function LoginPage() {
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full p-3 rounded-lg outline-none focus:ring-2 focus:ring-[#4b0082] bg-white/60 placeholder:text-gray-400"
+            className="w-full p-3 rounded-lg border border-slate-300 outline-none
+                       focus:ring-2 focus:ring-[#4b0082] bg-white/60 placeholder:text-gray-400"
             required
           />
 
