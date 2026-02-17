@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { createClient } from '@supabase/supabase-js';
@@ -12,12 +12,13 @@ const supabase = createClient(
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const [email, setEmail] = useState<string>('');
+  const [password, setPassword] = useState<string>('');
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
+
+  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
@@ -30,10 +31,14 @@ export default function LoginPage() {
 
       if (error) throw error;
 
-      if (data?.user) router.replace('/upload');
-      else setError('Login failed. Please try again.');
+      if (data?.user) {
+        router.replace('/upload');
+      } else {
+        setError('Login failed. Please try again.');
+      }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Something went wrong.';
+      const message =
+        err instanceof Error ? err.message : 'Something went wrong.';
       setError(message);
     } finally {
       setLoading(false);
@@ -41,45 +46,47 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center overflow-hidden px-4">
-      {/* Gradient Background */}
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.8 }}
+      className="min-h-screen flex items-center justify-center px-4 bg-gradient-to-br from-sky-200 via-white to-pink-200"
+    >
       <motion.div
-        className="absolute inset-0"
-        style={{
-          background: 'linear-gradient(135deg, #fbc2eb, #a6c1ee, #fbc2eb)',
-          backgroundSize: '400% 400%',
-        }}
-        animate={{ backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] }}
-        transition={{ duration: 15, repeat: Infinity, ease: 'easeInOut' }}
-      />
-
-      {/* Login Form */}
-      <motion.div
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
+        initial={{ scale: 0.95, opacity: 0, y: 20 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="relative z-10 bg-white/80 backdrop-blur-md border border-slate-200 shadow-md rounded-xl p-10 w-full max-w-md text-center"
+        className="bg-white/80 backdrop-blur border border-slate-200 shadow-md rounded-xl p-10 w-full max-w-md text-center"
       >
-        <h1 className="text-3xl font-bold text-blue-600 mb-2">Welcome Back 👋</h1>
-        <p className="text-slate-700 mb-8">Sign in to continue</p>
+        <h1 className="text-3xl font-bold text-blue-600 mb-2">
+          Welcome Back 👋
+        </h1>
+        <p className="text-slate-600 mb-8">Sign in to continue</p>
 
-        {error && <p className="text-red-600 mb-4">{error}</p>}
+        {error && (
+          <p className="text-red-600 mb-4 font-medium text-center">{error}</p>
+        )}
 
         <form onSubmit={handleLogin} className="space-y-4">
           <input
             type="email"
             placeholder="Email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="border border-slate-300 rounded-lg w-full p-3"
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+              setEmail(e.target.value)
+            }
+            className="border border-slate-300 rounded-lg w-full p-3 outline-none focus:ring-2 focus:ring-blue-400"
             required
           />
+
           <input
             type="password"
             placeholder="Password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="border border-slate-300 rounded-lg w-full p-3"
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+              setPassword(e.target.value)
+            }
+            className="border border-slate-300 rounded-lg w-full p-3 outline-none focus:ring-2 focus:ring-blue-400"
             required
           />
 
@@ -87,7 +94,7 @@ export default function LoginPage() {
             whileTap={{ scale: 0.97 }}
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition"
+            className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-60"
           >
             {loading ? 'Logging in...' : 'Login'}
           </motion.button>
@@ -96,11 +103,11 @@ export default function LoginPage() {
         <motion.button
           whileTap={{ scale: 0.97 }}
           onClick={() => router.push('/signup')}
-          className="mt-6 w-full text-blue-600 hover:underline font-semibold"
+          className="mt-6 w-full text-blue-700 hover:underline font-semibold"
         >
           Sign Up
         </motion.button>
       </motion.div>
-    </div>
+    </motion.div>
   );
 }
