@@ -13,33 +13,22 @@ const supabase = createClient(
 export default function LoginPage() {
   const router = useRouter();
 
-  const [email, setEmail] = useState<string>('');
-  const [password, setPassword] = useState<string>('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState<boolean>(false);
+  const [loading, setLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
-
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-
-      if (data?.user) {
-        router.replace('/upload');
-      } else {
-        setError('Login failed. Please try again.');
-      }
+      if (data?.user) router.replace('/upload');
+      else setError('Login failed. Please try again.');
     } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : 'Something went wrong.';
-      setError(message);
+      setError(err instanceof Error ? err.message : 'Something went wrong.');
     } finally {
       setLoading(false);
     }
@@ -56,36 +45,34 @@ export default function LoginPage() {
         initial={{ scale: 0.95, opacity: 0, y: 20 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="bg-white/80 backdrop-blur border border-slate-200 shadow-md rounded-xl p-10 w-full max-w-md text-center"
+        className="relative w-full max-w-md p-10 bg-white/80 backdrop-blur-lg rounded-xl shadow-md text-center"
       >
-        <h1 className="text-3xl font-bold text-blue-600 mb-2">
-          Welcome Back 👋
-        </h1>
+        {/* Animated neon border highlights */}
+        <motion.div
+          className="absolute inset-0 rounded-xl border-2 border-transparent pointer-events-none"
+          animate={{ borderColor: ['#00ffff', '#ff00ff', '#8a2be2', '#00ffff'] }}
+          transition={{ repeat: Infinity, duration: 3, ease: 'linear' }}
+        />
+
+        <h1 className="text-3xl font-bold text-blue-600 mb-2">Welcome Back 👋</h1>
         <p className="text-slate-600 mb-8">Sign in to continue</p>
 
-        {error && (
-          <p className="text-red-600 mb-4 font-medium text-center">{error}</p>
-        )}
+        {error && <p className="text-red-600 mb-4 font-medium">{error}</p>}
 
-        <form onSubmit={handleLogin} className="space-y-4">
+        <form onSubmit={handleLogin} className="space-y-4 relative z-10">
           <input
             type="email"
             placeholder="Email"
             value={email}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              setEmail(e.target.value)
-            }
+            onChange={(e) => setEmail(e.target.value)}
             className="border border-slate-300 rounded-lg w-full p-3 outline-none focus:ring-2 focus:ring-blue-400"
             required
           />
-
           <input
             type="password"
             placeholder="Password"
             value={password}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              setPassword(e.target.value)
-            }
+            onChange={(e) => setPassword(e.target.value)}
             className="border border-slate-300 rounded-lg w-full p-3 outline-none focus:ring-2 focus:ring-blue-400"
             required
           />

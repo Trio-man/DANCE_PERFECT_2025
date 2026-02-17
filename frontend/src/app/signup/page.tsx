@@ -2,8 +2,8 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@supabase/supabase-js';
 import { motion } from 'framer-motion';
+import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -13,10 +13,10 @@ const supabase = createClient(
 export default function SignupPage() {
   const router = useRouter();
 
-  const [email, setEmail] = useState<string>('');
-  const [password, setPassword] = useState<string>('');
-  const [loading, setLoading] = useState<boolean>(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   const handleSignup = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -25,14 +25,10 @@ export default function SignupPage() {
 
     try {
       const { error } = await supabase.auth.signUp({ email, password });
-
       if (error) throw error;
-
       router.push('/login');
     } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : 'Something went wrong.';
-      setError(message);
+      setError(err instanceof Error ? err.message : 'Something went wrong.');
     } finally {
       setLoading(false);
     }
@@ -43,44 +39,40 @@ export default function SignupPage() {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.8 }}
-      className="min-h-screen flex flex-col items-center justify-center px-4 bg-gradient-to-br from-pink-200 via-white to-sky-200"
+      className="min-h-screen flex items-center justify-center px-4 bg-gradient-to-br from-violet-300 via-pink-300 to-cyan-300"
     >
       <motion.div
-        initial={{ y: 30, opacity: 0, scale: 0.95 }}
-        animate={{ y: 0, opacity: 1, scale: 1 }}
-        transition={{ duration: 0.6 }}
-        className="min-h-screen flex flex-col items-center justify-center px-4 bg-gradient-to-br from-violet-300 via-pink-300 to-cyan-300"
+        initial={{ scale: 0.95, opacity: 0, y: 20 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="relative w-full max-w-md p-10 bg-white/85 backdrop-blur-lg rounded-xl shadow-md text-center"
       >
-        <h2 className="text-2xl font-bold text-blue-700 mb-2 text-center">
-          Sign Up 👤
-        </h2>
-        <p className="text-slate-600 mb-6 text-center">
-          Create your DancePerfect account
-        </p>
+        {/* Animated neon border highlights */}
+        <motion.div
+          className="absolute inset-0 rounded-xl border-2 border-transparent pointer-events-none"
+          animate={{ borderColor: ['#8a2be2', '#ff00ff', '#00ffff', '#8a2be2'] }}
+          transition={{ repeat: Infinity, duration: 3, ease: 'linear' }}
+        />
 
-        {error && (
-          <p className="text-red-600 mb-4 text-center font-medium">{error}</p>
-        )}
+        <h2 className="text-2xl font-bold text-blue-700 mb-2">Sign Up 👤</h2>
+        <p className="text-slate-600 mb-6">Create your DancePerfect account</p>
 
-        <form onSubmit={handleSignup} className="space-y-4">
+        {error && <p className="text-red-600 mb-4 font-medium">{error}</p>}
+
+        <form onSubmit={handleSignup} className="space-y-4 relative z-10">
           <input
             type="email"
             placeholder="Email"
             value={email}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              setEmail(e.target.value)
-            }
+            onChange={(e) => setEmail(e.target.value)}
             className="border border-slate-300 rounded-lg w-full p-3 outline-none focus:ring-2 focus:ring-pink-300"
             required
           />
-
           <input
             type="password"
             placeholder="Password"
             value={password}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              setPassword(e.target.value)
-            }
+            onChange={(e) => setPassword(e.target.value)}
             className="border border-slate-300 rounded-lg w-full p-3 outline-none focus:ring-2 focus:ring-pink-300"
             required
           />
