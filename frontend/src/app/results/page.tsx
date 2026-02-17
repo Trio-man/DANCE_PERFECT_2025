@@ -2,7 +2,11 @@
 
 import { useEffect, useMemo, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Image from 'next/image';
 
+// -----------------------------
+// Types
+// -----------------------------
 type TimelineItem = {
   start: string;
   end: string;
@@ -27,25 +31,41 @@ type Comparison = {
   feedback?: Feedback;
 };
 
+type Visuals = {
+  reference?: {
+    preview_images?: string[];
+    overlay_video?: string | null;
+  };
+  user?: {
+    preview_images?: string[];
+    overlay_video?: string | null;
+  };
+  reference_preview_images?: string[];
+  ref_preview_images?: string[];
+  user_preview_images?: string[];
+  usr_preview_images?: string[];
+  reference_overlay_video?: string | null;
+  ref_overlay_video?: string | null;
+  user_overlay_video?: string | null;
+  usr_overlay_video?: string | null;
+};
+
 type AnalysisResult = {
   message?: string;
   score?: number;
   feedback?: Feedback;
   comparison?: Comparison;
   log_file?: string;
-
-  // backend may put visuals here
-  outputs?: any;
-  visuals?: any;
+  outputs?: Visuals;
+  visuals?: Visuals;
 };
 
 // -----------------------------
-// Main logic component
+// Main component
 // -----------------------------
 function ResultsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-
   const errorParam = searchParams.get('error');
 
   const [result, setResult] = useState<AnalysisResult | null>(null);
@@ -64,13 +84,11 @@ function ResultsContent() {
 
     const run = () => {
       try {
-        // If you ever pass error in URL
         if (errorParam) {
           if (!cancelled) setLoading(false);
           return;
         }
 
-        // Also support error stored by Loading page
         const storedErr = sessionStorage.getItem('dp_result_error');
         if (storedErr && !sessionStorage.getItem('dp_result')) {
           if (!cancelled) setLoading(false);
@@ -95,13 +113,12 @@ function ResultsContent() {
     };
 
     run();
-
     return () => {
       cancelled = true;
     };
   }, [router, errorParam]);
 
-  // ✅ Always pick feedback from top-level first, then fallback to comparison.feedback
+  // Extract feedback
   const feedback: Feedback = useMemo(() => {
     if (!result) return {};
     return result.feedback || result.comparison?.feedback || {};
@@ -111,21 +128,10 @@ function ResultsContent() {
   const topErrors = Array.isArray(feedback.top_errors) ? feedback.top_errors : [];
   const timeline = Array.isArray(feedback.detailed_timeline) ? feedback.detailed_timeline : [];
 
-  // ✅ Pull visuals from common backend shapes
+  // Extract visuals
   const visuals = useMemo(() => {
     if (!result) return null;
-
-    // possible shapes:
-    // result.outputs.visuals
-    // result.visuals
-    // result.outputs
-    const v =
-      result.outputs?.visuals ||
-      result.visuals ||
-      result.outputs ||
-      null;
-
-    return v;
+    return result.outputs?.visuals || result.visuals || result.outputs || null;
   }, [result]);
 
   const refPreviews: string[] =
@@ -152,7 +158,6 @@ function ResultsContent() {
     visuals?.usr_overlay_video ||
     null;
 
-  // Helpful for debugging: show raw keys if visuals exist but nothing renders
   const visualsDebugKeys = useMemo(() => {
     if (!visuals || typeof visuals !== 'object') return [];
     return Object.keys(visuals);
@@ -166,7 +171,6 @@ function ResultsContent() {
     );
   }
 
-  // ✅ Prefer showing dp_result_error if present
   const storedErr = typeof window !== 'undefined' ? sessionStorage.getItem('dp_result_error') : null;
 
   if (errorParam || (storedErr && !result)) {
@@ -195,21 +199,17 @@ function ResultsContent() {
     );
   }
 
-  const score =
-    typeof result.score === 'number'
-      ? result.score
-      : (result as any)?.comparison?.similarity_score ?? 0;
+  const score = typeof result.score === 'number' ? result.score : result.comparison?.similarity_score ?? 0;
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-4">
       <div className="bg-white shadow-lg rounded-2xl p-10 w-full max-w-2xl">
         <h1 className="text-3xl font-bold text-green-600 text-center">Your Score</h1>
-
         <p className="mt-4 text-5xl font-bold text-gray-800 text-center">
           {Number.isFinite(score) ? Number(score).toFixed(2) : '0.00'}
         </p>
 
-        {/* ✅ NEW: Visual Outputs */}
+        {/* Visual Outputs */}
         <div className="mt-8">
           <h2 className="font-semibold text-lg text-gray-800">Visual Outputs</h2>
 
@@ -221,24 +221,15 @@ function ResultsContent() {
                   <div className="border rounded-xl p-3 bg-gray-50">
                     <p className="font-semibold text-gray-700 text-center mb-2">Reference Overlay</p>
                     {refOverlay ? (
-                      <video
-                        controls
-                        className="w-full rounded-lg border bg-black"
-                        src={toBackendUrl(refOverlay)}
-                      />
+                      <video controls className="w-full rounded-lg border bg-black" src={toBackendUrl(refOverlay)} />
                     ) : (
                       <p className="text-sm text-gray-500 text-center">No reference overlay generated.</p>
                     )}
                   </div>
-
                   <div className="border rounded-xl p-3 bg-gray-50">
                     <p className="font-semibold text-gray-700 text-center mb-2">User Overlay</p>
                     {usrOverlay ? (
-                      <video
-                        controls
-                        className="w-full rounded-lg border bg-black"
-                        src={toBackendUrl(usrOverlay)}
-                      />
+                      <video controls className="w-full rounded-lg border bg-black" src={toBackendUrl(usrOverlay)} />
                     ) : (
                       <p className="text-sm text-gray-500 text-center">No user overlay generated.</p>
                     )}
@@ -254,11 +245,13 @@ function ResultsContent() {
                     {refPreviews.length > 0 ? (
                       <div className="flex flex-wrap gap-3 justify-center">
                         {refPreviews.map((url, idx) => (
-                          <img
+                          <Image
                             key={idx}
                             src={toBackendUrl(url)}
                             alt={`ref preview ${idx + 1}`}
-                            className="w-44 rounded-lg border bg-white"
+                            width={176}
+                            height={99}
+                            className="rounded-lg border bg-white"
                           />
                         ))}
                       </div>
@@ -266,17 +259,18 @@ function ResultsContent() {
                       <p className="text-sm text-gray-500 text-center">No reference frames generated.</p>
                     )}
                   </div>
-
                   <div className="border rounded-xl p-3 bg-gray-50">
                     <p className="font-semibold text-gray-700 text-center mb-2">User Preview Frames</p>
                     {usrPreviews.length > 0 ? (
                       <div className="flex flex-wrap gap-3 justify-center">
                         {usrPreviews.map((url, idx) => (
-                          <img
+                          <Image
                             key={idx}
                             src={toBackendUrl(url)}
                             alt={`user preview ${idx + 1}`}
-                            className="w-44 rounded-lg border bg-white"
+                            width={176}
+                            height={99}
+                            className="rounded-lg border bg-white"
                           />
                         ))}
                       </div>
@@ -299,6 +293,7 @@ function ResultsContent() {
           )}
         </div>
 
+        {/* Feedback */}
         <div className="mt-8 space-y-6 text-gray-700">
           <div>
             <h2 className="font-semibold text-lg">Summary</h2>
@@ -313,28 +308,19 @@ function ResultsContent() {
           <div>
             <h2 className="font-semibold text-lg">Body Part Feedback</h2>
             <ul className="list-disc pl-5 mt-1 space-y-1">
-              {bodyPart.length > 0 ? (
-                bodyPart.map((comment, index) => <li key={index}>{comment}</li>)
-              ) : (
-                <li>No body part issues detected.</li>
-              )}
+              {bodyPart.length > 0 ? bodyPart.map((comment, idx) => <li key={idx}>{comment}</li>) : <li>No body part issues detected.</li>}
             </ul>
           </div>
 
           <div>
             <h2 className="font-semibold text-lg">Top Errors</h2>
             <ul className="list-disc pl-5 mt-1 space-y-1">
-              {topErrors.length > 0 ? (
-                topErrors.map((err, index) => <li key={index}>{err}</li>)
-              ) : (
-                <li>No major landmark errors detected.</li>
-              )}
+              {topErrors.length > 0 ? topErrors.map((err, idx) => <li key={idx}>{err}</li>) : <li>No major landmark errors detected.</li>}
             </ul>
           </div>
 
           <div>
             <h2 className="font-semibold text-lg">Detailed Timeline Coaching</h2>
-
             {timeline.length > 0 ? (
               <div className="mt-2 space-y-3">
                 {timeline.map((t, idx) => (
