@@ -12,61 +12,65 @@ const supabase = createClient(
 
 export default function SignupPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
+
+  const [email, setEmail] = useState<string>('');
+  const [password, setPassword] = useState<string>('');
+  const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSignup = async (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setError(null);
     setLoading(true);
+    setError(null);
 
-    const { error } = await supabase.auth.signUp({ email, password });
+    try {
+      const { error } = await supabase.auth.signUp({ email, password });
 
-    setLoading(false);
+      if (error) throw error;
 
-    if (error) setError(error.message);
-    else router.push('/login');
+      router.push('/login');
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : 'Something went wrong.';
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center overflow-hidden px-4">
-      {/* Animated Gradient Background */}
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.8 }}
+      className="min-h-screen flex flex-col items-center justify-center px-4 bg-gradient-to-br from-pink-200 via-white to-sky-200"
+    >
       <motion.div
-        className="absolute inset-0"
-        style={{
-          background: 'linear-gradient(135deg, #fbc2eb, #a6c1ee, #fbc2eb)',
-          backgroundSize: '400% 400%',
-        }}
-        animate={{ backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] }}
-        transition={{ duration: 15, repeat: Infinity, ease: 'easeInOut' }}
-      />
-
-      {/* Signup Form */}
-      <motion.div
-        initial={{ y: 30, opacity: 0, scale: 0.98 }}
+        initial={{ y: 30, opacity: 0, scale: 0.95 }}
         animate={{ y: 0, opacity: 1, scale: 1 }}
-        transition={{ duration: 0.6, ease: 'easeOut' }}
-        className="relative z-10 bg-white/80 backdrop-blur-md shadow-md rounded-xl p-8 w-full max-w-md border border-slate-200"
+        transition={{ duration: 0.6 }}
+        className="bg-white/85 backdrop-blur border border-pink-100 shadow-md rounded-xl p-8 w-full max-w-md"
       >
-        <h2 className="text-2xl font-bold text-blue-600 mb-2 text-center">
+        <h2 className="text-2xl font-bold text-blue-700 mb-2 text-center">
           Sign Up 👤
         </h2>
-
-        <p className="text-slate-600 text-center mb-6">
+        <p className="text-slate-600 mb-6 text-center">
           Create your DancePerfect account
         </p>
 
-        {error && <p className="text-red-600 mb-4 text-center">{error}</p>}
+        {error && (
+          <p className="text-red-600 mb-4 text-center font-medium">{error}</p>
+        )}
 
         <form onSubmit={handleSignup} className="space-y-4">
           <input
             type="email"
             placeholder="Email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="border border-slate-300 rounded-lg w-full p-3"
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+              setEmail(e.target.value)
+            }
+            className="border border-slate-300 rounded-lg w-full p-3 outline-none focus:ring-2 focus:ring-pink-300"
             required
           />
 
@@ -74,8 +78,10 @@ export default function SignupPage() {
             type="password"
             placeholder="Password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="border border-slate-300 rounded-lg w-full p-3"
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+              setPassword(e.target.value)
+            }
+            className="border border-slate-300 rounded-lg w-full p-3 outline-none focus:ring-2 focus:ring-pink-300"
             required
           />
 
@@ -83,7 +89,7 @@ export default function SignupPage() {
             whileTap={{ scale: 0.97 }}
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition"
+            className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-60"
           >
             {loading ? 'Signing up...' : 'Sign Up'}
           </motion.button>
@@ -92,11 +98,11 @@ export default function SignupPage() {
         <motion.button
           whileTap={{ scale: 0.97 }}
           onClick={() => router.push('/login')}
-          className="mt-5 w-full text-blue-600 hover:underline font-semibold"
+          className="mt-5 w-full text-blue-700 hover:underline font-semibold"
         >
           ← Back to Login
         </motion.button>
       </motion.div>
-    </div>
+    </motion.div>
   );
 }
