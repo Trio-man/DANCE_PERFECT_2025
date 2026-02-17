@@ -30,28 +30,35 @@ export default function LoginPage() {
 
       if (error) throw error;
 
-      if (data?.user) {
-        // Redirect to upload page after successful login
-        router.replace('/upload');
-      } else {
-        setError('Login failed. Please try again.');
-      }
-} catch (err: unknown) {
-  const message =
-    err instanceof Error ? err.message : 'Something went wrong.';
-  setError(message);
+      if (data?.user) router.replace('/upload');
+      else setError('Login failed. Please try again.');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Something went wrong.';
+      setError(message);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-50 px-4">
+    <div className="min-h-screen flex items-center justify-center relative overflow-hidden px-4">
+      {/* Animated Gradient Background */}
+      <motion.div
+        className="absolute inset-0 -z-10"
+        style={{
+          background: 'linear-gradient(135deg, #fbc2eb, #a6c1ee, #fbc2eb)',
+          backgroundSize: '400% 400%',
+        }}
+        animate={{ backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'] }}
+        transition={{ duration: 15, repeat: Infinity, ease: 'easeInOut' }}
+      />
+
+      {/* Login Form */}
       <motion.div
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ duration: 0.5 }}
-        className="bg-white border border-slate-200 shadow-md rounded-xl p-10 w-full max-w-md text-center"
+        className="bg-white border border-slate-200 shadow-md rounded-xl p-10 w-full max-w-md text-center relative z-10"
       >
         <h1 className="text-3xl font-bold text-blue-600 mb-2">Welcome Back 👋</h1>
         <p className="text-slate-500 mb-8">Sign in to continue</p>
