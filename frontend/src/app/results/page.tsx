@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import Image from 'next/image';
 
 // -----------------------------
 // Types
@@ -32,32 +31,18 @@ type Comparison = {
 };
 
 type Visuals = {
-  reference?: {
-    preview_images?: string[];
-    overlay_video?: string | null;
-  };
-  user?: {
-    preview_images?: string[];
-    overlay_video?: string | null;
-  };
-  reference_preview_images?: string[];
-  ref_preview_images?: string[];
-  user_preview_images?: string[];
-  usr_preview_images?: string[];
-  reference_overlay_video?: string | null;
-  ref_overlay_video?: string | null;
-  user_overlay_video?: string | null;
-  usr_overlay_video?: string | null;
+  reference?: { preview_images?: string[]; overlay_video?: string };
+  user?: { preview_images?: string[]; overlay_video?: string };
 };
 
 type AnalysisResult = {
-  message?: string;
   score?: number;
   feedback?: Feedback;
   comparison?: Comparison;
   log_file?: string;
-  outputs?: Visuals;
   visuals?: Visuals;
+  outputs?: { visuals?: Visuals };
+  message?: string;
 };
 
 // -----------------------------
@@ -66,6 +51,7 @@ type AnalysisResult = {
 function ResultsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+
   const errorParam = searchParams.get('error');
 
   const [result, setResult] = useState<AnalysisResult | null>(null);
@@ -79,6 +65,9 @@ function ResultsContent() {
     return `${BACKEND_URL}/${p}`;
   };
 
+  // -----------------------------
+  // Load result from sessionStorage
+  // -----------------------------
   useEffect(() => {
     let cancelled = false;
 
@@ -90,12 +79,13 @@ function ResultsContent() {
         }
 
         const storedErr = sessionStorage.getItem('dp_result_error');
-        if (storedErr && !sessionStorage.getItem('dp_result')) {
+        const stored = sessionStorage.getItem('dp_result');
+
+        if (storedErr && !stored) {
           if (!cancelled) setLoading(false);
           return;
         }
 
-        const stored = sessionStorage.getItem('dp_result');
         if (!stored) {
           if (!cancelled) setLoading(false);
           router.replace('/upload');
@@ -113,55 +103,32 @@ function ResultsContent() {
     };
 
     run();
-    return () => {
-      cancelled = true;
-    };
+
+    return () => { cancelled = true; };
   }, [router, errorParam]);
 
-  // Extract feedback
+  // -----------------------------
+  // Derived data
+  // -----------------------------
   const feedback: Feedback = useMemo(() => {
     if (!result) return {};
     return result.feedback || result.comparison?.feedback || {};
   }, [result]);
 
-  const bodyPart = Array.isArray(feedback.body_part_comments) ? feedback.body_part_comments : [];
-  const topErrors = Array.isArray(feedback.top_errors) ? feedback.top_errors : [];
-  const timeline = Array.isArray(feedback.detailed_timeline) ? feedback.detailed_timeline : [];
+  const bodyPartComments = feedback.body_part_comments ?? [];
+  const topErrors = feedback.top_errors ?? [];
+  const timeline = feedback.detailed_timeline ?? [];
 
-  // Extract visuals
-  const visuals = useMemo(() => {
+  // Extract visuals safely
+  const visuals: Visuals | null = useMemo(() => {
     if (!result) return null;
-    return result.outputs?.visuals || result.visuals || result.outputs || null;
+    return result.outputs?.visuals || result.visuals || null;
   }, [result]);
 
-  const refPreviews: string[] =
-    visuals?.reference?.preview_images ||
-    visuals?.reference_preview_images ||
-    visuals?.ref_preview_images ||
-    [];
-
-  const usrPreviews: string[] =
-    visuals?.user?.preview_images ||
-    visuals?.user_preview_images ||
-    visuals?.usr_preview_images ||
-    [];
-
-  const refOverlay: string | null =
-    visuals?.reference?.overlay_video ||
-    visuals?.reference_overlay_video ||
-    visuals?.ref_overlay_video ||
-    null;
-
-  const usrOverlay: string | null =
-    visuals?.user?.overlay_video ||
-    visuals?.user_overlay_video ||
-    visuals?.usr_overlay_video ||
-    null;
-
-  const visualsDebugKeys = useMemo(() => {
-    if (!visuals || typeof visuals !== 'object') return [];
-    return Object.keys(visuals);
-  }, [visuals]);
+  const refPreviews: string[] = visuals?.reference?.preview_images ?? [];
+  const usrPreviews: string[] = visuals?.user?.preview_images ?? [];
+  const refOverlay: string | null = visuals?.reference?.overlay_video ?? null;
+  const usrOverlay: string | null = visuals?.user?.overlay_video ?? null;
 
   if (loading) {
     return (
@@ -174,7 +141,7 @@ function ResultsContent() {
   const storedErr = typeof window !== 'undefined' ? sessionStorage.getItem('dp_result_error') : null;
 
   if (errorParam || (storedErr && !result)) {
-    const msg = errorParam ? decodeURIComponent(errorParam) : storedErr || 'Unknown error';
+    const msg = errorParam ? decodeURIComponent(errorParam) : storedErr ?? 'Unknown error';
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-4">
         <div className="bg-white shadow-lg rounded-2xl p-10 text-center w-full max-w-md">
@@ -199,148 +166,124 @@ function ResultsContent() {
     );
   }
 
-  const score = typeof result.score === 'number' ? result.score : result.comparison?.similarity_score ?? 0;
+  const score = result.score ?? result.comparison?.similarity_score ?? 0;
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-4">
       <div className="bg-white shadow-lg rounded-2xl p-10 w-full max-w-2xl">
         <h1 className="text-3xl font-bold text-green-600 text-center">Your Score</h1>
         <p className="mt-4 text-5xl font-bold text-gray-800 text-center">
-          {Number.isFinite(score) ? Number(score).toFixed(2) : '0.00'}
+          {Number(score).toFixed(2)}
         </p>
 
         {/* Visual Outputs */}
-        <div className="mt-8">
-          <h2 className="font-semibold text-lg text-gray-800">Visual Outputs</h2>
+        {(refOverlay || usrOverlay || refPreviews.length > 0 || usrPreviews.length > 0) && (
+          <div className="mt-8">
+            <h2 className="font-semibold text-lg text-gray-800">Visual Outputs</h2>
 
-          {(refOverlay || usrOverlay || refPreviews.length > 0 || usrPreviews.length > 0) ? (
-            <div className="mt-3 space-y-6">
-              {/* Overlays */}
-              {(refOverlay || usrOverlay) && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="border rounded-xl p-3 bg-gray-50">
-                    <p className="font-semibold text-gray-700 text-center mb-2">Reference Overlay</p>
-                    {refOverlay ? (
-                      <video controls className="w-full rounded-lg border bg-black" src={toBackendUrl(refOverlay)} />
-                    ) : (
-                      <p className="text-sm text-gray-500 text-center">No reference overlay generated.</p>
-                    )}
-                  </div>
-                  <div className="border rounded-xl p-3 bg-gray-50">
-                    <p className="font-semibold text-gray-700 text-center mb-2">User Overlay</p>
-                    {usrOverlay ? (
-                      <video controls className="w-full rounded-lg border bg-black" src={toBackendUrl(usrOverlay)} />
-                    ) : (
-                      <p className="text-sm text-gray-500 text-center">No user overlay generated.</p>
-                    )}
-                  </div>
+            {(refOverlay || usrOverlay) && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+                {/* Reference Overlay */}
+                <div className="border rounded-xl p-3 bg-gray-50">
+                  <p className="font-semibold text-gray-700 text-center mb-2">Reference Overlay</p>
+                  {refOverlay ? (
+                    <video controls className="w-full rounded-lg border bg-black" src={toBackendUrl(refOverlay)} />
+                  ) : <p className="text-sm text-gray-500 text-center">No reference overlay generated.</p>}
                 </div>
-              )}
 
-              {/* Preview frames */}
-              {(refPreviews.length > 0 || usrPreviews.length > 0) && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="border rounded-xl p-3 bg-gray-50">
-                    <p className="font-semibold text-gray-700 text-center mb-2">Reference Preview Frames</p>
-                    {refPreviews.length > 0 ? (
-                      <div className="flex flex-wrap gap-3 justify-center">
-                        {refPreviews.map((url, idx) => (
-                          <Image
-                            key={idx}
-                            src={toBackendUrl(url)}
-                            alt={`ref preview ${idx + 1}`}
-                            width={176}
-                            height={99}
-                            className="rounded-lg border bg-white"
-                          />
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-gray-500 text-center">No reference frames generated.</p>
-                    )}
-                  </div>
-                  <div className="border rounded-xl p-3 bg-gray-50">
-                    <p className="font-semibold text-gray-700 text-center mb-2">User Preview Frames</p>
-                    {usrPreviews.length > 0 ? (
-                      <div className="flex flex-wrap gap-3 justify-center">
-                        {usrPreviews.map((url, idx) => (
-                          <Image
-                            key={idx}
-                            src={toBackendUrl(url)}
-                            alt={`user preview ${idx + 1}`}
-                            width={176}
-                            height={99}
-                            className="rounded-lg border bg-white"
-                          />
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-gray-500 text-center">No user frames generated.</p>
-                    )}
-                  </div>
+                {/* User Overlay */}
+                <div className="border rounded-xl p-3 bg-gray-50">
+                  <p className="font-semibold text-gray-700 text-center mb-2">User Overlay</p>
+                  {usrOverlay ? (
+                    <video controls className="w-full rounded-lg border bg-black" src={toBackendUrl(usrOverlay)} />
+                  ) : <p className="text-sm text-gray-500 text-center">No user overlay generated.</p>}
                 </div>
-              )}
-            </div>
-          ) : (
-            <div className="mt-2 text-gray-600 text-sm">
-              No visual outputs were returned by the backend.
-              {visualsDebugKeys.length > 0 && (
-                <div className="mt-1 text-xs text-gray-500">
-                  (Debug: visuals keys detected: {visualsDebugKeys.join(', ')})
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Feedback */}
-        <div className="mt-8 space-y-6 text-gray-700">
-          <div>
-            <h2 className="font-semibold text-lg">Summary</h2>
-            <p className="mt-1">{feedback.summary || 'No summary available.'}</p>
-          </div>
-
-          <div>
-            <h2 className="font-semibold text-lg">Timing Analysis</h2>
-            <p className="mt-1">{feedback.timing || 'No timing data.'}</p>
-          </div>
-
-          <div>
-            <h2 className="font-semibold text-lg">Body Part Feedback</h2>
-            <ul className="list-disc pl-5 mt-1 space-y-1">
-              {bodyPart.length > 0 ? bodyPart.map((comment, idx) => <li key={idx}>{comment}</li>) : <li>No body part issues detected.</li>}
-            </ul>
-          </div>
-
-          <div>
-            <h2 className="font-semibold text-lg">Top Errors</h2>
-            <ul className="list-disc pl-5 mt-1 space-y-1">
-              {topErrors.length > 0 ? topErrors.map((err, idx) => <li key={idx}>{err}</li>) : <li>No major landmark errors detected.</li>}
-            </ul>
-          </div>
-
-          <div>
-            <h2 className="font-semibold text-lg">Detailed Timeline Coaching</h2>
-            {timeline.length > 0 ? (
-              <div className="mt-2 space-y-3">
-                {timeline.map((t, idx) => (
-                  <div key={idx} className="border rounded-lg p-3 bg-gray-50">
-                    <p className="font-semibold text-gray-800">
-                      {t.start} – {t.end} • {t.body_part} • {String(t.severity || '').toUpperCase()}
-                    </p>
-                    <p className="text-gray-700 mt-1">{t.message}</p>
-                  </div>
-                ))}
               </div>
-            ) : (
-              <p className="mt-1 text-gray-600">No detailed timestamped issues detected.</p>
+            )}
+
+            {/* Preview Frames */}
+            {(refPreviews.length > 0 || usrPreviews.length > 0) && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                {/* Reference Previews */}
+                <div className="border rounded-xl p-3 bg-gray-50">
+                  <p className="font-semibold text-gray-700 text-center mb-2">Reference Preview Frames</p>
+                  {refPreviews.length > 0 ? (
+                    <div className="flex flex-wrap gap-3 justify-center">
+                      {refPreviews.map((url, idx) => (
+                        <img key={idx} src={toBackendUrl(url)} alt={`ref preview ${idx + 1}`} className="w-44 rounded-lg border bg-white" />
+                      ))}
+                    </div>
+                  ) : <p className="text-sm text-gray-500 text-center">No reference frames generated.</p>}
+                </div>
+
+                {/* User Previews */}
+                <div className="border rounded-xl p-3 bg-gray-50">
+                  <p className="font-semibold text-gray-700 text-center mb-2">User Preview Frames</p>
+                  {usrPreviews.length > 0 ? (
+                    <div className="flex flex-wrap gap-3 justify-center">
+                      {usrPreviews.map((url, idx) => (
+                        <img key={idx} src={toBackendUrl(url)} alt={`user preview ${idx + 1}`} className="w-44 rounded-lg border bg-white" />
+                      ))}
+                    </div>
+                  ) : <p className="text-sm text-gray-500 text-center">No user frames generated.</p>}
+                </div>
+              </div>
             )}
           </div>
-        </div>
+        )}
+
+        {/* Feedback Summary */}
+        {feedback.summary && (
+          <div className="mt-8 bg-white border rounded-xl p-4">
+            <p className="font-semibold text-slate-700 mb-1">Feedback Summary</p>
+            <p className="text-slate-600">{feedback.summary}</p>
+          </div>
+        )}
+
+        {/* Timing Analysis */}
+        {feedback.timing && (
+          <div className="mt-4 bg-white border rounded-xl p-4">
+            <p className="font-semibold text-slate-700 mb-1">Timing Analysis</p>
+            <p className="text-slate-600">{feedback.timing}</p>
+          </div>
+        )}
+
+        {/* Body Part Feedback */}
+        {bodyPartComments.length > 0 && (
+          <div className="mt-4 bg-white border rounded-xl p-4">
+            <p className="font-semibold text-slate-700 mb-1">Body Part Feedback</p>
+            <ul className="list-disc pl-5 space-y-1">
+              {bodyPartComments.map((c, i) => <li key={i}>{c}</li>)}
+            </ul>
+          </div>
+        )}
+
+        {/* Top Errors */}
+        {topErrors.length > 0 && (
+          <div className="mt-4 bg-white border rounded-xl p-4">
+            <p className="font-semibold text-slate-700 mb-1">Top Errors</p>
+            <ul className="list-disc pl-5 space-y-1">
+              {topErrors.map((e, i) => <li key={i}>{e}</li>)}
+            </ul>
+          </div>
+        )}
+
+        {/* Detailed Timeline */}
+        {timeline.length > 0 && (
+          <div className="mt-4 bg-white border rounded-xl p-4">
+            <p className="font-semibold text-slate-700 mb-1">Detailed Timeline Coaching</p>
+            {timeline.map((t, idx) => (
+              <div key={idx} className="border rounded-lg p-3 bg-gray-50 mt-2">
+                <p className="font-semibold text-gray-800">{t.start} – {t.end} • {t.body_part} • {String(t.severity).toUpperCase()}</p>
+                <p className="text-gray-700 mt-1">{t.message}</p>
+              </div>
+            ))}
+          </div>
+        )}
 
         <button
           onClick={() => router.push('/upload')}
-          className="mt-10 w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition"
+          className="mt-6 w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition"
         >
           Compare Again
         </button>
@@ -350,7 +293,7 @@ function ResultsContent() {
 }
 
 // -----------------------------
-// Suspense wrapper
+// Suspense Wrapper
 // -----------------------------
 export default function ResultsPage() {
   return (
