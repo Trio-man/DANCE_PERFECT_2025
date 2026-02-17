@@ -19,7 +19,8 @@ def compare_motion_csvs(reference_csv_path, user_csv_path, frame_rate=30):
                 "summary": "We couldn't analyze because the motion CSV format is invalid.",
                 "timing": "N/A",
                 "body_part_comments": ["Fix CSV columns: frame, landmark_id, x, y, z."],
-                "top_errors": []
+                "top_errors": [],
+                "detailed_timeline": []
             }
         }
 
@@ -41,18 +42,16 @@ def compare_motion_csvs(reference_csv_path, user_csv_path, frame_rate=30):
                 "body_part_comments": [
                     "Record with better lighting and keep the full body visible in frame."
                 ],
-                "top_errors": []
+                "top_errors": [],
+                "detailed_timeline": []
             }
         }
 
     # -----------------------------
     # Config (tune these if needed)
     # -----------------------------
-    # If correlation is too low, treat as different dance and FAIL
     MISMATCH_MIN_CORR = 0.35
-    # If mean distance is too big, also treat as mismatch
     MISMATCH_MAX_MEAN_DIST = 0.55
-    # Only run mismatch logic if we have enough frames
     MIN_FRAMES_FOR_MISMATCH_CHECK = 60
 
     GROUPS = {
@@ -78,6 +77,12 @@ def compare_motion_csvs(reference_csv_path, user_csv_path, frame_rate=30):
     def to_sec(frame):
         return frame / float(frame_rate)
 
+    def fmt_ts(sec: float) -> str:
+        sec = max(0.0, float(sec))
+        m = int(sec // 60)
+        s = int(sec % 60)
+        return f"{m:02d}:{s:02d}"
+
     def severity_label(d):
         if d >= 0.12:
             return "high"
@@ -101,11 +106,104 @@ def compare_motion_csvs(reference_csv_path, user_csv_path, frame_rate=30):
             return parts[0]
         return f"{parts[0]} and {parts[1]}"
 
+    def build_detailed_timeline(frame_events, min_frames=6, gap_allow=2, limit=18):
+        """
+        frame_events: list of dict:
+          {frame, lid, name, group, dist, dx, dy, severity}
+        Returns merged segments with timestamp ranges.
+        """
+        if not frame_events:
+            return []
+
+        frame_events.sort(key=lambda e: (e["group"], e["lid"], e["frame"]))
+
+        merged = []
+        cur = None
+
+        for e in frame_events:
+            if cur is None:
+                cur = {
+                    "group": e["group"],
+                    "lid": e["lid"],
+                    "name": e["name"],
+                    "start_frame": e["frame"],
+                    "end_frame": e["frame"],
+                    "max_dist": e["dist"],
+                    "sum_dx": e["dx"],
+                    "sum_dy": e["dy"],
+                    "count": 1,
+                    "severity": e["severity"],
+                }
+                continue
+
+            same = (cur["group"] == e["group"] and cur["lid"] == e["lid"])
+            close = (e["frame"] <= cur["end_frame"] + gap_allow)
+
+            if same and close:
+                cur["end_frame"] = e["frame"]
+                cur["max_dist"] = max(cur["max_dist"], e["dist"])
+                cur["sum_dx"] += e["dx"]
+                cur["sum_dy"] += e["dy"]
+                cur["count"] += 1
+                if e["severity"] == "high":
+                    cur["severity"] = "high"
+                elif e["severity"] == "medium" and cur["severity"] == "low":
+                    cur["severity"] = "medium"
+            else:
+                merged.append(cur)
+                cur = {
+                    "group": e["group"],
+                    "lid": e["lid"],
+                    "name": e["name"],
+                    "start_frame": e["frame"],
+                    "end_frame": e["frame"],
+                    "max_dist": e["dist"],
+                    "sum_dx": e["dx"],
+                    "sum_dy": e["dy"],
+                    "count": 1,
+                    "severity": e["severity"],
+                }
+
+        if cur:
+            merged.append(cur)
+
+        # remove very short noisy segments
+        merged = [m for m in merged if (m["end_frame"] - m["start_frame"] + 1) >= min_frames]
+        if not merged:
+            return []
+
+        sev_rank = {"high": 2, "medium": 1, "low": 0}
+        merged.sort(key=lambda m: (sev_rank.get(m["severity"], 0), m["max_dist"]), reverse=True)
+        merged = merged[:limit]
+
+        out = []
+        for m in merged:
+            start_s = to_sec(m["start_frame"])
+            end_s = to_sec(m["end_frame"])
+            avg_dx = m["sum_dx"] / max(1, m["count"])
+            avg_dy = m["sum_dy"] / max(1, m["count"])
+            phrase = direction_phrase(avg_dx, avg_dy)
+
+            out.append({
+                "start": fmt_ts(start_s),
+                "end": fmt_ts(end_s),
+                "severity": m["severity"],
+                "body_part": m["group"],
+                "joint": m["name"],
+                "message": f"{m['name']} ({m['group']}) is {phrase} than the choreographer."
+            })
+
+        out.sort(key=lambda x: x["start"])
+        return out
+
     # For timestamped top-errors: store worst moment per landmark
     worst_by_landmark = {}  # lid -> {frame, dist, dx, dy}
 
     distances_all = []
     group_dists = {k: [] for k in GROUPS.keys()}
+
+    # NEW: collect many moments (for timeline)
+    timeline_events_all = []
 
     # Compare frame-by-frame
     for frame in common_frames:
@@ -143,6 +241,32 @@ def compare_motion_csvs(reference_csv_path, user_csv_path, frame_rate=30):
                     "dy": float(row["dy"]),
                 }
 
+        # NEW: timeline moments (keep only medium/high to reduce noise)
+        for _, row in merged.iterrows():
+            lid = int(row["landmark_id"])
+            dist = float(row["dist"])
+            if dist < 0.07:
+                continue
+
+            group_name = None
+            for gname, lids in GROUPS.items():
+                if lid in lids:
+                    group_name = gname
+                    break
+            if group_name is None:
+                continue
+
+            timeline_events_all.append({
+                "frame": int(frame),
+                "lid": lid,
+                "name": LANDMARK_NAME.get(lid, f"Landmark {lid}"),
+                "group": group_name,
+                "dist": dist,
+                "dx": float(row["dx"]),
+                "dy": float(row["dy"]),
+                "severity": severity_label(dist)
+            })
+
     if len(distances_all) == 0:
         return {
             "status": "fail",
@@ -155,7 +279,8 @@ def compare_motion_csvs(reference_csv_path, user_csv_path, frame_rate=30):
                 "summary": "We couldn't compute differences because landmarks did not overlap properly.",
                 "timing": "N/A",
                 "body_part_comments": ["Try keeping the full body visible and avoid occlusions."],
-                "top_errors": []
+                "top_errors": [],
+                "detailed_timeline": []
             }
         }
 
@@ -164,8 +289,6 @@ def compare_motion_csvs(reference_csv_path, user_csv_path, frame_rate=30):
 
     # -----------------------------
     # MISMATCH CHECK (different dance detector)
-    # Uses cross-correlation on multiple key joints (y-signal).
-    # If correlation is very low OR mean distance very high -> fail.
     # -----------------------------
     def landmark_series(df, lid, axis="y"):
         s = df[df["landmark_id"] == lid].sort_values("frame")
@@ -184,7 +307,6 @@ def compare_motion_csvs(reference_csv_path, user_csv_path, frame_rate=30):
         return sig / std
 
     def max_corr(a, b):
-        # normalized max cross-correlation
         a = norm(a)
         b = norm(b)
         if a is None or b is None:
@@ -195,7 +317,7 @@ def compare_motion_csvs(reference_csv_path, user_csv_path, frame_rate=30):
             return None
         return float(np.max(c) / denom)
 
-    corr_landmarks = [16, 15, 28, 27, 24, 23]  # wrists, ankles, hips
+    corr_landmarks = [16, 15, 28, 27, 24, 23]
     corrs = []
     if len(common_frames) >= MIN_FRAMES_FOR_MISMATCH_CHECK:
         for lid in corr_landmarks:
@@ -208,10 +330,8 @@ def compare_motion_csvs(reference_csv_path, user_csv_path, frame_rate=30):
     avg_corr = float(np.mean(corrs)) if len(corrs) else None
 
     is_mismatch = False
-    if avg_corr is not None:
-        if avg_corr < MISMATCH_MIN_CORR:
-            is_mismatch = True
-    # distance-based fallback
+    if avg_corr is not None and avg_corr < MISMATCH_MIN_CORR:
+        is_mismatch = True
     if mean_distance > MISMATCH_MAX_MEAN_DIST:
         is_mismatch = True
 
@@ -233,12 +353,13 @@ def compare_motion_csvs(reference_csv_path, user_csv_path, frame_rate=30):
                 "top_errors": [
                     f"Mismatch check: avg correlation = {avg_corr:.2f}" if avg_corr is not None else
                     "Mismatch check: insufficient reliable signal for correlation."
-                ]
+                ],
+                "detailed_timeline": []
             }
         }
 
     # -----------------------------
-    # Timing (lead/lag) using right wrist y, fallback right ankle y
+    # Timing
     # -----------------------------
     used_lid = 16
     ref_sig = landmark_series(ref_df, used_lid, "y")
@@ -297,6 +418,9 @@ def compare_motion_csvs(reference_csv_path, user_csv_path, frame_rate=30):
         phrase = direction_phrase(info["dx"], info["dy"])
         top_errors.append(f"At ~{t:.2f}s: {name} is {phrase} than the choreographer.")
 
+    # NEW: Detailed timeline segments
+    detailed_timeline = build_detailed_timeline(timeline_events_all)
+
     # -----------------------------
     # Summary
     # -----------------------------
@@ -329,6 +453,7 @@ def compare_motion_csvs(reference_csv_path, user_csv_path, frame_rate=30):
             ],
             "top_errors": top_errors if top_errors else [
                 "No single joint stood out strongly; small differences are spread across joints."
-            ]
+            ],
+            "detailed_timeline": detailed_timeline
         }
     }

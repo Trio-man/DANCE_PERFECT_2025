@@ -3,11 +3,21 @@
 import { useEffect, useMemo, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
+type TimelineItem = {
+  start: string;
+  end: string;
+  severity: string;
+  body_part: string;
+  joint: string;
+  message: string;
+};
+
 type Feedback = {
   summary?: string;
   timing?: string;
   body_part_comments?: string[];
   top_errors?: string[];
+  detailed_timeline?: TimelineItem[];
 };
 
 type Comparison = {
@@ -20,10 +30,13 @@ type Comparison = {
 type AnalysisResult = {
   message?: string;
   score?: number;
-  feedback?: Feedback; // ✅ TOP-LEVEL feedback (your backend returns this)
-  comparison?: Comparison; // ✅ fallback if feedback is nested here
+  feedback?: Feedback;
+  comparison?: Comparison;
   log_file?: string;
+
+  // backend may put visuals here
   outputs?: any;
+  visuals?: any;
 };
 
 // -----------------------------
@@ -38,12 +51,28 @@ function ResultsContent() {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const BACKEND_URL = 'http://localhost:5000';
+  const toBackendUrl = (p: string) => {
+    if (!p) return p;
+    if (p.startsWith('http://') || p.startsWith('https://')) return p;
+    if (p.startsWith('/')) return `${BACKEND_URL}${p}`;
+    return `${BACKEND_URL}/${p}`;
+  };
+
   useEffect(() => {
     let cancelled = false;
 
     const run = () => {
       try {
+        // If you ever pass error in URL
         if (errorParam) {
+          if (!cancelled) setLoading(false);
+          return;
+        }
+
+        // Also support error stored by Loading page
+        const storedErr = sessionStorage.getItem('dp_result_error');
+        if (storedErr && !sessionStorage.getItem('dp_result')) {
           if (!cancelled) setLoading(false);
           return;
         }
@@ -80,6 +109,54 @@ function ResultsContent() {
 
   const bodyPart = Array.isArray(feedback.body_part_comments) ? feedback.body_part_comments : [];
   const topErrors = Array.isArray(feedback.top_errors) ? feedback.top_errors : [];
+  const timeline = Array.isArray(feedback.detailed_timeline) ? feedback.detailed_timeline : [];
+
+  // ✅ Pull visuals from common backend shapes
+  const visuals = useMemo(() => {
+    if (!result) return null;
+
+    // possible shapes:
+    // result.outputs.visuals
+    // result.visuals
+    // result.outputs
+    const v =
+      result.outputs?.visuals ||
+      result.visuals ||
+      result.outputs ||
+      null;
+
+    return v;
+  }, [result]);
+
+  const refPreviews: string[] =
+    visuals?.reference?.preview_images ||
+    visuals?.reference_preview_images ||
+    visuals?.ref_preview_images ||
+    [];
+
+  const usrPreviews: string[] =
+    visuals?.user?.preview_images ||
+    visuals?.user_preview_images ||
+    visuals?.usr_preview_images ||
+    [];
+
+  const refOverlay: string | null =
+    visuals?.reference?.overlay_video ||
+    visuals?.reference_overlay_video ||
+    visuals?.ref_overlay_video ||
+    null;
+
+  const usrOverlay: string | null =
+    visuals?.user?.overlay_video ||
+    visuals?.user_overlay_video ||
+    visuals?.usr_overlay_video ||
+    null;
+
+  // Helpful for debugging: show raw keys if visuals exist but nothing renders
+  const visualsDebugKeys = useMemo(() => {
+    if (!visuals || typeof visuals !== 'object') return [];
+    return Object.keys(visuals);
+  }, [visuals]);
 
   if (loading) {
     return (
@@ -89,12 +166,16 @@ function ResultsContent() {
     );
   }
 
-  if (errorParam) {
+  // ✅ Prefer showing dp_result_error if present
+  const storedErr = typeof window !== 'undefined' ? sessionStorage.getItem('dp_result_error') : null;
+
+  if (errorParam || (storedErr && !result)) {
+    const msg = errorParam ? decodeURIComponent(errorParam) : storedErr || 'Unknown error';
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-4">
         <div className="bg-white shadow-lg rounded-2xl p-10 text-center w-full max-w-md">
           <h1 className="text-2xl font-bold text-red-600">Analysis Failed</h1>
-          <p className="mt-4 text-gray-600">{decodeURIComponent(errorParam)}</p>
+          <p className="mt-4 text-gray-600">{msg}</p>
           <button
             onClick={() => router.push('/upload')}
             className="mt-8 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition"
@@ -114,7 +195,10 @@ function ResultsContent() {
     );
   }
 
-  const score = typeof result.score === 'number' ? result.score : 0;
+  const score =
+    typeof result.score === 'number'
+      ? result.score
+      : (result as any)?.comparison?.similarity_score ?? 0;
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-4">
@@ -122,8 +206,98 @@ function ResultsContent() {
         <h1 className="text-3xl font-bold text-green-600 text-center">Your Score</h1>
 
         <p className="mt-4 text-5xl font-bold text-gray-800 text-center">
-          {Number.isFinite(score) ? score.toFixed(2) : '0.00'}
+          {Number.isFinite(score) ? Number(score).toFixed(2) : '0.00'}
         </p>
+
+        {/* ✅ NEW: Visual Outputs */}
+        <div className="mt-8">
+          <h2 className="font-semibold text-lg text-gray-800">Visual Outputs</h2>
+
+          {(refOverlay || usrOverlay || refPreviews.length > 0 || usrPreviews.length > 0) ? (
+            <div className="mt-3 space-y-6">
+              {/* Overlays */}
+              {(refOverlay || usrOverlay) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="border rounded-xl p-3 bg-gray-50">
+                    <p className="font-semibold text-gray-700 text-center mb-2">Reference Overlay</p>
+                    {refOverlay ? (
+                      <video
+                        controls
+                        className="w-full rounded-lg border bg-black"
+                        src={toBackendUrl(refOverlay)}
+                      />
+                    ) : (
+                      <p className="text-sm text-gray-500 text-center">No reference overlay generated.</p>
+                    )}
+                  </div>
+
+                  <div className="border rounded-xl p-3 bg-gray-50">
+                    <p className="font-semibold text-gray-700 text-center mb-2">User Overlay</p>
+                    {usrOverlay ? (
+                      <video
+                        controls
+                        className="w-full rounded-lg border bg-black"
+                        src={toBackendUrl(usrOverlay)}
+                      />
+                    ) : (
+                      <p className="text-sm text-gray-500 text-center">No user overlay generated.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Preview frames */}
+              {(refPreviews.length > 0 || usrPreviews.length > 0) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="border rounded-xl p-3 bg-gray-50">
+                    <p className="font-semibold text-gray-700 text-center mb-2">Reference Preview Frames</p>
+                    {refPreviews.length > 0 ? (
+                      <div className="flex flex-wrap gap-3 justify-center">
+                        {refPreviews.map((url, idx) => (
+                          <img
+                            key={idx}
+                            src={toBackendUrl(url)}
+                            alt={`ref preview ${idx + 1}`}
+                            className="w-44 rounded-lg border bg-white"
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500 text-center">No reference frames generated.</p>
+                    )}
+                  </div>
+
+                  <div className="border rounded-xl p-3 bg-gray-50">
+                    <p className="font-semibold text-gray-700 text-center mb-2">User Preview Frames</p>
+                    {usrPreviews.length > 0 ? (
+                      <div className="flex flex-wrap gap-3 justify-center">
+                        {usrPreviews.map((url, idx) => (
+                          <img
+                            key={idx}
+                            src={toBackendUrl(url)}
+                            alt={`user preview ${idx + 1}`}
+                            className="w-44 rounded-lg border bg-white"
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500 text-center">No user frames generated.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="mt-2 text-gray-600 text-sm">
+              No visual outputs were returned by the backend.
+              {visualsDebugKeys.length > 0 && (
+                <div className="mt-1 text-xs text-gray-500">
+                  (Debug: visuals keys detected: {visualsDebugKeys.join(', ')})
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         <div className="mt-8 space-y-6 text-gray-700">
           <div>
@@ -157,6 +331,25 @@ function ResultsContent() {
               )}
             </ul>
           </div>
+
+          <div>
+            <h2 className="font-semibold text-lg">Detailed Timeline Coaching</h2>
+
+            {timeline.length > 0 ? (
+              <div className="mt-2 space-y-3">
+                {timeline.map((t, idx) => (
+                  <div key={idx} className="border rounded-lg p-3 bg-gray-50">
+                    <p className="font-semibold text-gray-800">
+                      {t.start} – {t.end} • {t.body_part} • {String(t.severity || '').toUpperCase()}
+                    </p>
+                    <p className="text-gray-700 mt-1">{t.message}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-1 text-gray-600">No detailed timestamped issues detected.</p>
+            )}
+          </div>
         </div>
 
         <button
@@ -171,7 +364,7 @@ function ResultsContent() {
 }
 
 // -----------------------------
-// Suspense wrapper (required for useSearchParams in Next 13/14/15 app router)
+// Suspense wrapper
 // -----------------------------
 export default function ResultsPage() {
   return (

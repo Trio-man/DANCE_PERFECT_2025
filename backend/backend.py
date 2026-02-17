@@ -1,6 +1,12 @@
 # backend.py
+# DancePerfect (Flask) Backend
+# - Supabase (users table) + JWT auth endpoints
+# - /analyze accepts 2 MP4s (dancer_video, choreo_video)
+# - MediaPipe PoseLandmarker (Tasks) -> CSV
+# - compare_motion_csvs() with detailed timeline coaching
+# - Generates per-run PNG previews (unique per upload)
+# - Serves visuals via Flask static: /static/outputs/<run_id>/...
 
-# --- Imports: Flask for web server, CORS for cross-origin, Supabase for DB, dotenv for env vars, bcrypt for hashing, os for env access, JWT for tokens ---
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
@@ -9,50 +15,49 @@ from dotenv import load_dotenv
 import bcrypt
 import mediapipe as mp
 import os
-
-# --- COMPUTATIONAL ALGORITHM IMPORTS ---
-import tempfile
 import uuid
+import tempfile
+import mimetypes
+from datetime import datetime
+from pathlib import Path
+
+import cv2
 import pandas as pd
 import numpy as np
 from scipy.signal import correlate
-import json
 
-# --- MP4 -> MediaPipe imports ---
-import cv2
-from datetime import datetime
 from mediapipe.tasks import python as mp_python
 from mediapipe.tasks.python import vision as mp_vision
 
-# --- Load environment variables from .env file ---
+# =========================
+# ENV + SUPABASE
+# =========================
 load_dotenv()
 
-# --- Retrieve Supabase credentials from environment variables ---
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
-# --- Debug: Print if environment variables are loaded (remove in production) ---
 print(f"SUPABASE_URL loaded: {'Yes' if SUPABASE_URL else 'No'}")
 print(f"SUPABASE_KEY loaded: {'Yes' if SUPABASE_KEY else 'No'}")
 
-# --- Validate environment variables ---
 if not SUPABASE_URL or not SUPABASE_KEY:
     raise ValueError("SUPABASE_URL and SUPABASE_KEY must be set in environment variables")
 
-# --- Initialize Supabase client for database operations ---
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# --- Create Flask app and enable CORS for frontend-backend communication ---
-app = Flask(__name__)
-CORS(app)  # Allow frontend calls
+# =========================
+# FLASK APP
+# =========================
+# Flask serves ./static automatically at /static
+app = Flask(__name__, static_folder="static", static_url_path="/static")
+CORS(app)
 
-# --- Configure JWT ---
-app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'your-secret-key-change-in-production')  # Change this in production!
+app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production")
 jwt = JWTManager(app)
 
-# ================================================================================================
-# STORAGE FOLDERS (needed for flowchart: upload -> run backend -> outputs)
-# ================================================================================================
+# =========================
+# FOLDERS
+# =========================
 UPLOAD_FOLDER = "uploads"
 OUTPUT_FOLDER = "motion_outputs"
 LOG_FOLDER = "logs"
@@ -63,8 +68,18 @@ os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 os.makedirs(LOG_FOLDER, exist_ok=True)
 os.makedirs(MODEL_FOLDER, exist_ok=True)
 
-# --- Route: Test database connection ---
-@app.route('/test-connection')
+# Visual outputs (browser-accessible)
+STATIC_OUTPUTS = os.path.join("static", "outputs")
+os.makedirs(STATIC_OUTPUTS, exist_ok=True)
+
+# =========================
+# BASIC ROUTES
+# =========================
+@app.route("/")
+def home():
+    return "DancePerfect backend is running!"
+
+@app.route("/test-connection")
 def test_connection():
     try:
         response = supabase.table("users").select("*").limit(1).execute()
@@ -72,36 +87,10 @@ def test_connection():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# --- Route: Home page, simple health check ---
-@app.route('/')
-def home():
-    return "DancePerfect backend is running!"
-
-# --- Route: Test login with sample data ---
-@app.route('/test-login')
-def test_login():
-    return """
-    <h2>Test Login Endpoints</h2>
-    <p>Use these curl commands to test:</p>
-
-    <h3>1. Register a new user:</h3>
-    <pre>curl -X POST http://localhost:5000/register \\
-    -H "Content-Type: application/json" \\
-    -d '{"email": "test@example.com", "password": "password123"}'</pre>
-
-    <h3>2. Login with the user:</h3>
-    <pre>curl -X POST http://localhost:5000/login \\
-    -H "Content-Type: application/json" \\
-    -d '{"email": "test@example.com", "password": "password123"}'</pre>
-
-    <h3>3. Test with wrong password:</h3>
-    <pre>curl -X POST http://localhost:5000/login \\
-    -H "Content-Type: application/json" \\
-    -d '{"email": "test@example.com", "password": "wrongpassword"}'</pre>
-    """
-
-# --- Route: User registration endpoint ---
-@app.route('/register', methods=['POST'])
+# =========================
+# AUTH (SUPABASE users table)
+# =========================
+@app.route("/register", methods=["POST"])
 def register():
     data = request.get_json()
     if not data:
@@ -110,9 +99,6 @@ def register():
     email = data.get("email")
     password = data.get("password")
 
-    print(f"Received registration attempt for email: {email}")
-    print(f"Password length: {len(password) if password else 0} characters")
-
     if not email or not password:
         return jsonify({"error": "Email and password are required"}), 400
 
@@ -120,7 +106,7 @@ def register():
     if existing.data:
         return jsonify({"error": "Email already registered"}), 409
 
-    password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
     try:
         supabase.table("users").insert({
@@ -128,14 +114,11 @@ def register():
             "password_hash": password_hash,
             "role": "user"
         }).execute()
-
         return jsonify({"message": "User registered successfully"}), 201
-
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# --- Route: User login endpoint ---
-@app.route('/login', methods=['POST'])
+@app.route("/login", methods=["POST"])
 def login():
     data = request.get_json()
     if not data:
@@ -144,85 +127,68 @@ def login():
     email = data.get("email")
     password = data.get("password")
 
-    print(f"Received login attempt for email: {email}")
-    print(f"Password length: {len(password) if password else 0} characters")
-
     if not email or not password:
         return jsonify({"error": "Email and password are required"}), 400
 
     try:
         response = supabase.table("users").select("*").eq("email", email).execute()
-
         if not response.data:
             return jsonify({"error": "Invalid email or password"}), 401
 
         user = response.data[0]
         stored_password_hash = user.get("password_hash")
-
         if not stored_password_hash:
             return jsonify({"error": "Invalid email or password"}), 401
 
-        if bcrypt.checkpw(password.encode('utf-8'), stored_password_hash.encode('utf-8')):
+        if bcrypt.checkpw(password.encode("utf-8"), stored_password_hash.encode("utf-8")):
             access_token = create_access_token(identity=user.get("id"))
-
-            user_info = {
-                "id": user.get("id"),
-                "email": user.get("email"),
-                "role": user.get("role")
-            }
-
             return jsonify({
                 "message": "Login successful",
-                "user": user_info,
+                "user": {
+                    "id": user.get("id"),
+                    "email": user.get("email"),
+                    "role": user.get("role"),
+                },
                 "access_token": access_token
             }), 200
-        else:
-            return jsonify({"error": "Invalid email or password"}), 401
+
+        return jsonify({"error": "Invalid email or password"}), 401
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# --- Route: Protected endpoint that requires JWT token ---
-@app.route('/profile', methods=['GET'])
+@app.route("/profile", methods=["GET"])
 @jwt_required()
 def get_profile():
     current_user_id = get_jwt_identity()
-
     try:
         response = supabase.table("users").select("id, email, role").eq("id", current_user_id).execute()
-
         if not response.data:
             return jsonify({"error": "User not found"}), 404
-
-        user = response.data[0]
-        return jsonify({
-            "message": "Profile retrieved successfully",
-            "user": user
-        }), 200
-
+        return jsonify({"message": "Profile retrieved successfully", "user": response.data[0]}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# ================================================================================================
-# MP4 -> MEDIAPIPE TASKS (PoseLandmarker) -> CSV -> COMPARE
-# ================================================================================================
-def extract_motion_from_video(video_path, output_csv):
-    """
-    Uses MediaPipe Tasks PoseLandmarker (mediapipe 0.10.x) to extract pose landmarks per frame.
-    Outputs a CSV: frame, landmark_id, x, y, z, visibility
-    """
+# =========================
+# SUPABASE STORAGE HELPERS
+# =========================
+def upload_bytes_to_storage(bucket: str, path: str, data: bytes, content_type: str):
+    return supabase.storage.from_(bucket).upload(
+        path=path,
+        file=data,
+        file_options={"content-type": content_type, "upsert": "true"}
+    )
 
+# =========================
+# MEDIAPIPE TASKS: PoseLandmarker
+# =========================
+def _get_pose_landmarker(video_fps: float):
     model_path = os.path.join(MODEL_FOLDER, "pose_landmarker_full.task")
     if not os.path.exists(model_path):
         raise FileNotFoundError(
             f"Pose model not found: {model_path}\n"
-            f"Create a folder 'models' beside backend.py and put 'pose_landmarker_full.task' inside it."
+            f"Put 'pose_landmarker_full.task' inside ./models beside backend.py"
         )
-
-    cap = cv2.VideoCapture(video_path)
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    if not fps or fps <= 0:
-        fps = 30.0
 
     base_options = mp_python.BaseOptions(model_asset_path=model_path)
     options = mp_vision.PoseLandmarkerOptions(
@@ -234,6 +200,59 @@ def extract_motion_from_video(video_path, output_csv):
         min_tracking_confidence=0.5,
         output_segmentation_masks=False,
     )
+    return options
+
+def _draw_tasks_landmarks(frame_bgr, pose_landmarks_list):
+    """
+    Draw pose landmarks for MediaPipe Tasks PoseLandmarker without using mp.solutions.
+    Uses a fixed POSE_CONNECTIONS list (33-landmark BlazePose topology).
+    """
+    if not pose_landmarks_list:
+        return frame_bgr
+
+    # BlazePose connections (landmark index pairs)
+    POSE_CONNECTIONS = [
+        (0, 1), (1, 2), (2, 3), (3, 7),
+        (0, 4), (4, 5), (5, 6), (6, 8),
+        (9, 10),
+        (11, 12),
+        (11, 13), (13, 15), (15, 17), (15, 19), (15, 21),
+        (12, 14), (14, 16), (16, 18), (16, 20), (16, 22),
+        (11, 23), (12, 24), (23, 24),
+        (23, 25), (25, 27), (27, 29), (29, 31),
+        (24, 26), (26, 28), (28, 30), (30, 32),
+        (27, 31), (28, 32)
+    ]
+
+    h, w, _ = frame_bgr.shape
+    landmarks = pose_landmarks_list[0]  # first detected pose
+
+    # Draw connections
+    for a, b in POSE_CONNECTIONS:
+        if a < len(landmarks) and b < len(landmarks):
+            ax, ay = int(landmarks[a].x * w), int(landmarks[a].y * h)
+            bx, by = int(landmarks[b].x * w), int(landmarks[b].y * h)
+            cv2.line(frame_bgr, (ax, ay), (bx, by), (0, 255, 0), 2)
+
+    # Draw points
+    for lm in landmarks:
+        cx = int(lm.x * w)
+        cy = int(lm.y * h)
+        cv2.circle(frame_bgr, (cx, cy), 4, (0, 255, 0), -1)
+
+    return frame_bgr
+
+def extract_motion_from_video(video_path, output_csv):
+    """
+    Extract pose landmarks per frame into CSV:
+    frame, landmark_id, x, y, z, visibility
+    """
+    cap = cv2.VideoCapture(video_path)
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    if not fps or fps <= 0:
+        fps = 30.0
+
+    options = _get_pose_landmarker(fps)
 
     data = []
     frame_number = 0
@@ -249,7 +268,6 @@ def extract_motion_from_video(video_path, output_csv):
 
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-
             result = landmarker.detect_for_video(mp_image, timestamp_ms)
 
             if result.pose_landmarks:
@@ -262,16 +280,74 @@ def extract_motion_from_video(video_path, output_csv):
     df = pd.DataFrame(data, columns=["frame", "landmark_id", "x", "y", "z", "visibility"])
     df.to_csv(output_csv, index=False)
 
+# =========================
+# VISUAL OUTPUTS (PNG previews ONLY)
+# =========================
+def save_pose_preview_frames_tasks(video_path: str, out_dir: str, every_n_frames: int = 30, max_frames: int = 1):
+    os.makedirs(out_dir, exist_ok=True)
 
-# ✅ UPDATED: intelligent feedback version (replaces your old function)
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        raise RuntimeError(f"Could not open input video: {video_path}")
 
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    if not fps or fps <= 0:
+        fps = 30.0
+
+    options = _get_pose_landmarker(fps)
+
+    saved_paths = []
+    frame_number = 0
+    saved = 0
+
+    with mp_vision.PoseLandmarker.create_from_options(options) as landmarker:
+        while cap.isOpened() and saved < max_frames:
+            ok, frame = cap.read()
+            if not ok:
+                break
+
+            frame_number += 1
+            if frame_number % every_n_frames != 0:
+                continue
+
+            timestamp_ms = int((frame_number / fps) * 1000)
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+            result = landmarker.detect_for_video(mp_image, timestamp_ms)
+
+            if result.pose_landmarks:
+                frame = _draw_tasks_landmarks(frame, result.pose_landmarks)
+
+            out_path = os.path.join(out_dir, f"pose_preview_{saved + 1}.png")
+            cv2.imwrite(out_path, frame)
+            saved_paths.append(out_path)
+            saved += 1
+
+    cap.release()
+    return saved_paths
+
+def to_public_url(local_static_path: str):
+    """
+    Convert a local file under ./static into a browser URL under /static.
+    Example: static/outputs/<run>/user/previews/pose_preview_1.png -> /static/outputs/<run>/user/previews/pose_preview_1.png
+    """
+    p = local_static_path.replace("\\", "/")
+    if p.startswith("static/"):
+        p = p[len("static/"):]
+    return f"/static/{p}"
+
+# =========================
+# COMPARE: detailed feedback + timeline coaching
+# =========================
 def compare_motion_csvs(reference_csv_path, user_csv_path, frame_rate=30):
     ref_df = pd.read_csv(reference_csv_path)
-    user_df = pd.read_csv(user_csv_path)
+    usr_df = pd.read_csv(user_csv_path)
 
-    needed_cols = {"frame", "landmark_id", "x", "y", "z"}
-    if not needed_cols.issubset(ref_df.columns) or not needed_cols.issubset(user_df.columns):
+    needed = {"frame", "landmark_id", "x", "y", "z"}
+    if not needed.issubset(ref_df.columns) or not needed.issubset(usr_df.columns):
         return {
+            "status": "fail",
+            "reason": "invalid_csv",
             "similarity_score": 0.0,
             "mean_landmark_distance": None,
             "frames_compared": 0,
@@ -279,30 +355,39 @@ def compare_motion_csvs(reference_csv_path, user_csv_path, frame_rate=30):
             "feedback": {
                 "summary": "We couldn't analyze because the motion CSV format is invalid.",
                 "timing": "N/A",
-                "body_part_comments": ["Ensure your motion CSV includes frame, landmark_id, x, y, z."],
-                "top_errors": []
+                "body_part_comments": ["Fix CSV columns: frame, landmark_id, x, y, z."],
+                "top_errors": [],
+                "detailed_timeline": []
             }
         }
 
     ref_frames = set(ref_df["frame"].unique())
-    user_frames = set(user_df["frame"].unique())
-    common_frames = sorted(ref_frames & user_frames)
+    usr_frames = set(usr_df["frame"].unique())
+    common_frames = sorted(ref_frames & usr_frames)
 
     if not common_frames:
         return {
+            "status": "fail",
+            "reason": "no_common_frames",
             "similarity_score": 0.0,
             "mean_landmark_distance": None,
             "frames_compared": 0,
-            "message": "No common frames to compare (check that both videos had pose detections).",
+            "message": "No common frames to compare (pose not detected).",
             "feedback": {
                 "summary": "No matching pose frames were detected between the two videos.",
                 "timing": "Timing feedback unavailable because there were no comparable frames.",
                 "body_part_comments": [
-                    "Try recording with better lighting and keep the full body visible in frame."
+                    "Record with better lighting and keep the full body visible in frame."
                 ],
-                "top_errors": []
+                "top_errors": [],
+                "detailed_timeline": []
             }
         }
+
+    # mismatch detector config
+    MISMATCH_MIN_CORR = 0.35
+    MISMATCH_MAX_MEAN_DIST = 0.55
+    MIN_FRAMES_FOR_MISMATCH_CHECK = 60
 
     GROUPS = {
         "Head/Neck": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
@@ -314,99 +399,24 @@ def compare_motion_csvs(reference_csv_path, user_csv_path, frame_rate=30):
     }
 
     LANDMARK_NAME = {
+        0: "Nose",
         11: "Left Shoulder", 12: "Right Shoulder",
         13: "Left Elbow", 14: "Right Elbow",
         15: "Left Wrist", 16: "Right Wrist",
         23: "Left Hip", 24: "Right Hip",
         25: "Left Knee", 26: "Right Knee",
         27: "Left Ankle", 28: "Right Ankle",
-        0: "Nose",
+        31: "Left Foot", 32: "Right Foot",
     }
 
-    distances_all = []
-    group_dists = {k: [] for k in GROUPS.keys()}
-    landmark_dists = {i: [] for i in range(33)}
+    def to_sec(frame):
+        return frame / float(frame_rate)
 
-    for frame in common_frames:
-        ref_f = ref_df.loc[ref_df["frame"] == frame, ["landmark_id", "x", "y", "z"]]
-        usr_f = user_df.loc[user_df["frame"] == frame, ["landmark_id", "x", "y", "z"]]
-        merged = ref_f.merge(usr_f, on="landmark_id", suffixes=("_ref", "_usr"))
-
-        if merged.empty:
-            continue
-
-        merged["dist"] = np.sqrt(
-            (merged["x_ref"] - merged["x_usr"]) ** 2 +
-            (merged["y_ref"] - merged["y_usr"]) ** 2 +
-            (merged["z_ref"] - merged["z_usr"]) ** 2
-        )
-
-        distances_all.extend(merged["dist"].tolist())
-
-        for _, row in merged.iterrows():
-            lid = int(row["landmark_id"])
-            d = float(row["dist"])
-            if 0 <= lid <= 32:
-                landmark_dists[lid].append(d)
-
-        for gname, lids in GROUPS.items():
-            g = merged[merged["landmark_id"].isin(lids)]
-            if len(g) > 0:
-                group_dists[gname].extend(g["dist"].tolist())
-
-    if len(distances_all) == 0:
-        return {
-            "similarity_score": 0.0,
-            "mean_landmark_distance": None,
-            "frames_compared": 0,
-            "message": "No comparable landmark rows found in common frames.",
-            "feedback": {
-                "summary": "We couldn't compute distances because the detected landmarks did not overlap properly.",
-                "timing": "N/A",
-                "body_part_comments": ["Try keeping the full body visible and avoid occlusions."],
-                "top_errors": []
-            }
-        }
-
-    mean_distance = float(np.mean(distances_all))
-    similarity_score = float(np.clip(100 - (mean_distance * 100), 0, 100))
-
-    def landmark_series_y(df, lid):
-        s = df[df["landmark_id"] == lid].sort_values("frame")
-        return s["y"].to_numpy()
-
-    used_lid = 16
-    ref_sig = landmark_series_y(ref_df, used_lid)
-    usr_sig = landmark_series_y(user_df, used_lid)
-
-    if len(ref_sig) < 10 or len(usr_sig) < 10:
-        used_lid = 28
-        ref_sig = landmark_series_y(ref_df, used_lid)
-        usr_sig = landmark_series_y(user_df, used_lid)
-
-    timing_comment = "Timing feedback unavailable."
-    if len(ref_sig) >= 10 and len(usr_sig) >= 10:
-        ref_sig = ref_sig - np.mean(ref_sig)
-        usr_sig = usr_sig - np.mean(usr_sig)
-        corr = correlate(usr_sig, ref_sig, mode="full")
-        lag_frames = int(np.argmax(corr) - (len(ref_sig) - 1))
-        lag_seconds = lag_frames / float(frame_rate)
-
-        if lag_frames > 3:
-            timing_comment = (
-                f"You are BEHIND the reference timing (~{lag_frames} frames, ~{lag_seconds:.2f}s). "
-                f"Try initiating transitions slightly earlier to match the choreographer."
-            )
-        elif lag_frames < -3:
-            timing_comment = (
-                f"You are AHEAD of the reference timing (~{abs(lag_frames)} frames, ~{abs(lag_seconds):.2f}s). "
-                f"Try holding positions a bit longer before moving to the next beat."
-            )
-        else:
-            timing_comment = "Timing is close to the reference (no noticeable lead/lag)."
-
-    group_means = {g: (float(np.mean(v)) if len(v) else 0.0) for g, v in group_dists.items()}
-    worst_groups = sorted(group_means.items(), key=lambda x: x[1], reverse=True)[:2]
+    def fmt_ts(sec: float) -> str:
+        sec = max(0.0, float(sec))
+        m = int(sec // 60)
+        s = int(sec % 60)
+        return f"{m:02d}:{s:02d}"
 
     def severity_label(d):
         if d >= 0.12:
@@ -415,65 +425,336 @@ def compare_motion_csvs(reference_csv_path, user_csv_path, frame_rate=30):
             return "medium"
         return "low"
 
+    def direction_phrase(dx, dy):
+        # MediaPipe: y increases DOWNWARD on screen
+        parts = []
+        tx, ty = 0.05, 0.05
+
+        if abs(dy) >= ty:
+            parts.append("lower" if dy > 0 else "higher")
+        if abs(dx) >= tx:
+            parts.append("more to the right" if dx > 0 else "more to the left")
+
+        if not parts:
+            return "slightly off position"
+        if len(parts) == 1:
+            return parts[0]
+        return f"{parts[0]} and {parts[1]}"
+
+    def build_detailed_timeline(frame_events, min_frames=6, gap_allow=2, limit=18):
+        if not frame_events:
+            return []
+
+        frame_events.sort(key=lambda e: (e["group"], e["lid"], e["frame"]))
+
+        merged = []
+        cur = None
+
+        for e in frame_events:
+            if cur is None:
+                cur = {
+                    "group": e["group"],
+                    "lid": e["lid"],
+                    "name": e["name"],
+                    "start_frame": e["frame"],
+                    "end_frame": e["frame"],
+                    "max_dist": e["dist"],
+                    "sum_dx": e["dx"],
+                    "sum_dy": e["dy"],
+                    "count": 1,
+                    "severity": e["severity"],
+                }
+                continue
+
+            same = (cur["group"] == e["group"] and cur["lid"] == e["lid"])
+            close = (e["frame"] <= cur["end_frame"] + gap_allow)
+
+            if same and close:
+                cur["end_frame"] = e["frame"]
+                cur["max_dist"] = max(cur["max_dist"], e["dist"])
+                cur["sum_dx"] += e["dx"]
+                cur["sum_dy"] += e["dy"]
+                cur["count"] += 1
+                if e["severity"] == "high":
+                    cur["severity"] = "high"
+                elif e["severity"] == "medium" and cur["severity"] == "low":
+                    cur["severity"] = "medium"
+            else:
+                merged.append(cur)
+                cur = {
+                    "group": e["group"],
+                    "lid": e["lid"],
+                    "name": e["name"],
+                    "start_frame": e["frame"],
+                    "end_frame": e["frame"],
+                    "max_dist": e["dist"],
+                    "sum_dx": e["dx"],
+                    "sum_dy": e["dy"],
+                    "count": 1,
+                    "severity": e["severity"],
+                }
+
+        if cur:
+            merged.append(cur)
+
+        merged = [m for m in merged if (m["end_frame"] - m["start_frame"] + 1) >= min_frames]
+        if not merged:
+            return []
+
+        sev_rank = {"high": 2, "medium": 1, "low": 0}
+        merged.sort(key=lambda m: (sev_rank.get(m["severity"], 0), m["max_dist"]), reverse=True)
+        merged = merged[:limit]
+
+        out = []
+        for m in merged:
+            start_s = to_sec(m["start_frame"])
+            end_s = to_sec(m["end_frame"])
+            avg_dx = m["sum_dx"] / max(1, m["count"])
+            avg_dy = m["sum_dy"] / max(1, m["count"])
+            phrase = direction_phrase(avg_dx, avg_dy)
+
+            out.append({
+                "start": fmt_ts(start_s),
+                "end": fmt_ts(end_s),
+                "severity": m["severity"],
+                "body_part": m["group"],
+                "joint": m["name"],
+                "message": f"{m['name']} ({m['group']}) is {phrase} than the choreographer."
+            })
+
+        out.sort(key=lambda x: x["start"])
+        return out
+
+    worst_by_landmark = {}
+    distances_all = []
+    group_dists = {k: [] for k in GROUPS.keys()}
+    timeline_events_all = []
+
+    for frame in common_frames:
+        ref_f = ref_df.loc[ref_df["frame"] == frame, ["landmark_id", "x", "y", "z"]]
+        usr_f = usr_df.loc[usr_df["frame"] == frame, ["landmark_id", "x", "y", "z"]]
+        merged = ref_f.merge(usr_f, on="landmark_id", suffixes=("_ref", "_usr"))
+        if merged.empty:
+            continue
+
+        merged["dx"] = merged["x_usr"] - merged["x_ref"]
+        merged["dy"] = merged["y_usr"] - merged["y_ref"]
+        merged["dist"] = np.sqrt(
+            (merged["dx"]) ** 2 +
+            (merged["dy"]) ** 2 +
+            (merged["z_usr"] - merged["z_ref"]) ** 2
+        )
+
+        distances_all.extend(merged["dist"].tolist())
+
+        for gname, lids in GROUPS.items():
+            g = merged[merged["landmark_id"].isin(lids)]
+            if len(g) > 0:
+                group_dists[gname].extend(g["dist"].tolist())
+
+        for _, row in merged.iterrows():
+            lid = int(row["landmark_id"])
+            dist = float(row["dist"])
+            if lid not in worst_by_landmark or dist > worst_by_landmark[lid]["dist"]:
+                worst_by_landmark[lid] = {
+                    "frame": int(frame),
+                    "dist": dist,
+                    "dx": float(row["dx"]),
+                    "dy": float(row["dy"]),
+                }
+
+        # timeline events (keep medium/high only)
+        for _, row in merged.iterrows():
+            lid = int(row["landmark_id"])
+            dist = float(row["dist"])
+            if dist < 0.07:
+                continue
+
+            group_name = None
+            for gname, lids in GROUPS.items():
+                if lid in lids:
+                    group_name = gname
+                    break
+            if group_name is None:
+                continue
+
+            timeline_events_all.append({
+                "frame": int(frame),
+                "lid": lid,
+                "name": LANDMARK_NAME.get(lid, f"Landmark {lid}"),
+                "group": group_name,
+                "dist": dist,
+                "dx": float(row["dx"]),
+                "dy": float(row["dy"]),
+                "severity": severity_label(dist)
+            })
+
+    if len(distances_all) == 0:
+        return {
+            "status": "fail",
+            "reason": "no_distances",
+            "similarity_score": 0.0,
+            "mean_landmark_distance": None,
+            "frames_compared": 0,
+            "message": "No comparable landmark rows found in common frames.",
+            "feedback": {
+                "summary": "We couldn't compute differences because landmarks did not overlap properly.",
+                "timing": "N/A",
+                "body_part_comments": ["Try keeping the full body visible and avoid occlusions."],
+                "top_errors": [],
+                "detailed_timeline": []
+            }
+        }
+
+    mean_distance = float(np.mean(distances_all))
+    similarity_score = float(np.clip(100 - (mean_distance * 100), 0, 100))
+
+    # mismatch check
+    def landmark_series(df, lid, axis="y"):
+        s = df[df["landmark_id"] == lid].sort_values("frame")
+        if axis == "x":
+            return s["x"].to_numpy()
+        return s["y"].to_numpy()
+
+    def norm(sig):
+        if len(sig) < 10:
+            return None
+        sig = sig.astype(np.float64)
+        sig = sig - np.mean(sig)
+        std = np.std(sig)
+        if std < 1e-9:
+            return None
+        return sig / std
+
+    def max_corr(a, b):
+        a = norm(a)
+        b = norm(b)
+        if a is None or b is None:
+            return None
+        c = correlate(a, b, mode="full")
+        denom = len(a)
+        if denom <= 0:
+            return None
+        return float(np.max(c) / denom)
+
+    corr_landmarks = [16, 15, 28, 27, 24, 23]
+    corrs = []
+    if len(common_frames) >= MIN_FRAMES_FOR_MISMATCH_CHECK:
+        for lid in corr_landmarks:
+            r = landmark_series(ref_df, lid, "y")
+            u = landmark_series(usr_df, lid, "y")
+            mc = max_corr(u, r)
+            if mc is not None and not np.isnan(mc):
+                corrs.append(mc)
+
+    avg_corr = float(np.mean(corrs)) if len(corrs) else None
+
+    is_mismatch = False
+    if avg_corr is not None and avg_corr < MISMATCH_MIN_CORR:
+        is_mismatch = True
+    if mean_distance > MISMATCH_MAX_MEAN_DIST:
+        is_mismatch = True
+
+    if is_mismatch:
+        return {
+            "status": "fail",
+            "reason": "different_dance",
+            "similarity_score": 0.0,
+            "mean_landmark_distance": round(mean_distance, 6),
+            "frames_compared": len(common_frames),
+            "message": "Different dance detected (movement patterns do not match the reference).",
+            "feedback": {
+                "summary": "Analysis failed because the detected movement patterns do not match the reference choreography.",
+                "timing": "Timing comparison is not meaningful when dances do not match.",
+                "body_part_comments": [
+                    "Make sure you are using the same choreography video as the reference.",
+                    "Try trimming both videos so they start at the same beat."
+                ],
+                "top_errors": [
+                    f"Mismatch check: avg correlation = {avg_corr:.2f}" if avg_corr is not None else
+                    "Mismatch check: insufficient reliable signal for correlation."
+                ],
+                "detailed_timeline": []
+            }
+        }
+
+    # timing lead/lag
+    used_lid = 16
+    ref_sig = landmark_series(ref_df, used_lid, "y")
+    usr_sig = landmark_series(usr_df, used_lid, "y")
+
+    if len(ref_sig) < 10 or len(usr_sig) < 10:
+        used_lid = 28
+        ref_sig = landmark_series(ref_df, used_lid, "y")
+        usr_sig = landmark_series(usr_df, used_lid, "y")
+
+    timing_comment = "Timing feedback unavailable."
+    if len(ref_sig) >= 10 and len(usr_sig) >= 10:
+        ref0 = ref_sig - np.mean(ref_sig)
+        usr0 = usr_sig - np.mean(usr_sig)
+        c = correlate(usr0, ref0, mode="full")
+        lag_frames = int(np.argmax(c) - (len(ref0) - 1))
+        lag_seconds = lag_frames / float(frame_rate)
+
+        if lag_frames > 3:
+            timing_comment = (
+                f"You are BEHIND the choreographer by about {abs(lag_seconds):.2f}s. "
+                f"Try starting transitions slightly earlier."
+            )
+        elif lag_frames < -3:
+            timing_comment = (
+                f"You are AHEAD of the choreographer by about {abs(lag_seconds):.2f}s. "
+                f"Try holding positions slightly longer before switching moves."
+            )
+        else:
+            timing_comment = "Your timing is close to the choreographer."
+
+    # body-part worst 2 groups
+    group_means = {g: (float(np.mean(v)) if len(v) else 0.0) for g, v in group_dists.items()}
+    worst_groups = sorted(group_means.items(), key=lambda x: x[1], reverse=True)[:2]
+
     body_part_comments = []
     for gname, d in worst_groups:
         sev = severity_label(d)
         if sev == "high":
-            body_part_comments.append(
-                f"{gname}: major mismatch vs reference. Focus on matching angles and position paths more closely."
-            )
+            body_part_comments.append(f"{gname}: major mismatch. Focus on matching angles and movement path.")
         elif sev == "medium":
-            body_part_comments.append(
-                f"{gname}: noticeable differences. Tighten control and follow the reference movement path."
-            )
+            body_part_comments.append(f"{gname}: noticeable mismatch. Tighten control and follow the reference shape.")
         else:
-            body_part_comments.append(
-                f"{gname}: minor differences. Small refinements will improve accuracy."
-            )
+            body_part_comments.append(f"{gname}: minor mismatch. Small refinements will improve accuracy.")
 
-    landmark_avg = {lid: (float(np.mean(vals)) if len(vals) else 0.0) for lid, vals in landmark_dists.items()}
-    top_landmarks = sorted(landmark_avg.items(), key=lambda x: x[1], reverse=True)[:5]
-
+    # top errors (worst moments)
+    worst_sorted = sorted(worst_by_landmark.items(), key=lambda kv: kv[1]["dist"], reverse=True)[:5]
     top_errors = []
-    for lid, d in top_landmarks:
-        if d <= 0:
-            continue
+    for lid, info in worst_sorted:
         name = LANDMARK_NAME.get(lid, f"Landmark {lid}")
-        top_errors.append(f"{name}: deviation ≈ {d:.3f}")
+        t = to_sec(info["frame"])
+        phrase = direction_phrase(info["dx"], info["dy"])
+        top_errors.append(f"At ~{t:.2f}s: {name} is {phrase} than the choreographer.")
+
+    detailed_timeline = build_detailed_timeline(timeline_events_all)
 
     score = round(similarity_score, 2)
-    frames_used = len(common_frames)
     worst_group_name = worst_groups[0][0] if worst_groups else "overall posture"
 
     if score >= 90:
-        summary = (
-            f"Excellent match. Your movements closely follow the choreographer with minimal pose deviation. "
-            f"Most differences are small and mainly in {worst_group_name}."
-        )
+        summary = f"Excellent match overall. Small differences mainly in {worst_group_name}."
     elif score >= 75:
-        summary = (
-            f"Good performance with noticeable but manageable differences. "
-            f"The score is mainly affected by mismatches in {worst_group_name} and slight timing/pose variation."
-        )
+        summary = f"Good performance with manageable differences. Biggest issues are in {worst_group_name}."
     elif score >= 60:
-        summary = (
-            f"Fair alignment. There are clear deviations in pose and/or timing compared to the choreographer. "
-            f"The largest issues appear in {worst_group_name}, which pulls the score down."
-        )
+        summary = f"Fair alignment. Clear differences exist, mostly in {worst_group_name}."
     else:
-        summary = (
-            f"Needs improvement. Large pose differences or timing mismatch were detected. "
-            f"Your {worst_group_name} alignment differs significantly from the reference, strongly affecting the score."
-        )
+        summary = f"Needs improvement. Large differences detected, especially in {worst_group_name}."
 
     used_name = LANDMARK_NAME.get(used_lid, f"landmark {used_lid}")
     if "unavailable" not in timing_comment.lower():
         summary += f" Timing was estimated using {used_name} motion."
 
     return {
+        "status": "success",
         "similarity_score": score,
         "mean_landmark_distance": round(mean_distance, 6),
-        "frames_compared": frames_used,
+        "frames_compared": len(common_frames),
         "feedback": {
             "summary": summary,
             "timing": timing_comment,
@@ -481,286 +762,170 @@ def compare_motion_csvs(reference_csv_path, user_csv_path, frame_rate=30):
                 "Overall movement is consistent. Focus on matching key joint positions more precisely."
             ],
             "top_errors": top_errors if top_errors else [
-                "No dominant joint error stood out; differences are spread across joints."
-            ]
+                "No single joint stood out strongly; small differences are spread across joints."
+            ],
+            "detailed_timeline": detailed_timeline
         }
     }
 
-
-def write_result_log(video1_path, video2_path, output1, output2, comparison):
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    log_filename = f"motion_capture_{timestamp}.log"
-    log_path = os.path.join(LOG_FOLDER, log_filename)
-
-    lines = [
-        "=" * 60,
-        "MOTION CAPTURE RUN RESULT",
-        "=" * 60,
-        f"Timestamp: {datetime.now().isoformat()}",
-        "",
-        "Input videos:",
-        f"  Reference: {video1_path}",
-        f"  User:      {video2_path}",
-        "",
-        "Output CSVs:",
-        f"  Reference motion: {output1}",
-        f"  User motion:      {output2}",
-        "",
-        "Comparison:",
-        f"  Similarity score (0-100):  {comparison.get('similarity_score', 'N/A')}",
-        f"  Mean landmark distance:   {comparison.get('mean_landmark_distance', 'N/A')}",
-        f"  Frames compared:          {comparison.get('frames_compared', 'N/A')}",
-    ]
-    if comparison.get("message"):
-        lines.append(f"  Message: {comparison['message']}")
-
-    with open(log_path, "w", encoding="utf-8") as f:
-        f.write("\n".join(lines))
-
-    return log_path
-
-
+# =========================
+# /analyze : returns score + feedback + visuals (PNG previews)
+# - Optional: store original MP4s in Supabase Storage when store_in_supabase=true
+# =========================
 @app.route("/analyze", methods=["POST"])
-def analyze_videos():
-    if "video1" not in request.files or "video2" not in request.files:
-        return jsonify({"error": "Two videos are required (video1 and video2)."}), 400
-
-    video1 = request.files["video1"]
-    video2 = request.files["video2"]
-
-    if video1.filename == "" or video2.filename == "":
-        return jsonify({"error": "Both files must have names."}), 400
-
-    video1_path = os.path.join(UPLOAD_FOLDER, "dance_reference.mp4")
-    video2_path = os.path.join(UPLOAD_FOLDER, "dance_user.mp4")
-    video1.save(video1_path)
-    video2.save(video2_path)
-
-    output1 = os.path.join(OUTPUT_FOLDER, "reference_motion.csv")
-    output2 = os.path.join(OUTPUT_FOLDER, "user_motion.csv")
-
+def analyze():
     try:
-        extract_motion_from_video(video1_path, output1)
-        extract_motion_from_video(video2_path, output2)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        print("---- /analyze called ----")
+        print("Incoming files:", list(request.files.keys()))
+        print("Incoming form:", dict(request.form))
 
-    comparison = compare_motion_csvs(output1, output2)
-    log_path = write_result_log(video1_path, video2_path, output1, output2, comparison)
+        # ✅ Check required files
+        if "dancer_video" not in request.files or "choreo_video" not in request.files:
+            return jsonify({
+                "error": "Missing upload files",
+                "expected_fields": ["dancer_video", "choreo_video"],
+                "received_fields": list(request.files.keys())
+            }), 400
 
-    return jsonify({
-        "message": "Analysis complete",
-        "score": comparison.get("similarity_score", 0),
-        "comparison": comparison,
-        "feedback": comparison.get("feedback", {}),
-        "outputs": {"reference": output1, "user": output2},
-        "log_file": log_path
-    }), 200
+        dancer = request.files["dancer_video"]   # user/dancer
+        choreo = request.files["choreo_video"]   # reference/choreo
 
-# ================================================================================================
-# YOUR .MOT ALIGNMENT SECTION (UNCHANGED - kept for later)
-# ================================================================================================
-def save_uploaded_file(file_data, file_extension=".tmp"):
-    filename = f"upload_{uuid.uuid4()}{file_extension}"
-    file_path = os.path.join(tempfile.gettempdir(), filename)
-    with open(file_path, 'wb') as f:
-        f.write(file_data)
-    return file_path
+        if dancer.filename == "" or choreo.filename == "":
+            return jsonify({"error": "One or both uploaded files are empty"}), 400
 
-def cleanup_temp_files(*file_paths):
-    for file_path in file_paths:
+        # ----------------------------
+        # Flags from frontend
+        # ----------------------------
+        def _truthy(v: str) -> bool:
+            return str(v or "").strip().lower() in ("1", "true", "yes", "y", "on")
+
+        generate_preview = _truthy(request.form.get("generate_preview", "true"))
+
+        # ✅ default to 1 (limit marker PNG to one)
         try:
-            if os.path.exists(file_path):
-                os.remove(file_path)
-        except Exception as e:
-            print(f"Warning: Could not delete temp file {file_path}: {e}")
+            preview_max_frames = int(request.form.get("preview_max_frames", "1"))
+        except Exception:
+            preview_max_frames = 1
 
-def read_mot_file(file_path):
-    with open(file_path) as f:
-        lines = f.readlines()
-    start_index = next(i for i, line in enumerate(lines) if line.strip().startswith("time"))
-    df = pd.read_csv(file_path, sep=r'\s+', skiprows=start_index)
-    return df
+        # Optional: store original videos in Supabase Storage
+        store_in_supabase = _truthy(request.form.get("store_in_supabase", "false"))
+        storage_bucket = "videos"
 
-def interpolate_to_match(ref, usr):
-    usr_interp = usr.set_index('time').reindex(ref['time']).interpolate().reset_index()
-    return usr_interp
+        # ----------------------------
+        # Unique run folder
+        # ----------------------------
+        run_id = datetime.utcnow().strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:8]
 
-def compute_pose_error(ref_motion, usr_motion):
-    diff = np.abs(ref_motion.values - usr_motion.values)
-    pose_error = np.mean(diff)
-    return pose_error
+        run_root = os.path.join(STATIC_OUTPUTS, run_id)
+        ref_dir = os.path.join(run_root, "reference")
+        usr_dir = os.path.join(run_root, "user")
+        os.makedirs(ref_dir, exist_ok=True)
+        os.makedirs(usr_dir, exist_ok=True)
 
-def compute_timing_lag(ref_motion, usr_motion, key_joint='hip_flexion_r', frame_rate=60):
-    if key_joint not in ref_motion.columns or key_joint not in usr_motion.columns:
-        return 0.0
-    ref_signal = ref_motion[key_joint] - ref_motion[key_joint].mean()
-    usr_signal = usr_motion[key_joint] - usr_motion[key_joint].mean()
-    corr = correlate(usr_signal, ref_signal, mode='full')
-    lag = np.argmax(corr) - (len(ref_signal) - 1)
-    lag_seconds = lag / frame_rate
-    return lag_seconds
+        # ----------------------------
+        # Save uploaded MP4s locally (needed for cv2/mediapipe)
+        # ----------------------------
+        ref_video_path = os.path.join(ref_dir, "reference.mp4")
+        usr_video_path = os.path.join(usr_dir, "user.mp4")
 
-def compute_smoothness_error(motion):
-    velocity = np.diff(motion.values, axis=0)
-    smoothness_error = np.std(velocity)
-    return smoothness_error
+        choreo.save(ref_video_path)
+        dancer.save(usr_video_path)
 
-def compute_alignment_score(pose_error, timing_lag, smoothness_error, w1=0.6, w2=0.3, w3=0.1):
-    pose_penalty = min(pose_error * 100, 100)
-    timing_penalty = min(abs(timing_lag) * 10, 100)
-    smoothness_penalty = min(smoothness_error * 50, 100)
+        print("Saved videos:")
+        print("  ref:", ref_video_path)
+        print("  usr:", usr_video_path)
 
-    total_penalty = (w1 * pose_penalty) + (w2 * timing_penalty) + (w3 * smoothness_penalty)
-    score = max(0, 100 - total_penalty)
-    return score
+        # ----------------------------
+        # OPTIONAL: Upload videos to Supabase Storage
+        # ----------------------------
+        storage_info = None
+        if store_in_supabase:
+            ref_ct = mimetypes.guess_type(choreo.filename)[0] or "video/mp4"
+            usr_ct = mimetypes.guess_type(dancer.filename)[0] or "video/mp4"
 
-def analyze_dance_alignment(ref_file, usr_file):
-    ref = read_mot_file(ref_file)
-    usr = read_mot_file(usr_file)
+            ref_storage_path = f"{run_id}/reference.mp4"
+            usr_storage_path = f"{run_id}/user.mp4"
 
-    usr_interp = interpolate_to_match(ref, usr)
+            with open(ref_video_path, "rb") as f:
+                upload_bytes_to_storage(storage_bucket, ref_storage_path, f.read(), ref_ct)
 
-    ref_motion = ref.drop(columns=['time'])
-    usr_motion = usr_interp.drop(columns=['time'])
+            with open(usr_video_path, "rb") as f:
+                upload_bytes_to_storage(storage_bucket, usr_storage_path, f.read(), usr_ct)
 
-    pose_error = compute_pose_error(ref_motion, usr_motion)
-    timing_lag = compute_timing_lag(ref_motion, usr_motion)
-    smoothness_error = compute_smoothness_error(usr_motion)
-    score = compute_alignment_score(pose_error, timing_lag, smoothness_error)
-
-    if score > 90:
-        feedback = "Excellent synchronization! Very close to the reference."
-    elif score > 75:
-        feedback = "Good performance. Slight timing or pose variations."
-    elif score > 60:
-        feedback = "Average alignment. Noticeable deviations in movement."
-    else:
-        feedback = "Needs improvement. Large misalignment detected."
-
-    return {
-        "pose_error": float(pose_error),
-        "timing_lag_seconds": float(timing_lag),
-        "smoothness_error": float(smoothness_error),
-        "alignment_score": round(score, 2),
-        "feedback": feedback
-    }
-
-def process_two_files(file1_path, file2_path, algorithm_params=None):
-    try:
-        print(f"Processing reference file: {file1_path}")
-        print(f"Processing user file: {file2_path}")
-
-        alignment_results = analyze_dance_alignment(file1_path, file2_path)
-
-        return {
-            "status": "success",
-            "file1_processed": True,
-            "file2_processed": True,
-            "algorithm_results": alignment_results,
-            "metadata": {
-                "algorithm_version": "2.0",
-                "algorithm_name": "Dance Alignment Analysis",
-                "timestamp": "2025-01-01T12:00:00Z",
-                "files_analyzed": {
-                    "reference_file": os.path.basename(file1_path),
-                    "user_file": os.path.basename(file2_path)
-                }
+            storage_info = {
+                "bucket": storage_bucket,
+                "reference_path": ref_storage_path,
+                "user_path": usr_storage_path
             }
-        }
-    except Exception as e:
-        return {
-            "status": "error",
-            "error_message": str(e),
-            "file1_processed": False,
-            "file2_processed": False
-        }
 
-@app.route('/api/analyze-dance-alignment', methods=['POST'])
-@jwt_required()
-def analyze_dance_alignment_endpoint():
-    try:
-        if 'reference_file' not in request.files or 'user_file' not in request.files:
-            return jsonify({"error": "Both reference_file and user_file are required"}), 400
+        # ----------------------------
+        # Extract motion CSVs
+        # ----------------------------
+        ref_csv = os.path.join(OUTPUT_FOLDER, f"{run_id}_reference_motion.csv")
+        usr_csv = os.path.join(OUTPUT_FOLDER, f"{run_id}_user_motion.csv")
 
-        reference_file = request.files['reference_file']
-        user_file = request.files['user_file']
+        print("Extracting CSVs...")
+        extract_motion_from_video(ref_video_path, ref_csv)
+        extract_motion_from_video(usr_video_path, usr_csv)
 
-        if reference_file.filename == '' or user_file.filename == '':
-            return jsonify({"error": "Both files must have names"}), 400
+        # ----------------------------
+        # Compare motions -> feedback + score
+        # ----------------------------
+        print("Comparing motions...")
+        comparison = compare_motion_csvs(ref_csv, usr_csv, frame_rate=30)
 
-        if not (reference_file.filename.lower().endswith('.mot') and user_file.filename.lower().endswith('.mot')):
-            return jsonify({"error": "Both files must be .mot files"}), 400
+        score = comparison.get("similarity_score", 0.0)
+        feedback = comparison.get("feedback", {})
 
-        algorithm_params = {
-            'key_joint': request.form.get('key_joint', 'hip_flexion_r'),
-            'frame_rate': float(request.form.get('frame_rate', 60)),
-            'pose_weight': float(request.form.get('pose_weight', 0.6)),
-            'timing_weight': float(request.form.get('timing_weight', 0.3)),
-            'smoothness_weight': float(request.form.get('smoothness_weight', 0.1))
+        # ----------------------------
+        # Generate visuals (PNG previews ONLY)
+        # ----------------------------
+        visuals = {
+            "reference": {"preview_images": []},
+            "user": {"preview_images": []},
         }
 
-        ref_path = save_uploaded_file(reference_file.read(), '.mot')
-        usr_path = save_uploaded_file(user_file.read(), '.mot')
+        if generate_preview:
+            print("Generating preview PNGs...")
+            ref_prev_dir = os.path.join(ref_dir, "previews")
+            usr_prev_dir = os.path.join(usr_dir, "previews")
 
-        results = process_two_files(ref_path, usr_path, algorithm_params)
+            ref_pngs = save_pose_preview_frames_tasks(
+                ref_video_path, ref_prev_dir, every_n_frames=30, max_frames=preview_max_frames
+            )
+            usr_pngs = save_pose_preview_frames_tasks(
+                usr_video_path, usr_prev_dir, every_n_frames=30, max_frames=preview_max_frames
+            )
 
-        cleanup_temp_files(ref_path, usr_path)
+            visuals["reference"]["preview_images"] = [to_public_url(p) for p in ref_pngs]
+            visuals["user"]["preview_images"] = [to_public_url(p) for p in usr_pngs]
 
-        return jsonify(results), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/api/process-dance-alignment', methods=['POST'])
-@jwt_required()
-def process_dance_alignment():
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({"error": "No JSON data provided"}), 400
-
-        ref_file_path = data.get('reference_file_path')
-        usr_file_path = data.get('user_file_path')
-        algorithm_params = data.get('algorithm_params', {})
-
-        if not ref_file_path or not usr_file_path:
-            return jsonify({"error": "Both reference_file_path and user_file_path are required"}), 400
-
-        if not os.path.exists(ref_file_path) or not os.path.exists(usr_file_path):
-            return jsonify({"error": "One or both files do not exist"}), 404
-
-        results = process_two_files(ref_file_path, usr_file_path, algorithm_params)
-
-        return jsonify(results), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/api/dance-alignment-status', methods=['GET'])
-@jwt_required()
-def get_dance_alignment_status():
-    return jsonify({
-        "algorithm_info": {
-            "name": "Dance Alignment Analysis",
-            "version": "2.0",
-            "description": "Analyzes dance performance alignment between reference and user .mot files",
-            "supported_formats": [".mot"],
-            "parameters": {
-                "key_joint": "Joint used for timing analysis (default: hip_flexion_r)",
-                "frame_rate": "Frame rate for timing calculations (default: 60)",
-                "pose_weight": "Weight for pose error in scoring (default: 0.6)",
-                "timing_weight": "Weight for timing lag in scoring (default: 0.3)",
-                "smoothness_weight": "Weight for smoothness error in scoring (default: 0.1)"
+        return jsonify({
+            "message": "Analysis complete",
+            "score": score,
+            "comparison": comparison,
+            "feedback": feedback,
+            "outputs": {
+                "run_id": run_id,
+                "visuals": visuals,
+                "reference_video": to_public_url(ref_video_path),
+                "user_video": to_public_url(usr_video_path),
+                "reference_csv": ref_csv,
+                "user_csv": usr_csv,
+                "storage": storage_info
             }
-        },
-        "endpoints": [
-            "/api/analyze-dance-alignment",
-            "/api/process-dance-alignment"
-        ],
-        "system_status": "operational"
-    }), 200
+        }), 200
 
-# --- Run the Flask app if this file is executed directly ---
-if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    except Exception as e:
+        app.logger.exception("Analyze failed")
+        return jsonify({
+            "error": "Analyze failed (server error)",
+            "detail": str(e)
+        }), 500
+
+# =========================
+# RUN
+# =========================
+if __name__ == "__main__":
+    # host 0.0.0.0 so frontend can hit it from LAN too if needed
+    app.run(debug=True, host="0.0.0.0", port=5000)

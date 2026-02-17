@@ -1,79 +1,83 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+
+const BACKEND_URL = "http://localhost:5000";
 
 export default function LoadingPage() {
   const router = useRouter();
+  const [msg, setMsg] = useState("Starting analysis...");
 
   useEffect(() => {
-    const analyze = async () => {
-      // ✅ prevent stale results from previous runs
-      sessionStorage.removeItem("dp_result");
+    const run = async () => {
+      const dancer = sessionStorage.getItem("dp_dancer");
+      const choreo = sessionStorage.getItem("dp_choreo");
 
-      const dancerDataUrl = sessionStorage.getItem("dp_dancer");
-      const choreoDataUrl = sessionStorage.getItem("dp_choreo");
-
-      if (!dancerDataUrl || !choreoDataUrl) {
+      if (!dancer || !choreo) {
         router.replace("/upload");
         return;
       }
 
-      // Convert dataURL -> Blob
       const dataUrlToBlob = async (dataUrl: string) => {
         const res = await fetch(dataUrl);
         return await res.blob();
       };
 
       try {
-        const dancerBlob = await dataUrlToBlob(dancerDataUrl);
-        const choreoBlob = await dataUrlToBlob(choreoDataUrl);
+        setMsg("Preparing files...");
+        const dancerBlob = await dataUrlToBlob(dancer);
+        const choreoBlob = await dataUrlToBlob(choreo);
+
+        const dancerFile = new File([dancerBlob], "dancer.mp4", {
+          type: dancerBlob.type || "video/mp4",
+        });
+
+        const choreoFile = new File([choreoBlob], "choreo.mp4", {
+          type: choreoBlob.type || "video/mp4",
+        });
 
         const formData = new FormData();
-        formData.append("video1", choreoBlob, "choreo.mp4");
-        formData.append("video2", dancerBlob, "dancer.mp4");
 
- const response = await fetch("https://dance-perfect-backend-service.onrender.com", {
-  method: "POST",
-  body: formData,
-});
+        // ✅ MUST MATCH BACKEND EXPECTED KEYS
+        formData.append("dancer_video", dancerFile);
+        formData.append("choreo_video", choreoFile);
 
-const data = await response.json().catch(() => ({ error: "Analysis failed" }));
+        formData.append("generate_preview", "true");
+        formData.append("generate_overlay", "false");
+        formData.append("preview_max_frames", "1");
 
-if (!response.ok) {
-  throw new Error(data.error || "Analysis failed.");
-}
+        setMsg("Analyzing Videos...");
+        const resp = await fetch(`${BACKEND_URL}/analyze`, {
+          method: "POST",
+          body: formData,
+        });
 
-        // cleanup storage so it doesn't reuse old videos
-        sessionStorage.removeItem("dp_dancer");
-        sessionStorage.removeItem("dp_choreo");
+        const json = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(json?.detail || json?.error || "Analysis failed");
 
-        // ✅ store full backend response (includes comparison.feedback)
-        sessionStorage.setItem("dp_result", JSON.stringify(data));
+        sessionStorage.setItem("dp_result", JSON.stringify(json));
+        sessionStorage.removeItem("dp_result_error");
 
         router.replace("/results");
-} catch (err: unknown) {
-  sessionStorage.removeItem("dp_result");
-
-  const message =
-    err instanceof Error ? err.message : "Analysis failed.";
-
-  router.replace(`/results?error=${encodeURIComponent(message)}`);
-}
+      } catch (e: any) {
+        console.error(e);
+        sessionStorage.removeItem("dp_result");
+        sessionStorage.setItem("dp_result_error", e?.message || "Unknown error");
+        router.replace("/results");
+      }
     };
 
-    analyze();
+    run();
   }, [router]);
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-white">
-      <div className="w-16 h-16 border-4 border-gray-300 border-t-gray-700 rounded-full animate-spin"></div>
-      <h2 className="mt-6 text-xl font-semibold text-gray-700">
-        Analyzing your performance...
-      </h2>
-      <p className="mt-2 text-gray-500">
-        Please wait while we process your motion data.
-      </p>
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin h-10 w-10 rounded-full border-4 border-gray-300 border-t-gray-700 mx-auto mb-3" />
+        <p className="text-gray-700 font-semibold">{msg}</p>
+        <p className="text-gray-500 text-sm mt-1">Please wait a moment.</p>
+      </div>
     </div>
   );
 }
