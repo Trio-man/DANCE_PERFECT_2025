@@ -39,27 +39,20 @@ export default function LoginPage() {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.8 }}
-      className="min-h-screen flex items-center justify-center px-4 bg-gradient-to-br from-cyan-300 via-pink-300 to-violet-300"
+      className="min-h-screen flex items-center justify-center px-4 bg-gradient-to-br from-cyan-300 via-pink-300 to-violet-300 animate-gradient"
     >
       <motion.div
         initial={{ scale: 0.95, opacity: 0, y: 20 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="relative w-full max-w-md p-10 bg-white/80 backdrop-blur-lg rounded-xl shadow-md text-center"
+        className="w-full max-w-md p-10 bg-white/80 backdrop-blur-lg rounded-xl shadow-md text-center"
       >
-        {/* Animated neon border highlights */}
-        <motion.div
-          className="absolute inset-0 rounded-xl border-2 border-transparent pointer-events-none"
-          animate={{ borderColor: ['#00ffff', '#ff00ff', '#8a2be2', '#00ffff'] }}
-          transition={{ repeat: Infinity, duration: 3, ease: 'linear' }}
-        />
-
         <h1 className="text-3xl font-bold text-blue-600 mb-2">Welcome Back 👋</h1>
         <p className="text-slate-600 mb-8">Sign in to continue</p>
 
         {error && <p className="text-red-600 mb-4 font-medium">{error}</p>}
 
-        <form onSubmit={handleLogin} className="space-y-4 relative z-10">
+        <form onSubmit={handleLogin} className="space-y-4">
           <input
             type="email"
             placeholder="Email"
