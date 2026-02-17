@@ -1,93 +1,61 @@
-'use client';
+<motion.div
+  initial={{ opacity: 0 }}
+  animate={{ opacity: 1 }}
+  transition={{ duration: 0.8 }}
+  className="min-h-screen flex flex-col items-center justify-center px-4 bg-gradient-to-br from-[#cde7ff] via-[#a18cd1] to-white animate-gradient"
+>
+  <motion.div
+    initial={{ y: 30, opacity: 0, scale: 0.95 }}
+    animate={{ y: 0, opacity: 1, scale: 1 }}
+    transition={{ duration: 0.6 }}
+    className="bg-white/60 backdrop-blur-md shadow-lg rounded-2xl p-8 w-full max-w-md"
+  >
+    <h2 className="text-2xl font-bold text-[#4b0082] mb-2 text-center">
+      Sign Up 👤
+    </h2>
+    <p className="text-gray-700 mb-6 text-center">
+      Create your DancePerfect account
+    </p>
 
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
-import { createClient } from '@supabase/supabase-js';
+    {error && (
+      <p className="text-red-700 mb-4 text-center font-medium">{error}</p>
+    )}
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+    <form onSubmit={handleSignup} className="space-y-4">
+      <input
+        type="email"
+        placeholder="Email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        className="border border-gray-400 rounded-lg w-full p-3 outline-none focus:ring-2 focus:ring-[#4b0082]"
+        required
+      />
 
-export default function SignupPage() {
-  const router = useRouter();
+      <input
+        type="password"
+        placeholder="Password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        className="border border-gray-400 rounded-lg w-full p-3 outline-none focus:ring-2 focus:ring-[#4b0082]"
+        required
+      />
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  const handleSignup = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-
-    try {
-      const { error } = await supabase.auth.signUp({ email, password });
-      if (error) throw error;
-      router.push('/login');
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Something went wrong.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.8 }}
-      className="min-h-screen flex items-center justify-center px-4 bg-gradient-to-br from-white via-[#cde7ff] to-[#d6c1ff] animate-gradient"
-    >
-      <motion.div
-        initial={{ scale: 0.95, opacity: 0, y: 20 }}
-        animate={{ scale: 1, opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="w-full max-w-md p-10 bg-white/85 backdrop-blur-lg rounded-xl shadow-md text-center"
+      <motion.button
+        whileTap={{ scale: 0.97 }}
+        type="submit"
+        disabled={loading}
+        className="w-full bg-[#4b0082] text-white py-3 rounded-lg font-semibold hover:bg-[#37006b] transition disabled:opacity-60"
       >
-        <h2 className="text-2xl font-bold text-purple-700 mb-2">Sign Up 👤</h2>
-        <p className="text-slate-600 mb-6">Create your DancePerfect account</p>
+        {loading ? 'Signing up...' : 'Sign Up'}
+      </motion.button>
+    </form>
 
-        {error && <p className="text-red-600 mb-4 font-medium">{error}</p>}
-
-        <form onSubmit={handleSignup} className="space-y-4">
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="border border-slate-300 rounded-lg w-full p-3 outline-none focus:ring-2 focus:ring-purple-300"
-            required
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="border border-slate-300 rounded-lg w-full p-3 outline-none focus:ring-2 focus:ring-purple-300"
-            required
-          />
-
-          <motion.button
-            whileTap={{ scale: 0.97 }}
-            type="submit"
-            disabled={loading}
-            className="w-full bg-purple-600 text-white py-3 rounded-lg font-semibold hover:bg-purple-700 transition disabled:opacity-60"
-          >
-            {loading ? 'Signing up...' : 'Sign Up'}
-          </motion.button>
-        </form>
-
-        <motion.button
-          whileTap={{ scale: 0.97 }}
-          onClick={() => router.push('/login')}
-          className="mt-5 w-full text-purple-700 hover:underline font-semibold"
-        >
-          ← Back to Login
-        </motion.button>
-      </motion.div>
-    </motion.div>
-  );
-}
+    <motion.button
+      whileTap={{ scale: 0.97 }}
+      onClick={() => router.push('/login')}
+      className="mt-5 w-full text-[#4b0082] hover:underline font-semibold"
+    >
+      ← Back to Login
+    </motion.button>
+  </motion.div>
+</motion.div>
