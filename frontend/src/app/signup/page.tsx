@@ -49,7 +49,7 @@ export default function SignupPage() {
         initial={{ y: 30, opacity: 0, scale: 0.95 }}
         animate={{ y: 0, opacity: 1, scale: 1 }}
         transition={{ duration: 0.6 }}
-        className="bg-white/85 backdrop-blur border border-pink-100 shadow-md rounded-xl p-8 w-full max-w-md"
+        className="bg-white/70 backdrop-blur border border-pink-100 shadow-md rounded-xl p-8 w-full max-w-md"
       >
         <h2 className="text-2xl font-bold text-blue-700 mb-2 text-center">
           Sign Up 👤
