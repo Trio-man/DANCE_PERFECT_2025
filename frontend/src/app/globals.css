@@ -41,5 +41,5 @@ button {
 
 .animate-gradient {
   background-size: 300% 300%;
-  animation: gradientShift 8s ease infinite;
+  animation: gradientShift 10s ease infinite;
 }

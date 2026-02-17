@@ -39,27 +39,20 @@ export default function SignupPage() {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.8 }}
-      className="min-h-screen flex items-center justify-center px-4 bg-gradient-to-br from-violet-300 via-pink-300 to-cyan-300"
+      className="min-h-screen flex items-center justify-center px-4 bg-gradient-to-br from-[#e0f7fa] via-[#ffe4e6] to-[#dbeafe] animate-gradient"
     >
       <motion.div
         initial={{ scale: 0.95, opacity: 0, y: 20 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="relative w-full max-w-md p-10 bg-white/85 backdrop-blur-lg rounded-xl shadow-md text-center"
+        className="w-full max-w-md p-10 bg-white/85 backdrop-blur-lg rounded-xl shadow-md text-center"
       >
-        {/* Animated neon border highlights */}
-        <motion.div
-          className="absolute inset-0 rounded-xl border-2 border-transparent pointer-events-none"
-          animate={{ borderColor: ['#8a2be2', '#ff00ff', '#00ffff', '#8a2be2'] }}
-          transition={{ repeat: Infinity, duration: 3, ease: 'linear' }}
-        />
-
         <h2 className="text-2xl font-bold text-blue-700 mb-2">Sign Up 👤</h2>
         <p className="text-slate-600 mb-6">Create your DancePerfect account</p>
 
         {error && <p className="text-red-600 mb-4 font-medium">{error}</p>}
 
-        <form onSubmit={handleSignup} className="space-y-4 relative z-10">
+        <form onSubmit={handleSignup} className="space-y-4">
           <input
             type="email"
             placeholder="Email"
