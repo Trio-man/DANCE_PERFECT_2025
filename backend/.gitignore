@@ -24,3 +24,6 @@ Thumbs.db
 
 # Uploads or temporary files
 uploads/
+
+.env
+

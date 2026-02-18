@@ -57,7 +57,7 @@ function ResultsContent() {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const BACKEND_URL = 'http://localhost:5000';
+  const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL;
   const toBackendUrl = (p: string) => {
     if (!p) return p;
     if (p.startsWith('http://') || p.startsWith('https://')) return p;

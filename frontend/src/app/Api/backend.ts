@@ -1,5 +1,5 @@
 // src/api/backend.ts
-export const API_URL = "https://dance-perfect-backend-service.onrender.com";
+export const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 export async function uploadMotFile(file: File) {
   const formData = new FormData();
