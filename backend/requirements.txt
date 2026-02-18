@@ -1,6 +1,6 @@
 flask
 flask-cors
-flask_jwt_extended
+flask-jwt-extended
 supabase
 python-dotenv
 bcrypt
@@ -12,3 +12,4 @@ mediapipe
 werkzeug
 waitress
 gunicorn==20.1.0
+setuptools
