@@ -1,8 +1,14 @@
 flask
 flask-cors
+flask_jwt_extended
 supabase
-pyjwt
+python-dotenv
+bcrypt
 pandas
 numpy
+scipy
+opencv-python
+mediapipe
 werkzeug
+waitress
 gunicorn==20.1.0
