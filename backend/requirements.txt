@@ -12,4 +12,4 @@ mediapipe
 werkzeug
 waitress
 gunicorn==20.1.0
-setuptools
+setuptools>=68.0
