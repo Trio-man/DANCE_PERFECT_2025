@@ -10,5 +10,5 @@ scipy
 opencv-python-headless
 mediapipe
 werkzeug
-gunicorn==20.1.0
+gunicorn==23.0.0
 setuptools>=68.0
