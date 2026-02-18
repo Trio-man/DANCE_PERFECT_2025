@@ -41,7 +41,7 @@ export default function UploadPage() {
   const [status, setStatus] = useState<string | null>(null);
   const [result, setResult] = useState<ResultType | null>(null);
 
-  const BACKEND_URL = 'http://localhost:5000';
+  const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL;
 
   // -------------------------
   // AUTH CHECK
