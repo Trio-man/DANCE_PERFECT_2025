@@ -54,7 +54,7 @@ export default function LoginPage() {
 
       router.replace(isAdmin ? '/admin' : '/upload'); // ✅ UPDATED
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       const msg = err?.message || '';
 
       if (msg.toLowerCase().includes('email not confirmed')) {
