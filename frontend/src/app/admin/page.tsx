@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
@@ -10,7 +10,8 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-const API_BASE = 'http://localhost:5000';
+// ⚠️ Change this in production (Render URL etc.)
+const API_BASE = process.env.NEXT_PUBLIC_API_URL;
 
 type ProfileRow = {
   id: string;
@@ -39,6 +40,14 @@ function Badge({ children }: { children: React.ReactNode }) {
   );
 }
 
+function isRole(value: string): value is 'all' | 'user' | 'it_admin' | 'super_admin' {
+  return ['all', 'user', 'it_admin', 'super_admin'].includes(value);
+}
+
+function isStatus(value: string): value is 'all' | 'active' | 'inactive' {
+  return ['all', 'active', 'inactive'].includes(value);
+}
+
 export default function AdminDashboardPage() {
   const router = useRouter();
 
@@ -53,9 +62,6 @@ export default function AdminDashboardPage() {
   // ✅ only super_admin can change roles
   const canChangeRoles = normRole === 'super_admin';
 
-  // ✅ kept (even if not used on this page) for consistency
-  const canContentManage = ['super_admin', 'it_admin'].includes(normRole);
-
   const [runs, setRuns] = useState<RunRow[]>([]);
   const [users, setUsers] = useState<ProfileRow[]>([]);
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
@@ -66,9 +72,11 @@ export default function AdminDashboardPage() {
   const [roleFilter, setRoleFilter] = useState<'all' | 'user' | 'it_admin' | 'super_admin'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
-  const [confirm, setConfirm] = useState<{ open: boolean; userId: string; nextActive: boolean }>(
-    { open: false, userId: '', nextActive: false }
-  );
+  const [confirm, setConfirm] = useState<{ open: boolean; userId: string; nextActive: boolean }>({
+    open: false,
+    userId: '',
+    nextActive: false,
+  });
 
   const totalRuns = runs.length;
   const totalUsers = users.length;
@@ -84,7 +92,7 @@ export default function AdminDashboardPage() {
     return Array.isArray(r.profile) ? (r.profile[0]?.email ?? '—') : (r.profile.email ?? '—');
   };
 
-  const safeReadJson = async (res: Response) => {
+  const safeReadJson = async (res: Response): Promise<unknown> => {
     try {
       return await res.json();
     } catch {
@@ -92,12 +100,12 @@ export default function AdminDashboardPage() {
     }
   };
 
-  const getSessionToken = async () => {
+  const getSessionToken = useCallback(async (): Promise<string | null> => {
     const { data } = await supabase.auth.getSession();
     return data?.session?.access_token || null;
-  };
+  }, []);
 
-  const refreshUsers = async () => {
+  const refreshUsers = useCallback(async () => {
     setError(null);
 
     const token = await getSessionToken();
@@ -114,93 +122,121 @@ export default function AdminDashboardPage() {
       const payload = await safeReadJson(res);
 
       if (!res.ok) {
-        setError(payload?.error || `Failed to load users from backend. (${res.status})`);
+        const msg =
+          typeof payload === 'object' && payload !== null && 'error' in payload
+            ? String((payload as { error?: unknown }).error ?? '')
+            : '';
+
+        setError(msg || `Failed to load users from backend. (${res.status})`);
         setUsers([]);
         return;
       }
 
-      setUsers(payload?.users ?? []);
-    } catch (e: any) {
-      setError(`Backend not reachable: ${e?.message || 'Failed to fetch'}`);
+      if (typeof payload === 'object' && payload !== null && 'users' in payload) {
+        setUsers(((payload as { users?: unknown }).users ?? []) as ProfileRow[]);
+      } else {
+        setUsers([]);
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Failed to fetch';
+      setError(`Backend not reachable: ${msg}`);
       setUsers([]);
     }
-  };
+  }, [getSessionToken]);
 
-  const updateUserRole = async (userId: string, newRole: string) => {
-    if (!canChangeRoles) return;
-    if (!['user', 'it_admin', 'super_admin'].includes(newRole)) return;
+  const updateUserRole = useCallback(
+    async (userId: string, newRole: string) => {
+      if (!canChangeRoles) return;
+      if (!['user', 'it_admin', 'super_admin'].includes(newRole)) return;
 
-    setSavingUserId(userId);
-    setError(null);
+      setSavingUserId(userId);
+      setError(null);
 
-    const token = await getSessionToken();
-    if (!token) {
-      setError('No session token. Please login again.');
-      setSavingUserId(null);
-      return;
-    }
-
-    try {
-      const res = await fetch(`${API_BASE}/admin/users/${userId}/role`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ role: newRole }),
-      });
-
-      const payload = await safeReadJson(res);
-
-      if (!res.ok) {
-        setError(payload?.error || `Failed to update role. (${res.status})`);
+      const token = await getSessionToken();
+      if (!token) {
+        setError('No session token. Please login again.');
         setSavingUserId(null);
         return;
       }
 
-      await refreshUsers();
-      setSavingUserId(null);
-    } catch (e: any) {
-      setError(`Backend not reachable: ${e?.message || 'Failed to fetch'}`);
-      setSavingUserId(null);
-    }
-  };
+      try {
+        const res = await fetch(`${API_BASE}/admin/users/${userId}/role`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ role: newRole }),
+        });
 
-  const toggleUserActive = async (userId: string, nextActive: boolean) => {
-    if (!canManageUsers) return;
+        const payload = await safeReadJson(res);
 
-    setSavingUserId(userId);
-    setError(null);
+        if (!res.ok) {
+          const msg =
+            typeof payload === 'object' && payload !== null && 'error' in payload
+              ? String((payload as { error?: unknown }).error ?? '')
+              : '';
 
-    const token = await getSessionToken();
-    if (!token) {
-      setError('No session token. Please login again.');
-      setSavingUserId(null);
-      return;
-    }
+          setError(msg || `Failed to update role. (${res.status})`);
+          setSavingUserId(null);
+          return;
+        }
 
-    const endpoint = nextActive
-      ? `${API_BASE}/admin/users/${userId}/activate`
-      : `${API_BASE}/admin/users/${userId}/deactivate`;
+        await refreshUsers();
+        setSavingUserId(null);
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : 'Failed to fetch';
+        setError(`Backend not reachable: ${msg}`);
+        setSavingUserId(null);
+      }
+    },
+    [canChangeRoles, getSessionToken, refreshUsers]
+  );
 
-    try {
-      const res = await fetch(endpoint, {
-        method: 'PATCH',
-        headers: { Authorization: `Bearer ${token}` },
-      });
+  const toggleUserActive = useCallback(
+    async (userId: string, nextActive: boolean) => {
+      if (!canManageUsers) return;
 
-      const payload = await safeReadJson(res);
+      setSavingUserId(userId);
+      setError(null);
 
-      if (!res.ok) {
-        setError(payload?.error || `Failed to update active status. (${res.status})`);
+      const token = await getSessionToken();
+      if (!token) {
+        setError('No session token. Please login again.');
         setSavingUserId(null);
         return;
       }
 
-      await refreshUsers();
-      setSavingUserId(null);
-    } catch (e: any) {
-      setError(`Backend not reachable: ${e?.message || 'Failed to fetch'}`);
-      setSavingUserId(null);
-    }
-  };
+      const endpoint = nextActive
+        ? `${API_BASE}/admin/users/${userId}/activate`
+        : `${API_BASE}/admin/users/${userId}/deactivate`;
+
+      try {
+        const res = await fetch(endpoint, {
+          method: 'PATCH',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        const payload = await safeReadJson(res);
+
+        if (!res.ok) {
+          const msg =
+            typeof payload === 'object' && payload !== null && 'error' in payload
+              ? String((payload as { error?: unknown }).error ?? '')
+              : '';
+
+          setError(msg || `Failed to update active status. (${res.status})`);
+          setSavingUserId(null);
+          return;
+        }
+
+        await refreshUsers();
+        setSavingUserId(null);
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : 'Failed to fetch';
+        setError(`Backend not reachable: ${msg}`);
+        setSavingUserId(null);
+      }
+    },
+    [canManageUsers, getSessionToken, refreshUsers]
+  );
 
   useEffect(() => {
     const load = async () => {
@@ -255,7 +291,7 @@ export default function AdminDashboardPage() {
     };
 
     load();
-  }, [router]);
+  }, [router, refreshUsers]);
 
   const filteredUsers = useMemo(() => {
     const query = q.trim().toLowerCase();
@@ -288,11 +324,11 @@ export default function AdminDashboardPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white/60 border border-white/70 rounded-xl p-4">
           <div className="text-sm text-slate-600">Total Users</div>
-          <div className="text-2xl font-bold">{totalUsers}</div>
+          <div className="text-2xl font-bold">{users.length}</div>
         </div>
         <div className="bg-white/60 border border-white/70 rounded-xl p-4">
           <div className="text-sm text-slate-600">Total Runs</div>
-          <div className="text-2xl font-bold">{totalRuns}</div>
+          <div className="text-2xl font-bold">{runs.length}</div>
         </div>
         <div className="bg-white/60 border border-white/70 rounded-xl p-4">
           <div className="text-sm text-slate-600">Runs Today</div>
@@ -371,7 +407,10 @@ export default function AdminDashboardPage() {
 
             <select
               value={roleFilter}
-              onChange={(e) => setRoleFilter(e.target.value as any)}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (isRole(v)) setRoleFilter(v);
+              }}
               className="px-3 py-2 rounded-lg border border-white/70 bg-white/70"
             >
               <option value="all">All roles</option>
@@ -382,7 +421,10 @@ export default function AdminDashboardPage() {
 
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as any)}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (isStatus(v)) setStatusFilter(v);
+              }}
               className="px-3 py-2 rounded-lg border border-white/70 bg-white/70"
             >
               <option value="all">All status</option>
