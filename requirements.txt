@@ -8,7 +8,7 @@ pandas
 numpy
 scipy
 opencv-python-headless
-mediapipe
+mediapipe==0.10.14
 werkzeug
 gunicorn==23.0.0
 setuptools>=68.0
