@@ -1,0 +1,32 @@
+============================================================
+MOTION CAPTURE RUN RESULT
+============================================================
+Timestamp: 2026-02-19T01:06:11.698887
+
+Input videos:
+  Reference: uploads\dance_reference.mp4
+  User:      uploads\dance_user.mp4
+
+Output CSVs:
+  Reference motion: motion_outputs\reference_motion.csv
+  User motion:      motion_outputs\user_motion.csv
+
+Comparison (frame-by-frame):
+  Similarity score (0-100):  85.61
+  Mean landmark distance:   0.143891
+  Frames compared:          707
+  DTW message: DTW skipped: install fastdtw and scipy (pip install fastdtw scipy).
+
+Full comparison (JSON):
+{
+  "similarity_score": 85.61,
+  "mean_landmark_distance": 0.143891,
+  "frames_compared": 707,
+  "dtw_message": "DTW skipped: install fastdtw and scipy (pip install fastdtw scipy).",
+  "dtw_distance": null,
+  "dtw_similarity_score": null,
+  "aligned_moments": [],
+  "feedback_analysis": []
+}
+
+============================================================
