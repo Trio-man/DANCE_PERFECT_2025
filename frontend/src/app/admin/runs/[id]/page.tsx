@@ -17,7 +17,7 @@ type RunRow = {
   score: number | null;
   summary_feedback: string | null;
   run_folder: string | null;
-  result_json: any | null;
+  result_json: unknown | null;
 };
 
 export default function AdminRunDetailPage() {
