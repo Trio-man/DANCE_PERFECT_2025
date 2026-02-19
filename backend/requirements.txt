@@ -1,7 +1,14 @@
 flask
 flask-cors
+flask-jwt-extended
 supabase
-pyjwt
+python-dotenv
+bcrypt
 pandas
 numpy
+scipy
+opencv-python-headless
+mediapipe
 werkzeug
+gunicorn==23.0.0
+setuptools>=68.0
