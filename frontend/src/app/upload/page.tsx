@@ -77,7 +77,7 @@ export default function UploadPage() {
   }, [router]);
 
   // -------------------------
-  // CMS LOAD (settings + pages + faqs)
+  // CMS LOAD
   // -------------------------
   useEffect(() => {
     const loadCms = async () => {
@@ -239,137 +239,138 @@ export default function UploadPage() {
       animate={{ opacity: 1 }}
       className="min-h-screen flex flex-col items-center justify-center px-4 bg-gradient-to-br from-[#d6c1ff] via-[#cde7ff] to-white animate-gradient"
     >
-      {/* CMS CONTENT */}
-      <div className="w-full max-w-6xl mb-6">
-        <div className="mb-8">
-          {cmsError && (
-            <p className="text-center text-sm text-red-600 mb-3">
-              CMS load warning: {cmsError}
-            </p>
-          )}
+      <div className="w-full max-w-6xl flex flex-col gap-6 py-10">
 
-          {aboutPage && (
-            <div className="bg-white/60 border border-white/70 rounded-xl p-4 mb-4">
-              <h2 className="text-lg font-semibold mb-2" style={{ color: primaryColor }}>
-                {aboutPage.title}
-              </h2>
-              <p className="text-slate-700 whitespace-pre-line">{aboutPage.body}</p>
-            </div>
-          )}
+        {cmsError && (
+          <p className="text-center text-sm text-red-600">
+            CMS load warning: {cmsError}
+          </p>
+        )}
 
-          {guidelinesPage && (
-            <div className="bg-white/60 border border-white/70 rounded-xl p-4 mb-4">
-              <h2 className="text-lg font-semibold mb-2" style={{ color: primaryColor }}>
-                {guidelinesPage.title}
-              </h2>
-              <p className="text-slate-700 whitespace-pre-line">{guidelinesPage.body}</p>
-            </div>
-          )}
+        {/* 1. RECORDING GUIDELINES */}
+        {guidelinesPage && (
+          <div className="bg-white/60 border border-white/70 rounded-xl p-6">
+            <h2 className="text-lg font-semibold mb-2" style={{ color: primaryColor }}>
+              {guidelinesPage.title}
+            </h2>
+            <p className="text-slate-700 whitespace-pre-line">{guidelinesPage.body}</p>
+          </div>
+        )}
 
-          {faqs.length > 0 && (
-            <div className="bg-white/60 border border-white/70 rounded-xl p-4">
-              <h2 className="text-lg font-semibold mb-2" style={{ color: primaryColor }}>
-                FAQs
-              </h2>
-              <div className="space-y-3">
-                {faqs.map((f) => (
-                  <div key={f.id} className="border border-white/70 rounded-lg p-3 bg-white/50">
-                    <p className="font-semibold text-slate-800">{f.question}</p>
-                    <p className="text-slate-700 whitespace-pre-line mt-1">{f.answer}</p>
-                  </div>
-                ))}
+        {/* 2. VIDEO UPLOAD */}
+        <motion.div className="bg-white/70 backdrop-blur-lg border border-white/60 shadow-lg rounded-2xl p-8 relative">
+          {loading && (
+            <div className="absolute inset-0 bg-white/70 backdrop-blur-sm flex items-center justify-center rounded-2xl z-50">
+              <div className="text-center">
+                <div className="animate-spin h-10 w-10 rounded-full border-4 border-gray-300 border-t-gray-700 mx-auto mb-3" />
+                <p className="text-gray-700 font-semibold">Processing...</p>
+                <p className="text-gray-500 text-sm mt-1">
+                  Please wait while we analyze the videos.
+                </p>
               </div>
             </div>
           )}
-        </div>
-      </div>
 
-      {/* UPLOAD UI */}
-      <motion.div className="w-full max-w-6xl bg-white/70 backdrop-blur-lg border border-white/60 shadow-lg rounded-2xl p-8 relative">
-        {loading && (
-          <div className="absolute inset-0 bg-white/70 backdrop-blur-sm flex items-center justify-center rounded-2xl z-50">
-            <div className="text-center">
-              <div className="animate-spin h-10 w-10 rounded-full border-4 border-gray-300 border-t-gray-700 mx-auto mb-3" />
-              <p className="text-gray-700 font-semibold">Processing...</p>
-              <p className="text-gray-500 text-sm mt-1">
-                Please wait while we analyze the videos.
-              </p>
+          <button
+            onClick={() => router.back()}
+            className="absolute top-4 left-4 text-gray-600 hover:text-gray-800"
+          >
+            <FiArrowLeft size={24} />
+          </button>
+
+          <button
+            onClick={handleLogout}
+            className="absolute top-4 right-4 text-red-600 hover:text-red-800"
+          >
+            <FiLogOut size={24} />
+          </button>
+
+          <div className="flex items-center justify-center gap-3 mb-2">
+            {appSettings?.logo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={appSettings.logo_url}
+                alt="System Logo"
+                className="h-10 w-10 rounded-lg object-contain border border-white/60 bg-white/60"
+              />
+            ) : null}
+            <h1 className="text-3xl font-bold text-center mb-0" style={{ color: primaryColor }}>
+              {systemName}
+            </h1>
+          </div>
+
+          <p className="text-slate-600 text-center mb-4">
+            Welcome {user?.email?.split('@')[0]}
+          </p>
+
+          <div className="flex flex-col md:flex-row gap-8">
+            <VideoUpload
+              label="Dancer Video"
+              preview={previewDancer}
+              setFile={setDancerVideo}
+              loading={loading}
+            />
+            <VideoUpload
+              label="Choreographer Video"
+              preview={previewChoreo}
+              setFile={setChoreoVideo}
+              loading={loading}
+            />
+          </div>
+
+          {status && <p className="text-center text-gray-600 mt-3">{status}</p>}
+
+          <div className="flex flex-col md:flex-row gap-4 justify-center mt-6">
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              disabled={!user || loading}
+              onClick={handleListFiles}
+              className="text-white py-3 px-6 rounded-lg font-semibold transition"
+              style={{ backgroundColor: primaryColor }}
+            >
+              <FiList className="inline mr-2" /> List Files
+            </motion.button>
+
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              disabled={loading || !user}
+              onClick={handleAnalyze}
+              className="text-white py-3 px-6 rounded-lg font-semibold transition"
+              style={{ backgroundColor: primaryColor }}
+            >
+              Analyze 🎯
+            </motion.button>
+          </div>
+        </motion.div>
+
+        {/* 3. FAQs */}
+        {faqs.length > 0 && (
+          <div className="bg-white/60 border border-white/70 rounded-xl p-6">
+            <h2 className="text-lg font-semibold mb-3" style={{ color: primaryColor }}>
+              FAQs
+            </h2>
+            <div className="space-y-3">
+              {faqs.map((f) => (
+                <div key={f.id} className="border border-white/70 rounded-lg p-3 bg-white/50">
+                  <p className="font-semibold text-slate-800">{f.question}</p>
+                  <p className="text-slate-700 whitespace-pre-line mt-1">{f.answer}</p>
+                </div>
+              ))}
             </div>
           </div>
         )}
 
-        <button
-          onClick={() => router.back()}
-          className="absolute top-4 left-4 text-gray-600 hover:text-gray-800"
-        >
-          <FiArrowLeft size={24} />
-        </button>
+        {/* 4. ABOUT US */}
+        {aboutPage && (
+          <div className="bg-white/60 border border-white/70 rounded-xl p-6">
+            <h2 className="text-lg font-semibold mb-2" style={{ color: primaryColor }}>
+              {aboutPage.title}
+            </h2>
+            <p className="text-slate-700 whitespace-pre-line">{aboutPage.body}</p>
+          </div>
+        )}
 
-        <button
-          onClick={handleLogout}
-          className="absolute top-4 right-4 text-red-600 hover:text-red-800"
-        >
-          <FiLogOut size={24} />
-        </button>
-
-        <div className="flex items-center justify-center gap-3 mb-2">
-          {appSettings?.logo_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={appSettings.logo_url}
-              alt="System Logo"
-              className="h-10 w-10 rounded-lg object-contain border border-white/60 bg-white/60"
-            />
-          ) : null}
-
-          <h1 className="text-3xl font-bold text-center mb-0" style={{ color: primaryColor }}>
-            {systemName}
-          </h1>
-        </div>
-
-        <p className="text-slate-600 text-center mb-4">
-          Welcome {user?.email?.split('@')[0]}
-        </p>
-
-        <div className="flex flex-col md:flex-row gap-8">
-          <VideoUpload
-            label="Dancer Video"
-            preview={previewDancer}
-            setFile={setDancerVideo}
-            loading={loading}
-          />
-          <VideoUpload
-            label="Choreographer Video"
-            preview={previewChoreo}
-            setFile={setChoreoVideo}
-            loading={loading}
-          />
-        </div>
-
-        {status && <p className="text-center text-gray-600 mt-3">{status}</p>}
-
-        <div className="flex flex-col md:flex-row gap-4 justify-center mt-6">
-          <motion.button
-            whileTap={{ scale: 0.97 }}
-            disabled={!user || loading}
-            onClick={handleListFiles}
-            className="text-white py-3 px-6 rounded-lg font-semibold transition"
-            style={{ backgroundColor: primaryColor }}
-          >
-            <FiList className="inline mr-2" /> List Files
-          </motion.button>
-
-          <motion.button
-            whileTap={{ scale: 0.97 }}
-            disabled={loading || !user}
-            onClick={handleAnalyze}
-            className="text-white py-3 px-6 rounded-lg font-semibold transition"
-            style={{ backgroundColor: primaryColor }}
-          >
-            Analyze 🎯
-          </motion.button>
-        </div>
-      </motion.div>
+      </div>
     </motion.div>
   );
 }
