@@ -39,6 +39,63 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)  # Create the Flask application instance
 
+# ----- Optional: cloud storage for generated files (log, tips, screenshots) -----
+# Set STORAGE_PROVIDER to "supabase" or "s3" and the corresponding env vars (see below).
+# If unset or empty, files stay on disk and response uses local paths only.
+def _upload_file_to_storage(local_path, storage_key):
+    """
+    Upload a local file to configured cloud storage. Returns public URL or None.
+    Env vars (groupmate fills these):
+      - STORAGE_PROVIDER: "supabase" | "s3" | "" (disabled)
+      Supabase: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, STORAGE_BUCKET
+      S3: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, S3_BUCKET, S3_REGION (optional), S3_PUBLIC_BASE_URL (optional)
+    """
+    provider = os.environ.get("STORAGE_PROVIDER", "").strip().lower()
+    if not provider or not os.path.isfile(local_path):
+        return None
+    try:
+        if provider == "supabase":
+            url = os.environ.get("SUPABASE_URL", "").strip()
+            key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip() or os.environ.get("SUPABASE_STORAGE_KEY", "").strip()
+            bucket = os.environ.get("STORAGE_BUCKET", "analysis-assets").strip()
+            if not url or not key:
+                return None
+            try:
+                from supabase import create_client
+                client = create_client(url, key)
+                with open(local_path, "rb") as f:
+                    client.storage.from_(bucket).upload(storage_key, f, file_options={"content-type": "application/octet-stream"})
+                public = client.storage.from_(bucket).get_public_url(storage_key)
+                return public
+            except Exception:
+                return None
+        if provider == "s3":
+            bucket = os.environ.get("S3_BUCKET", "").strip()
+            region = os.environ.get("S3_REGION", "us-east-1")
+            if not bucket:
+                return None
+            try:
+                import boto3
+                from botocore.config import Config
+                s3 = boto3.client(
+                    "s3",
+                    region_name=region,
+                    aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID", ""),
+                    aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY", ""),
+                    config=Config(signature_version="s3v4"),
+                )
+                content_type = "text/plain" if local_path.endswith(".log") or local_path.endswith(".txt") else "image/png"
+                s3.upload_file(local_path, bucket, storage_key, ExtraArgs={"ContentType": content_type})
+                base = os.environ.get("S3_PUBLIC_BASE_URL", "").strip()
+                if base:
+                    return f"{base.rstrip('/')}/{storage_key}" if not base.endswith("/") else f"{base}{storage_key}"
+                return f"https://{bucket}.s3.{region}.amazonaws.com/{storage_key}"
+            except Exception:
+                return None
+    except Exception:
+        pass
+    return None
+
 UPLOAD_FOLDER = "uploads"          # Folder where uploaded video files are saved
 OUTPUT_FOLDER = "motion_outputs"   # Folder where generated CSV motion files go
 LOG_FOLDER = "logs"                # Folder where result log files are written (one per run)
@@ -1612,37 +1669,14 @@ def write_result_log(video1_path, video2_path, output1, output2, comparison, vid
     return log_path
 
 
-@app.route("/upload-videos", methods=["POST"])
-def upload_videos():
+def _run_analysis(video1_path, video2_path, run_ts):
     """
-    HTTP POST endpoint that expects two uploaded videos:
-    - 'video1': the reference/perfect dance
-    - 'video2': the user's dance performance
-
-    It saves both videos, runs pose extraction on each, and returns the paths
-    to the generated CSV motion files.
+    Run full motion capture pipeline: extract motion, compare, generate tips/log/screenshots,
+    optionally upload to storage. Returns response dict (no jsonify).
     """
-    # Ensure both files were provided in the form-data
-    if "video1" not in request.files or "video2" not in request.files:
-        return jsonify({"error": "Two videos are required"}), 400
-
-    # Access the uploaded files from the incoming request
-    video1 = request.files["video1"]
-    video2 = request.files["video2"]
-
-    # Define where to save the uploaded videos on disk
-    video1_path = os.path.join(UPLOAD_FOLDER, "dance_reference.mp4")
-    video2_path = os.path.join(UPLOAD_FOLDER, "dance_user.mp4")
-
-    # Save the uploaded videos to the upload folder
-    video1.save(video1_path)
-    video2.save(video2_path)
-
-    # Define output CSV paths for the extracted motion data
     output1 = os.path.join(OUTPUT_FOLDER, "reference_motion.csv")
     output2 = os.path.join(OUTPUT_FOLDER, "user_motion.csv")
 
-    # Get video info (frame count, FPS, duration) for both; FPS capped at 30 for timestamp display
     video_info = {
         "reference": get_video_info(video1_path),
         "user": get_video_info(video2_path),
@@ -1669,7 +1703,6 @@ def upload_videos():
 
     # Side-by-side deviation images: one per worst-deviation moment; user's wrong landmarks in red; tips at bottom
     comparison["deviation_comparison_images"] = []
-    run_ts_img = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     tips_for_image = comparison.get("practice_tips") or []
     for idx, moment in enumerate(comparison.get("worst_deviations") or []):
         ref_f = moment.get("ref_frame")
@@ -1677,7 +1710,7 @@ def upload_videos():
         if ref_f is None or user_f is None:
             continue
         img_path = os.path.join(
-            DEVIATION_SCREENSHOTS_FOLDER, f"deviation_comparison_{idx + 1}_{run_ts_img}.png"
+            DEVIATION_SCREENSHOTS_FOLDER, f"deviation_comparison_{idx + 1}_{run_ts}.png"
         )
         try:
             if save_deviation_comparison_image(
@@ -1704,7 +1737,7 @@ def upload_videos():
         if ref_f is None or user_f is None:
             continue
         img_path = os.path.join(
-            POSE_MATCH_SCREENSHOTS_FOLDER, f"pose_match_comparison_{idx + 1}_{run_ts_img}.png"
+            POSE_MATCH_SCREENSHOTS_FOLDER, f"pose_match_comparison_{idx + 1}_{run_ts}.png"
         )
         try:
             if save_deviation_comparison_image(
@@ -1729,8 +1762,8 @@ def upload_videos():
     tips_path = write_tips_file(comparison)
     log_path = write_result_log(video1_path, video2_path, output1, output2, comparison, video_info=video_info, tips_file_path=tips_path)
 
-    # Respond with paths, video info (timestamps are at 30 FPS), comparison (feedback in timestamp form), log, and tips
-    return jsonify({
+    # Build response; then upload generated files to storage and add URLs when configured
+    response = {
         "message": "Motion capture completed",
         "outputs": {
             "reference": output1,
@@ -1744,7 +1777,63 @@ def upload_videos():
         "deviation_comparison_images": comparison.get("deviation_comparison_images", []),
         "pose_match_comparison_image": comparison.get("pose_match_comparison_image"),
         "pose_match_comparison_images": comparison.get("pose_match_comparison_images", []),
-    })
+    }
+    run_prefix = f"runs/{run_ts}"
+    if log_path:
+        u = _upload_file_to_storage(log_path, f"{run_prefix}/logs/{os.path.basename(log_path)}")
+        if u:
+            response["log_file_url"] = u
+    if tips_path:
+        u = _upload_file_to_storage(tips_path, f"{run_prefix}/tips/{os.path.basename(tips_path)}")
+        if u:
+            response["tips_file_url"] = u
+    for path in response.get("deviation_comparison_images") or []:
+        u = _upload_file_to_storage(path, f"{run_prefix}/screenshots/deviation/{os.path.basename(path)}")
+        if u:
+            response.setdefault("deviation_comparison_image_urls", []).append(u)
+    for path in response.get("pose_match_comparison_images") or []:
+        u = _upload_file_to_storage(path, f"{run_prefix}/screenshots/pose_match/{os.path.basename(path)}")
+        if u:
+            response.setdefault("pose_match_comparison_image_urls", []).append(u)
+
+    return response
+
+
+@app.route("/upload-videos", methods=["POST"])
+def upload_videos():
+    """
+    POST two videos as 'video1' (reference) and 'video2' (user). Saves to backend, runs analysis,
+    returns comparison and (when configured) storage URLs for log, tips, and screenshots.
+    """
+    if "video1" not in request.files or "video2" not in request.files:
+        return jsonify({"error": "Two videos are required"}), 400
+    video1 = request.files["video1"]
+    video2 = request.files["video2"]
+    video1_path = os.path.join(UPLOAD_FOLDER, "dance_reference.mp4")
+    video2_path = os.path.join(UPLOAD_FOLDER, "dance_user.mp4")
+    video1.save(video1_path)
+    video2.save(video2_path)
+    run_ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    return jsonify(_run_analysis(video1_path, video2_path, run_ts))
+
+
+@app.route("/analyze", methods=["POST"])
+def analyze():
+    """
+    POST two videos as 'choreo_video' (reference) and 'dancer_video' (user). Used by the website
+    frontend. Saves to backend for processing, runs analysis, returns comparison and (when
+    configured) storage URLs for log, tips, and screenshots.
+    """
+    if "choreo_video" not in request.files or "dancer_video" not in request.files:
+        return jsonify({"error": "Both choreographer and dancer videos are required"}), 400
+    choreo = request.files["choreo_video"]
+    dancer = request.files["dancer_video"]
+    video1_path = os.path.join(UPLOAD_FOLDER, "dance_reference.mp4")
+    video2_path = os.path.join(UPLOAD_FOLDER, "dance_user.mp4")
+    choreo.save(video1_path)
+    dancer.save(video2_path)
+    run_ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    return jsonify(_run_analysis(video1_path, video2_path, run_ts))
 
 
 @app.route("/check-dtw", methods=["GET"])
