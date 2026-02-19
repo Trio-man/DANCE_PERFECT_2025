@@ -38,7 +38,7 @@ except ImportError:
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)  # Create the Flask application instance
-
+CORS(app)
 # ----- Optional: cloud storage for generated files (log, tips, screenshots) -----
 # Set STORAGE_PROVIDER to "supabase" or "s3" and the corresponding env vars (see below).
 # If unset or empty, files stay on disk and response uses local paths only.
