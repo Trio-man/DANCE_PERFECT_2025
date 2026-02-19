@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===== Global Base Styles ===== */
+html, body {
+  @apply min-h-screen bg-white text-slate-800;
+  font-family: 'Inter', sans-serif;
+}
+
+button {
+  @apply transition duration-200 ease-in-out;
+}
+
+/* ===== Auth Page Layout ===== */
+.auth-container {
+  @apply flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-blue-100 to-white;
+}
+
+.auth-card {
+  @apply bg-white shadow-lg rounded-2xl p-8 w-full max-w-md;
+}
+
+.auth-title {
+  @apply text-3xl font-bold text-blue-600 mb-6 text-center;
+}
+
+.auth-input {
+  @apply w-full p-3 border border-gray-300 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-blue-400;
+}
+
+.auth-button {
+  @apply w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-semibold;
+}
+
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.animate-gradient {
+  background-size: 300% 300%;
+  animation: gradientShift 15s ease infinite;
+}

@@ -1,0 +1,83 @@
+/* Upload Page */
+body {
+    font-family: Arial, sans-serif;
+    background-color: #fff3e0; /* light orange */
+    margin: 0;
+    padding: 0;
+    color: #e65100;
+}
+
+.container {
+    max-width: 500px;
+    margin: 60px auto;
+    padding: 30px;
+    background-color: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    text-align: center;
+}
+
+h1, h2 {
+    color: #bf360c;
+    margin-bottom: 20px;
+}
+
+.upload-box {
+    border: 2px dashed #e65100;
+    padding: 40px;
+    text-align: center;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    background-color: #fff8e1;
+    font-weight: bold;
+}
+
+.upload-box:hover {
+    border-color: #ff6f00;
+    background-color: #fff3e0;
+}
+
+button {
+    background-color: #e65100;
+    color: white;
+    padding: 12px 20px;
+    margin-top: 10px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: 0.3s ease;
+}
+
+button:hover {
+    background-color: #bf360c;
+}
+
+.success {
+    color: green;
+    margin-bottom: 10px;
+}
+
+.error {
+    color: red;
+    margin-bottom: 10px;
+}
+
+/* New sections for dancer and choreographer */
+.section-title {
+    color: #d84315;
+    font-size: 20px;
+    margin-top: 30px;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    font-weight: bold;
+    border-bottom: 2px solid #e65100;
+    display: inline-block;
+    padding-bottom: 5px;
+}
+
+.dual-upload {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
