@@ -243,17 +243,12 @@ def _draw_tasks_landmarks(frame_bgr, pose_landmarks_list):
     return frame_bgr
 
 def extract_motion_from_video(video_path, output_csv):
-    """
-    Extract pose landmarks per frame into CSV:
-    frame, landmark_id, x, y, z, visibility
-    """
     cap = cv2.VideoCapture(video_path)
     fps = cap.get(cv2.CAP_PROP_FPS)
     if not fps or fps <= 0:
         fps = 30.0
 
     options = _get_pose_landmarker(fps)
-
     data = []
     frame_number = 0
 
@@ -264,8 +259,14 @@ def extract_motion_from_video(video_path, output_csv):
                 break
 
             frame_number += 1
-            timestamp_ms = int((frame_number / fps) * 1000)
+            # Skip every other frame
+            if frame_number % 2 != 0:
+                continue
 
+            # Downscale to 480p
+            frame = cv2.resize(frame, (854, 480))
+
+            timestamp_ms = int((frame_number / fps) * 1000)
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
             result = landmarker.detect_for_video(mp_image, timestamp_ms)
@@ -276,10 +277,8 @@ def extract_motion_from_video(video_path, output_csv):
                     data.append([frame_number, landmark_id, lm.x, lm.y, lm.z, lm.visibility])
 
     cap.release()
-
     df = pd.DataFrame(data, columns=["frame", "landmark_id", "x", "y", "z", "visibility"])
     df.to_csv(output_csv, index=False)
-
 # =========================
 # VISUAL OUTPUTS (PNG previews ONLY)
 # =========================
