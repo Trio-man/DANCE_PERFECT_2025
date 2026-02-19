@@ -26,10 +26,46 @@ export default function LoginPage() {
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-      if (data?.user) router.replace('/upload');
-      else setError('Login failed. Please try again.');
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Something went wrong.');
+
+      if (!data?.user) {
+        setError('Login failed. Please try again.');
+        return;
+      }
+
+      // ✅ Check if account is deactivated in public.profiles
+      // ✅ ADDED: also fetch role
+      const { data: profile, error: profileErr } = await supabase
+        .from('profiles')
+        .select('is_active, role') // ✅ ADDED role
+        .eq('id', data.user.id)
+        .single();
+
+      if (profileErr) throw profileErr;
+
+      if (profile?.is_active === false) {
+        await supabase.auth.signOut();
+        setError('Your account has been deactivated. Please contact the administrator.');
+        return;
+      }
+
+      // ✅ ADDED: role-based redirect
+      const role = (profile?.role || 'user').toLowerCase();
+      const isAdmin = ['admin', 'super_admin', 'it_admin'].includes(role);
+
+      router.replace(isAdmin ? '/admin' : '/upload'); // ✅ UPDATED
+
+    } catch (err: any) {
+      const msg = err?.message || '';
+
+      if (msg.toLowerCase().includes('email not confirmed')) {
+        setError('Email not confirmed. Please verify your email or ask admin to disable confirmation.');
+      } else if (msg.toLowerCase().includes('invalid login credentials')) {
+        setError('Invalid email or password.');
+      } else if (msg.toLowerCase().includes('no api key')) {
+        setError('Supabase config error (missing API key). Check NEXT_PUBLIC env vars and restart dev server.');
+      } else {
+        setError(msg || 'Login failed.');
+      }
     } finally {
       setLoading(false);
     }

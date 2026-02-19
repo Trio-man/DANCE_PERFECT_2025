@@ -4,6 +4,17 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 
+function dataURLtoBlob(dataUrl: string) {
+  const arr = dataUrl.split(',');
+  const mimeMatch = arr[0].match(/:(.*?);/);
+  const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+  const bstr = atob(arr[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while (n--) u8arr[n] = bstr.charCodeAt(n);
+  return new Blob([u8arr], { type: mime });
+}
+
 const BACKEND_URL = 'http://localhost:5000';
 
 export default function LoadingPage() {
@@ -11,75 +22,58 @@ export default function LoadingPage() {
   const [msg, setMsg] = useState('Starting analysis...');
 
   useEffect(() => {
-    const run = async () => {
-      const dancer = sessionStorage.getItem('dp_dancer');
-      const choreo = sessionStorage.getItem('dp_choreo');
+  const run = async () => {
+    const dancer = sessionStorage.getItem('dp_dancer');
+    const choreo = sessionStorage.getItem('dp_choreo');
+    const token = sessionStorage.getItem('dp_token');
 
-      if (!dancer || !choreo) {
-        router.replace('/upload');
-        return;
-      }
+    if (!dancer || !choreo) {
+      console.error('Missing videos');
+      setMsg('❌ Missing videos. Please go back and upload again.');
+      return;
+    }
 
-      const dataUrlToBlob = async (dataUrl: string): Promise<Blob> => {
-        const res = await fetch(dataUrl);
-        return await res.blob();
-      };
+    if (!token) {
+      console.error('Missing token');
+      setMsg('❌ Missing session. Please log in again.');
+      router.replace('/login');
+      return;
+    }
 
-      try {
-        setMsg('Preparing files...');
-        const dancerBlob = await dataUrlToBlob(dancer);
-        const choreoBlob = await dataUrlToBlob(choreo);
+    const dancerBlob = dataURLtoBlob(dancer);
+    const choreoBlob = dataURLtoBlob(choreo);
 
-        const dancerFile = new File([dancerBlob], 'dancer.mp4', {
-          type: dancerBlob.type || 'video/mp4',
-        });
+    const formData = new FormData();
+    formData.append('dancer_video', dancerBlob, 'dancer.mp4');
+    formData.append('choreo_video', choreoBlob, 'choreo.mp4');
 
-        const choreoFile = new File([choreoBlob], 'choreo.mp4', {
-          type: choreoBlob.type || 'video/mp4',
-        });
+    setMsg('Uploading videos to server...');
 
-        const formData = new FormData();
-        formData.append('dancer_video', dancerFile);
-        formData.append('choreo_video', choreoFile);
-        formData.append('generate_preview', 'true');
-        formData.append('generate_overlay', 'false');
-        formData.append('preview_max_frames', '1');
+    const res = await fetch(`${BACKEND_URL}/analyze`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: formData,
+    });
 
-        setMsg('Analyzing Videos...');
-        const resp = await fetch(`${BACKEND_URL}/analyze`, {
-          method: 'POST',
-          body: formData,
-        });
+    const json = await res.json();
+    console.log(json);
 
-        const json: Record<string, unknown> = await resp.json().catch(() => ({}));
+    if (!res.ok) {
+      setMsg(`❌ ${json?.error || 'Analyze failed'}`);
+      return;
+    }
 
-        if (!resp.ok) {
-          const errorMsg =
-            typeof json?.['detail'] === 'string'
-              ? (json['detail'] as string)
-              : typeof json?.['error'] === 'string'
-              ? (json['error'] as string)
-              : 'Analysis failed';
+    // Save result for the next page (optional)
+    sessionStorage.setItem('dp_result', JSON.stringify(json));
 
-          throw new Error(errorMsg);
-        }
+    setMsg('✅ Analysis complete! Redirecting...');
+    router.replace('/results'); // change to your actual results page route
+  };
 
-        sessionStorage.setItem('dp_result', JSON.stringify(json));
-        sessionStorage.removeItem('dp_result_error');
-
-        router.replace('/results');
-      } catch (err) {
-        const error = err instanceof Error ? err : new Error('Unknown error');
-        console.error(error);
-        sessionStorage.removeItem('dp_result');
-        sessionStorage.setItem('dp_result_error', error.message);
-        router.replace('/results');
-      }
-    };
-
-    run();
-  }, [router]);
-
+  run();
+}, [router]);
   return (
     <motion.div
       initial={{ opacity: 0 }}
