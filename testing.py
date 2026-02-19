@@ -36,6 +36,7 @@ except ImportError:
 
 # Flask components: app object, incoming request data, and JSON responses
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 
 app = Flask(__name__)  # Create the Flask application instance
 CORS(app)
