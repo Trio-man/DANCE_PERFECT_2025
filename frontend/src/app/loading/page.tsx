@@ -15,7 +15,8 @@ function dataURLtoBlob(dataUrl: string) {
   return new Blob([u8arr], { type: mime });
 }
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+// Use same-origin proxy to avoid CORS; proxy forwards to backend
+const ANALYZE_URL = '/api/analyze';
 
 export default function LoadingPage() {
   const router = useRouter();
@@ -49,15 +50,21 @@ export default function LoadingPage() {
 
     setMsg('Uploading videos to server...');
 
-    const res = await fetch(`${BACKEND_URL}/analyze`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      body: formData,
-    });
+    let res: Response;
+    try {
+      res = await fetch(ANALYZE_URL, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+    } catch (err) {
+      setMsg('❌ Network error. Check your connection and try again.');
+      return;
+    }
 
-    const json = await res.json();
+    const json = await res.json().catch(() => ({}));
     console.log(json);
 
     if (!res.ok) {
