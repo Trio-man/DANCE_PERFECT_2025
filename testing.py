@@ -42,12 +42,14 @@ app = Flask(__name__)  # Create the Flask application instance
 UPLOAD_FOLDER = "uploads"          # Folder where uploaded video files are saved
 OUTPUT_FOLDER = "motion_outputs"   # Folder where generated CSV motion files go
 LOG_FOLDER = "logs"                # Folder where result log files are written (one per run)
+TIPS_FOLDER = "tips"               # Folder for clean practice tips files (one per run)
 DEVIATION_SCREENSHOTS_FOLDER = "deviation_screenshots"  # Screenshots with pose overlay where user deviates most
 POSE_MATCH_SCREENSHOTS_FOLDER = "pose_match_screenshots"  # Screenshots where user pose is most identical to reference
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 os.makedirs(LOG_FOLDER, exist_ok=True)
+os.makedirs(TIPS_FOLDER, exist_ok=True)
 os.makedirs(DEVIATION_SCREENSHOTS_FOLDER, exist_ok=True)
 os.makedirs(POSE_MATCH_SCREENSHOTS_FOLDER, exist_ok=True)
 
@@ -84,6 +86,8 @@ ACCEPTABLE_SIMILARITY_PERCENT = 80  # Minimum similarity to be "within acceptabl
 # Number of moments to capture: worst deviations (negative) and most identical pose (positive).
 NUM_DEVIATION_SCREENSHOTS = 3   # Frames where user deviates most from reference
 NUM_POSE_MATCH_SCREENSHOTS = 3  # Frames where user pose is most identical to reference
+# Only count as "pose match" when normalized pose distance is below this (stricter = more identical).
+POSE_MATCH_MAX_DISTANCE = 0.15  # Pairs with distance > this are excluded from best_pose_matches
 
 # ----- Motion detection: trim standing-still at start/end -----
 # Per-frame "activity" = mean landmark displacement from previous frame (normalized coords).
@@ -95,6 +99,10 @@ MIN_ACTIVE_RUN_FRAMES = 5
 # include resting/transition poses. Comparison starts when the dance has actually begun.
 MOTION_START_COOLDOWN_FRAMES = 15   # e.g. ~0.5 s at 30 FPS; avoids first standing/transition frame
 MOTION_END_COOLDOWN_FRAMES = 15     # skip same at end to avoid wind-down pose
+# Skip core ("crunch") feedback for this many frames from start so we don't flag the starting stance.
+FEEDBACK_CORE_START_COOLDOWN_FRAMES = 45  # ~1.5 s at 30 FPS
+# Reference torso vertical span below this = "crunching" (torso lowered). Above = standing.
+REF_TORSO_CRUNCH_THRESHOLD = 0.22  # normalized; ref must be below this to count as crunch
 
 # Body parts for feedback analysis: name -> [landmark_id, ...] (MediaPipe pose indices).
 BODY_LANDMARKS = {
@@ -242,6 +250,161 @@ def save_deviation_screenshot(video_path, frame_number_1based, output_path, fps=
 
     try:
         cv2.imwrite(output_path, frame)
+        return output_path
+    except Exception:
+        return None
+
+
+def _landmarks_normalized(pose_landmarks):
+    """Return list of (x, y) normalized 0-1 for each of the 33 landmarks, or None if missing."""
+    if not pose_landmarks or not pose_landmarks.landmark:
+        return None
+    return [(lm.x, lm.y) for lm in pose_landmarks.landmark]
+
+
+def _mismatched_landmark_indices(ref_pts, user_pts, distance_thresh=0.08):
+    """Return set of landmark indices where user position differs from reference (normalized distance > thresh)."""
+    if not ref_pts or not user_pts or len(ref_pts) != len(user_pts):
+        return set()
+    mismatched = set()
+    for i in range(min(len(ref_pts), len(user_pts))):
+        d = ((ref_pts[i][0] - user_pts[i][0]) ** 2 + (ref_pts[i][1] - user_pts[i][1]) ** 2) ** 0.5
+        if d > distance_thresh:
+            mismatched.add(i)
+    return mismatched
+
+
+def save_deviation_comparison_image(
+    ref_video_path,
+    user_video_path,
+    ref_frame_1based,
+    user_frame_1based,
+    ref_motion_fps,
+    user_motion_fps,
+    output_path,
+    tips_list=None,
+    user_label=None,
+    landmark_match_thresh=None,
+):
+    """
+    Create a side-by-side image: reference (left), user (right). User's landmarks: green = matching
+    reference, red = not matching. Tips at the bottom. user_label: caption on the right.
+    landmark_match_thresh: max normalized distance for a landmark to count as matching (default 0.08);
+    use a lower value (e.g. 0.04) for pose-match images so only very close poses show as green.
+    """
+    cap_ref = cv2.VideoCapture(ref_video_path)
+    cap_user = cv2.VideoCapture(user_video_path)
+    if not cap_ref.isOpened() or not cap_user.isOpened():
+        if cap_ref.isOpened():
+            cap_ref.release()
+        if cap_user.isOpened():
+            cap_user.release()
+        return None
+    ref_video_fps = max(1e-6, cap_ref.get(cv2.CAP_PROP_FPS))
+    user_video_fps = max(1e-6, cap_user.get(cv2.CAP_PROP_FPS))
+    ref_step = max(1, round(ref_video_fps / ref_motion_fps))
+    user_step = max(1, round(user_video_fps / user_motion_fps))
+    ref_video_idx = (ref_frame_1based - 1) * ref_step
+    user_video_idx = (user_frame_1based - 1) * user_step
+    cap_ref.set(cv2.CAP_PROP_POS_FRAMES, ref_video_idx)
+    cap_user.set(cv2.CAP_PROP_POS_FRAMES, user_video_idx)
+    ok_ref, frame_ref = cap_ref.read()
+    ok_user, frame_user = cap_user.read()
+    cap_ref.release()
+    cap_user.release()
+    if not ok_ref or not ok_user or frame_ref is None or frame_user is None:
+        return None
+
+    rgb_ref = cv2.cvtColor(frame_ref, cv2.COLOR_BGR2RGB)
+    rgb_user = cv2.cvtColor(frame_user, cv2.COLOR_BGR2RGB)
+    with mp_pose.Pose(static_image_mode=True, model_complexity=1, min_detection_confidence=0.5) as pose:
+        res_ref = pose.process(rgb_ref)
+        res_user = pose.process(rgb_user)
+    if not res_ref.pose_landmarks or not res_user.pose_landmarks:
+        return None
+
+    ref_pts = _landmarks_normalized(res_ref.pose_landmarks)
+    user_pts = _landmarks_normalized(res_user.pose_landmarks)
+    thresh = landmark_match_thresh if landmark_match_thresh is not None else 0.08
+    mismatched = _mismatched_landmark_indices(ref_pts, user_pts, distance_thresh=thresh)
+
+    # Draw reference (left) with default skeleton
+    frame_ref_bgr = frame_ref.copy()
+    mp_drawing.draw_landmarks(
+        frame_ref_bgr,
+        res_ref.pose_landmarks,
+        mp_pose.POSE_CONNECTIONS,
+        landmark_drawing_spec=mp_drawing_styles.get_default_pose_landmarks_style(),
+    )
+
+    # Draw user (right): default style for matching landmarks, RED for mismatched
+    frame_user_bgr = frame_user.copy()
+    h, w = frame_user_bgr.shape[:2]
+    connections = mp_pose.POSE_CONNECTIONS
+    for conn in connections:
+        a, b = conn
+        if a >= len(user_pts) or b >= len(user_pts):
+            continue
+        pt_a = (int(user_pts[a][0] * w), int(user_pts[a][1] * h))
+        pt_b = (int(user_pts[b][0] * w), int(user_pts[b][1] * h))
+        color = (0, 0, 255) if (a in mismatched or b in mismatched) else (0, 255, 0)
+        cv2.line(frame_user_bgr, pt_a, pt_b, color, 2, cv2.LINE_AA)
+    for i, (x, y) in enumerate(user_pts):
+        pt = (int(x * w), int(y * h))
+        color = (0, 0, 255) if i in mismatched else (0, 255, 0)
+        cv2.circle(frame_user_bgr, pt, 5, color, -1, cv2.LINE_AA)
+        cv2.circle(frame_user_bgr, pt, 5, (255, 255, 255), 1, cv2.LINE_AA)
+
+    # Resize to same height
+    h1, w1 = frame_ref_bgr.shape[:2]
+    h2, w2 = frame_user_bgr.shape[:2]
+    target_h = max(h1, h2)
+    if h1 != target_h:
+        frame_ref_bgr = cv2.resize(frame_ref_bgr, (int(w1 * target_h / h1), target_h))
+    if h2 != target_h:
+        frame_user_bgr = cv2.resize(frame_user_bgr, (int(w2 * target_h / h2), target_h))
+    w_left = frame_ref_bgr.shape[1]
+    side_by_side = np.hstack([frame_ref_bgr, frame_user_bgr])
+
+    # Labels above (Reference left; You + legend on the right, right-aligned)
+    cv2.putText(side_by_side, "Reference", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+    if user_label is None:
+        user_label = "You. Red glowing line means the body part is not matching the choreographer."
+    (tw, th), _ = cv2.getTextSize(user_label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+    x_right = side_by_side.shape[1] - tw - 10
+    cv2.putText(side_by_side, user_label, (max(x_right, w_left + 10), 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+
+    # Tips at the bottom: add a panel and wrap text
+    tips_list = tips_list or []
+    if tips_list:
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.45
+        thickness = 1
+        line_height = 22
+        margin = 12
+        max_chars_per_line = 80
+        lines = ["Tips:"]
+        for tip in tips_list[:6]:
+            tip = (tip.strip() or "").strip("• ")
+            if not tip:
+                continue
+            while len(tip) > max_chars_per_line:
+                lines.append(tip[:max_chars_per_line])
+                tip = tip[max_chars_per_line:].lstrip()
+            if tip:
+                lines.append(tip)
+        tips_height = margin * 2 + len(lines) * line_height
+        panel = np.zeros((tips_height, side_by_side.shape[1], 3), dtype=np.uint8)
+        panel[:] = (40, 40, 40)
+        y = margin + line_height
+        for i, line in enumerate(lines):
+            color = (180, 255, 180) if i == 0 else (220, 220, 220)
+            cv2.putText(panel, line, (margin, y), font, font_scale if i > 0 else 0.5, color, thickness, cv2.LINE_AA)
+            y += line_height
+        side_by_side = np.vstack([side_by_side, panel])
+
+    try:
+        cv2.imwrite(output_path, side_by_side)
         return output_path
     except Exception:
         return None
@@ -598,14 +761,25 @@ def _analyze_frame(ref_df, user_df, ref_f, user_f, fps=DEFAULT_FPS, ref_time=Non
         user_lean_x = user_shoulder_mid[0] - user_hip_mid[0]
         user_lean_z = user_shoulder_mid[2] - user_hip_mid[2]
         thresh = 0.04
+        ref_straight_x = abs(ref_lean_x) < 0.02  # reference torso is straight (no left/right lean)
         if user_lean_x > ref_lean_x + thresh:
-            feedback.append(
-                f"At {user_ts}: Your torso is leaning right compared to the reference at {ref_ts}."
-            )
+            if ref_straight_x:
+                feedback.append(
+                    f"At {user_ts}: Your torso is to the right while the reference's torso is straight at {ref_ts}."
+                )
+            else:
+                feedback.append(
+                    f"At {user_ts}: Your torso is leaning right compared to the reference at {ref_ts}."
+                )
         elif user_lean_x < ref_lean_x - thresh:
-            feedback.append(
-                f"At {user_ts}: Your torso is leaning left compared to the reference at {ref_ts}."
-            )
+            if ref_straight_x:
+                feedback.append(
+                    f"At {user_ts}: Your torso is to the left while the reference's torso is straight at {ref_ts}."
+                )
+            else:
+                feedback.append(
+                    f"At {user_ts}: Your torso is leaning left compared to the reference at {ref_ts}."
+                )
         if user_lean_z > ref_lean_z + thresh:
             feedback.append(
                 f"At {user_ts}: Your torso is leaning forward compared to the reference at {ref_ts}."
@@ -615,12 +789,15 @@ def _analyze_frame(ref_df, user_df, ref_f, user_f, fps=DEFAULT_FPS, ref_time=Non
                 f"At {user_ts}: Your torso is leaning back compared to the reference at {ref_ts}."
             )
 
-        # ----- Core engagement: reference crunching (torso compressed) vs user upright -----
-        # Vertical torso span (y increases downward): smaller = more crunch / core engaged.
+        # ----- Core engagement: only when reference is actually crunching (torso lowered), not at start -----
+        # Vertical torso span (y increases downward): smaller = torso lowered / crunching.
         ref_torso_vertical = ref_hip_mid[1] - ref_shoulder_mid[1]   # positive when hips below shoulders
         user_torso_vertical = user_hip_mid[1] - user_shoulder_mid[1]
         core_thresh = 0.05  # ref clearly more "crunched" than user
-        if ref_torso_vertical < user_torso_vertical - core_thresh:
+        # Skip at start (standing position) and only when ref is actually crunching (torso lowered).
+        ref_is_crunching = ref_torso_vertical < REF_TORSO_CRUNCH_THRESHOLD
+        past_start = ref_f > FEEDBACK_CORE_START_COOLDOWN_FRAMES
+        if past_start and ref_is_crunching and ref_torso_vertical < user_torso_vertical - core_thresh:
             feedback.append(
                 f"At {user_ts}: You are not engaging your core."
             )
@@ -827,8 +1004,8 @@ def _format_time_range_for_tip(user_time_range):
 def _feedback_stem_to_tip(stem, user_time_range):
     """
     Convert a feedback stem (log-style) into a clear 1-3 sentence tip for the user.
-    stem: normalized feedback text (no leading 'At [m:s]:', no trailing ' for [x]–[y].')
-    user_time_range: e.g. '[0:02]' or '[0:02]–[0:04]'
+    Returns (tip_text, merge_info). merge_info is None or (limb_type, action, side) for
+    arm/leg tips that can be merged when both left and right appear at the same timestamp.
     """
     t = _format_time_range_for_tip(user_time_range)
     time_phrase = f" {t}." if t else "."
@@ -837,84 +1014,161 @@ def _feedback_stem_to_tip(stem, user_time_range):
     # Arm too low / reference has arm higher
     if "arm is too low" in stem_lower or "arm higher" in stem_lower:
         side = "left" if "left" in stem_lower else "right"
-        return f"Keep your {side} arm higher{time_phrase}"
+        return (f"Keep your {side} arm higher{time_phrase}", ("arm", "higher", side))
     # Arm too high / reference has arm lower
     if "arm is too high" in stem_lower or "arm lower" in stem_lower:
         side = "left" if "left" in stem_lower else "right"
-        return f"Lower your {side} arm{time_phrase}"
+        return (f"Lower your {side} arm{time_phrase}", ("arm", "lower", side))
     # Arm more bent than reference
     if "arm is more bent" in stem_lower:
         side = "left" if "left" in stem_lower else "right"
-        return f"Straighten your {side} arm{time_phrase}"
+        return (f"Straighten your {side} arm{time_phrase}", ("arm", "straighten", side))
     # Arm straighter than reference
     if "arm is straighter" in stem_lower:
         side = "left" if "left" in stem_lower else "right"
-        return f"Keep your {side} arm bent{time_phrase}"
+        return (f"Keep your {side} arm bent{time_phrase}", ("arm", "bent", side))
     # Arm should be straighter; reference has straight arm
-    if "arm should be straighter" in stem_lower or "straight arm" in stem_lower and "straighter" in stem_lower:
+    if "arm should be straighter" in stem_lower or ("straight arm" in stem_lower and "straighter" in stem_lower):
         side = "left" if "left" in stem_lower else "right"
-        return f"Keep your {side} arm straighter{time_phrase}"
+        return (f"Keep your {side} arm straighter{time_phrase}", ("arm", "straighter", side))
 
     # Leg bent while reference straight
     if "leg is bent" in stem_lower and "reference" in stem_lower and "straight" in stem_lower:
         side = "left" if "left" in stem_lower else "right"
-        return f"Straighten your {side} leg{time_phrase}"
+        return (f"Straighten your {side} leg{time_phrase}", ("leg", "leg_straight", side))
     # Leg straight while reference bent
     if "leg is straight" in stem_lower and "reference" in stem_lower and "bent" in stem_lower:
         side = "left" if "left" in stem_lower else "right"
-        return f"Bend your {side} leg{time_phrase}"
+        return (f"Bend your {side} leg{time_phrase}", ("leg", "leg_bent", side))
     # Knee too bent
     if "knee is too bent" in stem_lower:
         side = "left" if "left" in stem_lower else "right"
-        return f"Straighten your {side} knee a little{time_phrase}"
+        return (f"Straighten your {side} knee a little{time_phrase}", ("leg", "knee_straight", side))
     # Knee too straight
     if "knee is too straight" in stem_lower:
         side = "left" if "left" in stem_lower else "right"
-        return f"Lift your {side} leg higher or bend your {side} knee more{time_phrase}"
+        return (f"Lift your {side} leg higher or bend your {side} knee more{time_phrase}", ("leg", "knee_bent", side))
 
-    # Torso lean
+    # Torso to the left/right while reference is straight -> straighten body
+    if "torso is to the right" in stem_lower and "reference's torso is straight" in stem_lower:
+        return (f"Straighten your body{time_phrase}", None)
+    if "torso is to the left" in stem_lower and "reference's torso is straight" in stem_lower:
+        return (f"Straighten your body{time_phrase}", None)
+    # Torso lean (no merge)
     if "torso is leaning right" in stem_lower:
-        return f"Lean your torso slightly left{time_phrase}"
+        return (f"Lean your torso slightly left{time_phrase}", None)
     if "torso is leaning left" in stem_lower:
-        return f"Lean your torso slightly right{time_phrase}"
+        return (f"Lean your torso slightly right{time_phrase}", None)
     if "torso is leaning forward" in stem_lower:
-        return f"Lean your torso forward{time_phrase}"
+        return (f"Lean your torso forward{time_phrase}", None)
     if "torso is leaning back" in stem_lower:
-        return f"Lean your torso back{time_phrase}"
+        return (f"Lean your torso back{time_phrase}", None)
 
-    # Core engagement
+    # Core engagement (no merge)
     if "not engaging your core" in stem_lower or "engaging your core" in stem_lower:
-        return f"Crunch your core{time_phrase}"
+        return (f"Crunch your core{time_phrase}", None)
 
-    # Arm symmetry: reference has left/right arm raised
+    # Arm symmetry: reference has left/right arm raised (no merge for single-arm raise)
     if "reference has left arm raised" in stem_lower or "left arm raised" in stem_lower:
-        return f"Raise your left arm to match the reference{time_phrase}"
+        return (f"Raise your left arm to match the reference{time_phrase}", None)
     if "reference has right arm raised" in stem_lower or "right arm raised" in stem_lower:
-        return f"Raise your right arm to match the reference{time_phrase}"
+        return (f"Raise your right arm to match the reference{time_phrase}", None)
     if "arms are not in the same pose" in stem_lower:
-        return f"Match the reference arm pose (one arm up, one down){time_phrase}"
+        return (f"Match the reference arm pose (one arm up, one down){time_phrase}", None)
 
-    # Timing
+    # Timing (no merge)
     if "moving too slow" in stem_lower or "falling behind" in stem_lower:
-        return f"Speed up to match the reference{time_phrase}"
+        return (f"Speed up to match the reference{time_phrase}", None)
     if "moving too fast" in stem_lower or "ahead of the reference" in stem_lower:
-        return f"Slow down to match the reference{time_phrase}"
+        return (f"Slow down to match the reference{time_phrase}", None)
 
-    # Fallback: shorten and use time
-    return f"Match the reference pose{time_phrase}".strip()
+    # Fallback
+    return (f"Match the reference pose{time_phrase}".strip(), None)
+
+
+# Merged tip text when both left and right match at same timestamp (limb_type, action) -> tip base
+_MERGED_TIP_TEXT = {
+    ("arm", "higher"): "Keep your arms higher",
+    ("arm", "lower"): "Lower your arms",
+    ("arm", "straighten"): "Straighten your arms",
+    ("arm", "straighter"): "Keep your arms straighter",
+    ("arm", "bent"): "Keep your arms bent",
+    ("leg", "leg_straight"): "Straighten your legs",
+    ("leg", "leg_bent"): "Bend your legs",
+    ("leg", "knee_straight"): "Straighten your knees a little",
+    ("leg", "knee_bent"): "Lift your legs higher or bend your knees more",
+}
+
+
+def get_practice_tips_sentences(comparison):
+    """
+    Build a list of clean, frontend-ready tip sentences from feedback_analysis.
+    When both left and right arm (or leg) need the same fix at the same timestamp,
+    returns one sentence with "arms" or "legs" instead of two. Each sentence is
+    one short, actionable tip (e.g. "Keep your arms higher at 0:02.").
+    """
+    feedback_analysis = comparison.get("feedback_analysis") or []
+    if not isinstance(feedback_analysis, list):
+        feedback_analysis = []
+
+    raw_tips = []
+    for entry in feedback_analysis:
+        user_range = entry.get("user_time_range", "")
+        fb = entry.get("feedback", "")
+        stem = re.sub(r"\s+for\s+\[\d+:\d+\](?:[–\-]\[\d+:\d+\])?\.?\s*$", "", fb).strip().rstrip(".")
+        if not stem:
+            continue
+        tip, merge_info = _feedback_stem_to_tip(stem, user_range)
+        if not tip:
+            continue
+        raw_tips.append((user_range, tip, merge_info))
+
+    time_phrase_by_range = {user_range: _format_time_range_for_tip(user_range) for user_range, _, _ in raw_tips}
+    group_sides = {}
+    group_tips = {}
+    non_merge_tips = []
+    for user_range, tip, merge_info in raw_tips:
+        if merge_info is None:
+            non_merge_tips.append(tip)
+            continue
+        limb_type, action, side = merge_info
+        key = (user_range, limb_type, action)
+        group_sides.setdefault(key, set()).add(side)
+        group_tips.setdefault(key, []).append(tip)
+
+    final_tips = []
+    for (user_range, limb_type, action), sides in group_sides.items():
+        if sides >= {"left", "right"}:
+            base = _MERGED_TIP_TEXT.get((limb_type, action), f"Adjust your {limb_type}s")
+            t = time_phrase_by_range.get(user_range, _format_time_range_for_tip(user_range))
+            time_phrase = f" {t}." if t else "."
+            final_tips.append(f"{base}{time_phrase}")
+        else:
+            for tip in group_tips.get((user_range, limb_type, action), []):
+                final_tips.append(tip)
+    final_tips.extend(non_merge_tips)
+
+    seen = set()
+    unique = []
+    for tip in final_tips:
+        s = tip.strip()
+        if not s:
+            continue
+        if s not in seen:
+            seen.add(s)
+            unique.append(s if s.endswith(".") else s + ".")
+    return unique
 
 
 def write_tips_file(comparison, tips_path=None):
     """
-    From the comparison's feedback_analysis (log-style entries), generate a clean tips file
-    with 1-3 sentence actionable tips per item. Returns the path to the written file.
+    Write a tips file to disk and return its path. Uses the same clean sentences
+    as get_practice_tips_sentences (arms/legs merged when both sides at same time).
     """
     if tips_path is None:
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        tips_path = os.path.join(LOG_FOLDER, f"tips_{timestamp}.txt")
-    feedback_analysis = comparison.get("feedback_analysis") or []
-    if not isinstance(feedback_analysis, list):
-        feedback_analysis = []
+        tips_path = os.path.join(TIPS_FOLDER, f"tips_{timestamp}.txt")
+    unique_tips = get_practice_tips_sentences(comparison)
 
     tips_lines = [
         "DANCE PRACTICE TIPS",
@@ -923,20 +1177,11 @@ def write_tips_file(comparison, tips_path=None):
         "Use these tips to improve your next run. Each tip corresponds to a moment in your performance.",
         "",
     ]
-
-    for entry in feedback_analysis:
-        user_range = entry.get("user_time_range", "")
-        fb = entry.get("feedback", "")
-        stem = re.sub(r"\s+for\s+\[\d+:\d+\](?:[–\-]\[\d+:\d+\])?\.?\s*$", "", fb).strip().rstrip(".")
-        if not stem:
-            continue
-        tip = _feedback_stem_to_tip(stem, user_range)
-        if not tip:
-            continue
+    for tip in unique_tips:
         tips_lines.append(f"• {tip}")
         tips_lines.append("")
 
-    if len(tips_lines) <= 6:  # only header and no tips
+    if not unique_tips:
         tips_lines.append("No specific tips for this run. Keep practicing!")
         tips_lines.append("")
 
@@ -1098,7 +1343,9 @@ def compare_motion_csvs_dtw(reference_csv_path, user_csv_path, fps=DEFAULT_FPS, 
     ]
     # Top N worst (highest distance) and top N best (lowest distance)
     sorted_worst = sorted(path_distances, key=lambda x: x[3], reverse=True)[:NUM_DEVIATION_SCREENSHOTS]
-    sorted_best = sorted(path_distances, key=lambda x: x[3])[:NUM_POSE_MATCH_SCREENSHOTS]
+    # Only include pairs that are actually close (distance <= POSE_MATCH_MAX_DISTANCE)
+    best_candidates = [p for p in path_distances if p[3] <= POSE_MATCH_MAX_DISTANCE]
+    sorted_best = sorted(best_candidates, key=lambda x: x[3])[:NUM_POSE_MATCH_SCREENSHOTS]
 
     worst_deviations = [
         {
@@ -1311,28 +1558,18 @@ def write_result_log(video1_path, video2_path, output1, output2, comparison, vid
         lines.append("")
         lines.append("Positive feedback (where your pose was most identical to the reference):")
         lines.extend(wrap_paragraph(comparison["positive_feedback_summary"]))
-    dev_user = comparison.get("deviation_screenshots_user") or []
-    dev_ref = comparison.get("deviation_screenshots_reference") or []
-    if dev_user or dev_ref or comparison.get("deviation_screenshot_user") or comparison.get("deviation_screenshot_reference"):
+    dev_imgs = comparison.get("deviation_comparison_images") or []
+    if dev_imgs:
         lines.append("")
-        lines.append("Deviation screenshots (moments that differed most from reference):")
-        for i, p in enumerate(dev_user, 1):
-            lines.append(f"  User #{i}:      {p}")
-        for i, p in enumerate(dev_ref, 1):
-            lines.append(f"  Reference #{i}: {p}")
-        if not dev_user and comparison.get("deviation_screenshot_user"):
-            lines.append(f"  User:      {comparison['deviation_screenshot_user']}")
-        if not dev_ref and comparison.get("deviation_screenshot_reference"):
-            lines.append(f"  Reference: {comparison['deviation_screenshot_reference']}")
-    pose_user = comparison.get("pose_match_screenshots_user") or []
-    pose_ref = comparison.get("pose_match_screenshots_reference") or []
-    if pose_user or pose_ref:
+        lines.append("Deviation comparison images (side-by-side, red = not matching choreographer):")
+        for i, p in enumerate(dev_imgs, 1):
+            lines.append(f"  #{i}: {p}")
+    pose_imgs = comparison.get("pose_match_comparison_images") or []
+    if pose_imgs:
         lines.append("")
-        lines.append("Pose-match screenshots (frames where your pose was most identical to the reference):")
-        for i, p in enumerate(pose_user, 1):
-            lines.append(f"  User #{i}:      {p}")
-        for i, p in enumerate(pose_ref, 1):
-            lines.append(f"  Reference #{i}: {p}")
+        lines.append("Pose-match comparison images (side-by-side, green = matching choreographer):")
+        for i, p in enumerate(pose_imgs, 1):
+            lines.append(f"  #{i}: {p}")
     if comparison.get("aligned_moments") and isinstance(comparison["aligned_moments"], list):
         lines.append("")
         lines.append("Aligned moments (timestamps [min:sec], reference <-> user), sampled every 20 matches:")
@@ -1427,48 +1664,65 @@ def upload_videos():
     comparison["negative_feedback_summary"] = build_negative_feedback_summary(comparison)
     comparison["positive_feedback_summary"] = build_positive_feedback_summary(comparison)
 
-    # Multiple screenshots: worst deviations and best pose-match moments
-    run_ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    comparison["deviation_screenshots_user"] = []
-    comparison["deviation_screenshots_reference"] = []
-    comparison["pose_match_screenshots_user"] = []
-    comparison["pose_match_screenshots_reference"] = []
+    # Practice tips (used below for comparison images and in response)
+    comparison["practice_tips"] = get_practice_tips_sentences(comparison)
 
+    # Side-by-side deviation images: one per worst-deviation moment; user's wrong landmarks in red; tips at bottom
+    comparison["deviation_comparison_images"] = []
+    run_ts_img = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    tips_for_image = comparison.get("practice_tips") or []
     for idx, moment in enumerate(comparison.get("worst_deviations") or []):
-        u_frame = moment.get("user_frame")
-        r_frame = moment.get("ref_frame")
-        if u_frame is not None:
-            path_u = os.path.join(
-                DEVIATION_SCREENSHOTS_FOLDER, f"deviation_{idx + 1}_user_{run_ts}.png"
-            )
-            if save_deviation_screenshot(video2_path, u_frame, path_u, fps=user_motion_fps):
-                comparison["deviation_screenshots_user"].append(path_u)
-        if r_frame is not None:
-            path_r = os.path.join(
-                DEVIATION_SCREENSHOTS_FOLDER, f"deviation_{idx + 1}_reference_{run_ts}.png"
-            )
-            if save_deviation_screenshot(video1_path, r_frame, path_r, fps=ref_motion_fps):
-                comparison["deviation_screenshots_reference"].append(path_r)
+        ref_f = moment.get("ref_frame")
+        user_f = moment.get("user_frame")
+        if ref_f is None or user_f is None:
+            continue
+        img_path = os.path.join(
+            DEVIATION_SCREENSHOTS_FOLDER, f"deviation_comparison_{idx + 1}_{run_ts_img}.png"
+        )
+        try:
+            if save_deviation_comparison_image(
+                video1_path,
+                video2_path,
+                ref_f,
+                user_f,
+                ref_motion_fps,
+                user_motion_fps,
+                img_path,
+                tips_list=tips_for_image,
+            ):
+                comparison["deviation_comparison_images"].append(img_path)
+        except Exception:
+            pass
+    comparison["deviation_comparison_image"] = (comparison["deviation_comparison_images"] or [None])[0]
 
+    # Side-by-side pose-match images: one per best pose-match moment; green = matching choreographer; same format + tips
+    comparison["pose_match_comparison_images"] = []
+    pose_match_label = "You. Green line means the body part is matching the choreographer."
     for idx, moment in enumerate(comparison.get("best_pose_matches") or []):
-        u_frame = moment.get("user_frame")
-        r_frame = moment.get("ref_frame")
-        if u_frame is not None:
-            path_u = os.path.join(
-                POSE_MATCH_SCREENSHOTS_FOLDER, f"pose_match_{idx + 1}_user_{run_ts}.png"
-            )
-            if save_deviation_screenshot(video2_path, u_frame, path_u, fps=user_motion_fps):
-                comparison["pose_match_screenshots_user"].append(path_u)
-        if r_frame is not None:
-            path_r = os.path.join(
-                POSE_MATCH_SCREENSHOTS_FOLDER, f"pose_match_{idx + 1}_reference_{run_ts}.png"
-            )
-            if save_deviation_screenshot(video1_path, r_frame, path_r, fps=ref_motion_fps):
-                comparison["pose_match_screenshots_reference"].append(path_r)
-
-    # Backward compat: single "worst" deviation paths (first of list)
-    comparison["deviation_screenshot_user"] = (comparison["deviation_screenshots_user"] or [None])[0]
-    comparison["deviation_screenshot_reference"] = (comparison["deviation_screenshots_reference"] or [None])[0]
+        ref_f = moment.get("ref_frame")
+        user_f = moment.get("user_frame")
+        if ref_f is None or user_f is None:
+            continue
+        img_path = os.path.join(
+            POSE_MATCH_SCREENSHOTS_FOLDER, f"pose_match_comparison_{idx + 1}_{run_ts_img}.png"
+        )
+        try:
+            if save_deviation_comparison_image(
+                video1_path,
+                video2_path,
+                ref_f,
+                user_f,
+                ref_motion_fps,
+                user_motion_fps,
+                img_path,
+                tips_list=tips_for_image,
+                user_label=pose_match_label,
+                landmark_match_thresh=0.04,
+            ):
+                comparison["pose_match_comparison_images"].append(img_path)
+        except Exception:
+            pass
+    comparison["pose_match_comparison_image"] = (comparison["pose_match_comparison_images"] or [None])[0]
 
     apply_acceptable_threshold(comparison)
 
@@ -1486,6 +1740,10 @@ def upload_videos():
         "comparison": comparison,
         "log_file": log_path,
         "tips_file": tips_path,
+        "deviation_comparison_image": comparison.get("deviation_comparison_image"),
+        "deviation_comparison_images": comparison.get("deviation_comparison_images", []),
+        "pose_match_comparison_image": comparison.get("pose_match_comparison_image"),
+        "pose_match_comparison_images": comparison.get("pose_match_comparison_images", []),
     })
 
 
