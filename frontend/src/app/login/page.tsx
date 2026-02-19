@@ -55,7 +55,7 @@ export default function LoginPage() {
       router.replace(isAdmin ? '/admin' : '/upload'); // ✅ UPDATED
 
     } catch (err: unknown) {
-      const msg = err?.message || '';
+  const msg = err instanceof Error ? err.message : String(err) || '';
 
       if (msg.toLowerCase().includes('email not confirmed')) {
         setError('Email not confirmed. Please verify your email or ask admin to disable confirmation.');
