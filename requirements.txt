@@ -12,3 +12,4 @@ mediapipe==0.10.14
 werkzeug
 gunicorn==23.0.0
 setuptools>=68.0
+fastdtw
