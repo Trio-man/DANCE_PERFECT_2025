@@ -5,29 +5,11 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { createClient, Session, User } from '@supabase/supabase-js';
 import { FiArrowLeft, FiLogOut, FiUploadCloud, FiList } from 'react-icons/fi';
-import Image from 'next/image';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
-
-type Visuals = {
-  reference?: {
-    preview_images?: string[];
-    overlay_video?: string;
-  };
-  user?: {
-    preview_images?: string[];
-    overlay_video?: string;
-  };
-};
-
-type ResultType = {
-  score?: number;
-  feedback?: { summary?: string };
-  visuals?: Visuals;
-};
 
 // -------------------------
 // CMS TYPES
@@ -57,20 +39,15 @@ type FaqRow = {
 export default function UploadPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
   const [dancerVideo, setDancerVideo] = useState<File | null>(null);
   const [choreoVideo, setChoreoVideo] = useState<File | null>(null);
   const [previewDancer, setPreviewDancer] = useState<string | null>(null);
   const [previewChoreo, setPreviewChoreo] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
-  const [result, setResult] = useState<ResultType | null>(null);
-
-  // ✅ ADDED: display name (username) for Welcome text
-  const [displayName, setDisplayName] = useState<string>('User');
 
   // -------------------------
-  // ✅ CMS STATE
+  // CMS STATE
   // -------------------------
   const [appSettings, setAppSettings] = useState<AppSettingsRow | null>(null);
   const [aboutPage, setAboutPage] = useState<ContentPageRow | null>(null);
@@ -78,18 +55,14 @@ export default function UploadPage() {
   const [faqs, setFaqs] = useState<FaqRow[]>([]);
   const [cmsError, setCmsError] = useState<string | null>(null);
 
-  const BACKEND_URL = 'http://localhost:5000';
-
   // -------------------------
   // AUTH CHECK
   // -------------------------
   useEffect(() => {
     const checkUser = async () => {
-      setAuthLoading(true);
       const { data } = await supabase.auth.getUser();
       if (!data.user) router.replace('/login');
       else setUser(data.user);
-      setAuthLoading(false);
     };
     checkUser();
 
@@ -103,37 +76,13 @@ export default function UploadPage() {
     return () => listener.subscription.unsubscribe();
   }, [router]);
 
-  // ✅ ADDED: Load username from profiles when user is available
-  useEffect(() => {
-    const loadDisplayName = async () => {
-      if (!user?.id) return;
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('display_name,email')
-        .eq('id', user.id)
-        .single();
-
-      // fallback to email if display_name is missing
-      const name =
-        (profile?.display_name || '').trim() ||
-        (profile?.email || user.email || '').trim() ||
-        'User';
-
-      setDisplayName(name);
-    };
-
-    loadDisplayName();
-  }, [user]);
-
   // -------------------------
-  // ✅ CMS LOAD (settings + pages + faqs)
+  // CMS LOAD (settings + pages + faqs)
   // -------------------------
   useEffect(() => {
     const loadCms = async () => {
       setCmsError(null);
 
-      // app_settings (single row)
       const { data: settingsRow, error: sErr } = await supabase
         .from('app_settings')
         .select('id,system_name,logo_url,primary_color')
@@ -145,7 +94,6 @@ export default function UploadPage() {
         setAppSettings(settingsRow as AppSettingsRow);
       }
 
-      // content_pages (about + guidelines)
       const { data: pages, error: pErr } = await supabase
         .from('content_pages')
         .select('id,slug,title,body,is_active')
@@ -160,7 +108,6 @@ export default function UploadPage() {
         setGuidelinesPage(list.find((x) => x.slug === 'guidelines' && x.is_active) || null);
       }
 
-      // faqs (active only)
       const { data: faqRows, error: fErr } = await supabase
         .from('faqs')
         .select('id,question,answer,is_active')
@@ -175,7 +122,6 @@ export default function UploadPage() {
       }
     };
 
-    // Load even before user is ready (public-ish content is fine)
     loadCms();
   }, []);
 
@@ -184,14 +130,12 @@ export default function UploadPage() {
   // -------------------------
   useEffect(() => {
     let url: string | null = null;
-
     if (dancerVideo) {
       url = URL.createObjectURL(dancerVideo);
       setPreviewDancer(url);
     } else {
       setPreviewDancer(null);
     }
-
     return () => {
       if (url) URL.revokeObjectURL(url);
     };
@@ -199,14 +143,12 @@ export default function UploadPage() {
 
   useEffect(() => {
     let url: string | null = null;
-
     if (choreoVideo) {
       url = URL.createObjectURL(choreoVideo);
       setPreviewChoreo(url);
     } else {
       setPreviewChoreo(null);
     }
-
     return () => {
       if (url) URL.revokeObjectURL(url);
     };
@@ -235,21 +177,17 @@ export default function UploadPage() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-
-    // 🔥 Remove stored Supabase session keys
     Object.keys(localStorage).forEach((key) => {
       if (key.startsWith('sb-')) {
         localStorage.removeItem(key);
       }
     });
-
     router.replace('/login');
   };
 
   // -------------------------
   // ANALYZE FLOW
   // -------------------------
-
   const handleAnalyze = async () => {
     if (!dancerVideo || !choreoVideo) {
       setStatus('Please upload both videos first.');
@@ -274,7 +212,6 @@ export default function UploadPage() {
       sessionStorage.setItem('dp_dancer', dancerDataUrl);
       sessionStorage.setItem('dp_choreo', choreoDataUrl);
 
-      // 🔐 Get Supabase session token
       const { data } = await supabase.auth.getSession();
       const accessToken = data.session?.access_token;
 
@@ -285,7 +222,6 @@ export default function UploadPage() {
       }
 
       sessionStorage.setItem('dp_token', accessToken);
-
       router.push('/loading');
     } catch (err) {
       console.error(err);
@@ -295,7 +231,7 @@ export default function UploadPage() {
   };
 
   const systemName = appSettings?.system_name || 'DancePerfect';
-  const primaryColor = appSettings?.primary_color || '#7C3AED'; // fallback
+  const primaryColor = appSettings?.primary_color || '#7C3AED';
 
   return (
     <motion.div
@@ -303,7 +239,7 @@ export default function UploadPage() {
       animate={{ opacity: 1 }}
       className="min-h-screen flex flex-col items-center justify-center px-4 bg-gradient-to-br from-[#d6c1ff] via-[#cde7ff] to-white animate-gradient"
     >
-      {/* ✅ OUTSIDE THE BOX: CMS CONTENT (original code moved here, unchanged) */}
+      {/* CMS CONTENT */}
       <div className="w-full max-w-6xl mb-6">
         <div className="mb-8">
           {cmsError && (
@@ -335,7 +271,6 @@ export default function UploadPage() {
               <h2 className="text-lg font-semibold mb-2" style={{ color: primaryColor }}>
                 FAQs
               </h2>
-
               <div className="space-y-3">
                 {faqs.map((f) => (
                   <div key={f.id} className="border border-white/70 rounded-lg p-3 bg-white/50">
@@ -349,9 +284,8 @@ export default function UploadPage() {
         </div>
       </div>
 
-      {/* ✅ INSIDE THE BOX: upload UI stays here (original code unchanged) */}
+      {/* UPLOAD UI */}
       <motion.div className="w-full max-w-6xl bg-white/70 backdrop-blur-lg border border-white/60 shadow-lg rounded-2xl p-8 relative">
-        {/* Loading Overlay */}
         {loading && (
           <div className="absolute inset-0 bg-white/70 backdrop-blur-sm flex items-center justify-center rounded-2xl z-50">
             <div className="text-center">
@@ -364,7 +298,6 @@ export default function UploadPage() {
           </div>
         )}
 
-        {/* Header */}
         <button
           onClick={() => router.back()}
           className="absolute top-4 left-4 text-gray-600 hover:text-gray-800"
@@ -379,7 +312,6 @@ export default function UploadPage() {
           <FiLogOut size={24} />
         </button>
 
-        {/* ✅ CMS Brand Row */}
         <div className="flex items-center justify-center gap-3 mb-2">
           {appSettings?.logo_url ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -399,7 +331,6 @@ export default function UploadPage() {
           Welcome {user?.email?.split('@')[0]}
         </p>
 
-        {/* Video Uploads */}
         <div className="flex flex-col md:flex-row gap-8">
           <VideoUpload
             label="Dancer Video"
@@ -417,7 +348,6 @@ export default function UploadPage() {
 
         {status && <p className="text-center text-gray-600 mt-3">{status}</p>}
 
-        {/* Buttons */}
         <div className="flex flex-col md:flex-row gap-4 justify-center mt-6">
           <motion.button
             whileTap={{ scale: 0.97 }}
