@@ -21,6 +21,25 @@ Project Highlights
 • Built with a modern React + Vite frontend and Python backend  
 
 ---
+Core Features
+-------------
+
+Pose Estimation  
+- 33 landmark detection per frame  
+- Real-time capable architecture  
+
+Kinematic Analysis  
+- Shoulder, elbow, hip, and knee angle computation  
+- Symmetry analysis  
+- Movement consistency tracking  
+- Trajectory mapping  
+
+Dashboard & Management  
+- Analysis history tracking  
+- Run management interface  
+- Structured performance reporting  
+
+---
 
 How It Works
 ------------
@@ -60,37 +79,11 @@ System Architecture
 -------------------
 
 Client (React Frontend)
-        ↓
-REST API (Flask Backend)
-        ↓
-Video Processing Pipeline
-        ↓
-MediaPipe Pose Estimation
-        ↓
-Landmark Extraction
-        ↓
-Kinematic Computation
-        ↓
-Metric Visualization
-
----
-
-Core Features
--------------
-
-Pose Estimation  
-- 33 landmark detection per frame  
-- Real-time capable architecture  
-
-Kinematic Analysis  
-- Shoulder, elbow, hip, and knee angle computation  
-- Symmetry analysis  
-- Movement consistency tracking  
-- Trajectory mapping  
-
-Dashboard & Management  
-- Analysis history tracking  
-- Run management interface  
-- Structured performance reporting  
+    → REST API (Flask Backend)
+        → Video Processing Pipeline
+            → MediaPipe Pose Estimation
+                → Landmark Extraction
+                    → Kinematic Computation
+                        → Metric Visualization
 
 ---
