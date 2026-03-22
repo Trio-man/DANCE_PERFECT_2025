@@ -1,0 +1,6 @@
+DancePerfect Analysis Log
+
+Reference Video: uploads\dance_reference.mp4
+User Video: uploads\dance_user.mp4
+Comparison Score: None
+Tips File: tips\tips_20260220_125454.txt

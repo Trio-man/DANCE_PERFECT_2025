@@ -237,137 +237,6 @@ def get_public_storage_url(bucket: str, storage_path: str):
     # If your bucket is public, this works. If private, you’ll need signed URLs.
     return f"{SUPABASE_URL}/storage/v1/object/public/{bucket}/{storage_path}"
 
-
-# =========================
-# NEW: TEXT / SCREENSHOT / MOT HELPERS (ADDED)
-# =========================
-def write_text_file(path: str, text: str):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(text or "")
-
-def build_logs_text(comparison: dict) -> str:
-    score = comparison.get("similarity_score")
-    mean_dist = comparison.get("mean_landmark_distance")
-    frames = comparison.get("frames_compared")
-    status = comparison.get("status")
-    reason = comparison.get("reason")
-    msg = comparison.get("message")
-
-    lines = []
-    lines.append(f"status: {status}")
-    if reason:
-        lines.append(f"reason: {reason}")
-    if msg:
-        lines.append(f"message: {msg}")
-    lines.append(f"score: {score}")
-    lines.append(f"mean_landmark_distance: {mean_dist}")
-    lines.append(f"frames_compared: {frames}")
-    return "\n".join(lines) + "\n"
-
-def build_tips_text(comparison: dict) -> str:
-    fb = (comparison or {}).get("feedback") or {}
-    summary = fb.get("summary", "")
-    timing = fb.get("timing", "")
-    body = fb.get("body_part_comments") or []
-    top = fb.get("top_errors") or []
-    timeline = fb.get("detailed_timeline") or []
-
-    lines = []
-    lines.append("=== SUMMARY ===")
-    lines.append(summary)
-    lines.append("")
-    lines.append("=== TIMING ===")
-    lines.append(timing)
-    lines.append("")
-    lines.append("=== BODY PART FOCUS ===")
-    for b in body:
-        lines.append(f"- {b}")
-    lines.append("")
-    lines.append("=== TOP ERRORS ===")
-    for t in top:
-        lines.append(f"- {t}")
-    lines.append("")
-    lines.append("=== TIMELINE (GROUPED) ===")
-    for e in timeline:
-        start = e.get("start")
-        end = e.get("end")
-        sev = e.get("severity")
-        bp = e.get("body_part")
-        joint = e.get("joint")
-        message = e.get("message")
-        lines.append(f"- [{start}–{end}] ({sev}) {bp} / {joint}: {message}")
-
-    return "\n".join(lines).strip() + "\n"
-
-def save_side_by_side(img_path_a: str, img_path_b: str, out_path: str):
-    a = cv2.imread(img_path_a)
-    b = cv2.imread(img_path_b)
-    if a is None or b is None:
-        raise RuntimeError("Could not read one or both images for comparison screenshot.")
-
-    ha = a.shape[0]
-    hb = b.shape[0]
-    h = min(ha, hb)
-
-    def resize_to_h(im, target_h):
-        scale = target_h / im.shape[0]
-        w = int(im.shape[1] * scale)
-        return cv2.resize(im, (w, target_h))
-
-    a2 = resize_to_h(a, h)
-    b2 = resize_to_h(b, h)
-
-    out = cv2.hconcat([a2, b2])
-    os.makedirs(os.path.dirname(out_path), exist_ok=True)
-    cv2.imwrite(out_path, out)
-    return out_path
-
-def save_labeled_copy(src_path: str, out_path: str, label: str):
-    img = cv2.imread(src_path)
-    if img is None:
-        raise RuntimeError("Could not read preview image.")
-    cv2.putText(img, label, (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 255), 3)
-    os.makedirs(os.path.dirname(out_path), exist_ok=True)
-    cv2.imwrite(out_path, img)
-    return out_path
-
-def csv_landmarks_to_mot(csv_path: str, mot_path: str, fps: float = 30.0, landmark_ids=None):
-    df = pd.read_csv(csv_path)
-    if landmark_ids is None:
-        landmark_ids = [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28]
-
-    frames = sorted(df["frame"].unique())
-    time = [f / fps for f in frames]
-
-    out = pd.DataFrame({"time": time})
-
-    for lid in landmark_ids:
-        d = df[df["landmark_id"] == lid].sort_values("frame")
-        if d.empty:
-            out[f"lm{lid}_x"] = np.nan
-            out[f"lm{lid}_y"] = np.nan
-            out[f"lm{lid}_z"] = np.nan
-            continue
-        out[f"lm{lid}_x"] = d["x"].to_numpy()
-        out[f"lm{lid}_y"] = d["y"].to_numpy()
-        out[f"lm{lid}_z"] = d["z"].to_numpy()
-
-    os.makedirs(os.path.dirname(mot_path), exist_ok=True)
-    with open(mot_path, "w", encoding="utf-8") as f:
-        f.write("Coordinates\n")
-        f.write("version=1\n")
-        f.write(f"nRows={len(out)}\n")
-        f.write(f"nColumns={len(out.columns)}\n")
-        f.write("inDegrees=no\n")
-        f.write("endheader\n")
-        f.write("\t".join(out.columns) + "\n")
-        for _, row in out.iterrows():
-            f.write("\t".join(str(v) for v in row.values) + "\n")
-
-    return mot_path
-
-
 # =========================
 # MEDIAPIPE TASKS: PoseLandmarker
 # =========================
@@ -1088,7 +957,7 @@ def admin_activate_user(user_id):
 @app.route("/admin/users/<user_id>/role", methods=["PATCH"])
 @require_auth(["super_admin"])  # only super_admin can change roles (recommended)
 def admin_set_role(user_id):
-
+    
     """
     Set role: user | super_admin | it_admin
     """
@@ -1112,234 +981,22 @@ def admin_set_role(user_id):
 @app.route("/analyze", methods=["POST"])
 @require_auth()  # any active logged-in user
 def analyze():
-    db_run_id = None  # ✅ DB row id (analysis_runs). Keep separate from folder id.
-    try:
-        print("---- /analyze called ----")
-        print("Incoming files:", list(request.files.keys()))
-        print("Incoming form:", dict(request.form))
+    print("---- /analyze called ----")
+    print("Incoming files:", list(request.files.keys()))
+    print("Incoming form:", dict(request.form))
 
-        # ✅ Check required files
-        if "dancer_video" not in request.files or "choreo_video" not in request.files:
-            return jsonify({
-                "error": "Missing upload files",
-                "expected_fields": ["dancer_video", "choreo_video"],
-                "received_fields": list(request.files.keys())
-            }), 400
+    dancer = request.files.get("dancer_video") or request.files.get("video2")
+    choreo = request.files.get("choreo_video") or request.files.get("video1")
 
-        dancer = request.files["dancer_video"]   # user/dancer
-        choreo = request.files["choreo_video"]   # reference/choreo
-
-        if dancer.filename == "" or choreo.filename == "":
-            return jsonify({"error": "One or both uploaded files are empty"}), 400
-
-        # ✅ Create a run row so admin dashboard can see it
-        user_id = request.current_profile["id"]
-        db_run_id = db_create_run(supabase, user_id)
-
-        # ----------------------------
-        # Flags from frontend
-        # ----------------------------
-        def _truthy(v: str) -> bool:
-            return str(v or "").strip().lower() in ("1", "true", "yes", "y", "on")
-
-        generate_preview = _truthy(request.form.get("generate_preview", "true"))
-
-        # ✅ default to 1 (limit marker PNG to one)
-        try:
-            preview_max_frames = int(request.form.get("preview_max_frames", "1"))
-        except Exception:
-            preview_max_frames = 1
-
-        # Optional: store original videos in Supabase Storage
-        store_in_supabase = _truthy(request.form.get("store_in_supabase", "false"))
-        storage_bucket = "videos"
-
-        # ----------------------------
-        # Unique run folder (folder id)
-        # ----------------------------
-        folder_run_id = datetime.utcnow().strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:8]
-
-        run_root = os.path.join(STATIC_OUTPUTS, folder_run_id)
-        ref_dir = os.path.join(run_root, "reference")
-        usr_dir = os.path.join(run_root, "user")
-        os.makedirs(ref_dir, exist_ok=True)
-        os.makedirs(usr_dir, exist_ok=True)
-
-        # ----------------------------
-        # Save uploaded MP4s locally (needed for cv2/mediapipe)
-        # ----------------------------
-        ref_video_path = os.path.join(ref_dir, "reference.mp4")
-        usr_video_path = os.path.join(usr_dir, "user.mp4")
-
-        choreo.save(ref_video_path)
-        dancer.save(usr_video_path)
-
-        print("Saved videos:")
-        print("  ref:", ref_video_path)
-        print("  usr:", usr_video_path)
-
-        # ----------------------------
-        # OPTIONAL: Upload videos to Supabase Storage
-        # ----------------------------
-        storage_info = None
-        if store_in_supabase:
-            ref_ct = mimetypes.guess_type(choreo.filename)[0] or "video/mp4"
-            usr_ct = mimetypes.guess_type(dancer.filename)[0] or "video/mp4"
-
-            ref_storage_path = f"{folder_run_id}/reference.mp4"
-            usr_storage_path = f"{folder_run_id}/user.mp4"
-
-            with open(ref_video_path, "rb") as f:
-                upload_bytes_to_storage(storage_bucket, ref_storage_path, f.read(), ref_ct)
-
-            with open(usr_video_path, "rb") as f:
-                upload_bytes_to_storage(storage_bucket, usr_storage_path, f.read(), usr_ct)
-
-            storage_info = {
-                "bucket": storage_bucket,
-                "reference_path": ref_storage_path,
-                "user_path": usr_storage_path
-            }
-
-        # ----------------------------
-        # Extract motion CSVs
-        # ----------------------------
-        ref_csv = os.path.join(OUTPUT_FOLDER, f"{folder_run_id}_reference_motion.csv")
-        usr_csv = os.path.join(OUTPUT_FOLDER, f"{folder_run_id}_user_motion.csv")
-
-        print("Extracting CSVs...")
-        extract_motion_from_video(ref_video_path, ref_csv)
-        extract_motion_from_video(usr_video_path, usr_csv)
-
-        # ----------------------------
-        # Compare motions -> feedback + score
-        # ----------------------------
-        print("Comparing motions...")
-        comparison = compare_motion_csvs(ref_csv, usr_csv, frame_rate=30)
-
-        score = comparison.get("similarity_score", 0.0)
-        feedback = comparison.get("feedback", {})
-
-        # ----------------------------
-        # Generate visuals (PNG previews ONLY)
-        # ----------------------------
-        visuals = {
-            "reference": {"preview_images": []},
-            "user": {"preview_images": []},
-        }
-
-        ref_pngs = []
-        usr_pngs = []
-
-        if generate_preview:
-            print("Generating preview PNGs...")
-            ref_prev_dir = os.path.join(ref_dir, "previews")
-            usr_prev_dir = os.path.join(usr_dir, "previews")
-
-            ref_pngs = save_pose_preview_frames_tasks(
-                ref_video_path, ref_prev_dir, every_n_frames=30, max_frames=preview_max_frames
-            )
-            usr_pngs = save_pose_preview_frames_tasks(
-                usr_video_path, usr_prev_dir, every_n_frames=30, max_frames=preview_max_frames
-            )
-
-            visuals["reference"]["preview_images"] = [to_public_url(p) for p in ref_pngs]
-            visuals["user"]["preview_images"] = [to_public_url(p) for p in usr_pngs]
-
-        # =========================
-        # NEW: Create + upload logs/tips/mot/screenshots to online drive (Supabase Storage)
-        # =========================
-        outputs_bucket = "outputs"  # ✅ create a PUBLIC bucket named "outputs" in Supabase Storage
-
-        # write logs.txt & tips.txt under run folder
-        logs_path = os.path.join(run_root, "logs.txt")
-        tips_path = os.path.join(run_root, "tips.txt")
-        write_text_file(logs_path, build_logs_text(comparison))
-        write_text_file(tips_path, build_tips_text(comparison))
-
-        # create .mot files under run folder
-        ref_mot_path = os.path.join(run_root, "reference_landmarks.mot")
-        usr_mot_path = os.path.join(run_root, "user_landmarks.mot")
-        csv_landmarks_to_mot(ref_csv, ref_mot_path, fps=30.0)
-        csv_landmarks_to_mot(usr_csv, usr_mot_path, fps=30.0)
-
-        # create screenshots folder under run folder
-        screenshots_dir = os.path.join(run_root, "screenshots")
-        os.makedirs(screenshots_dir, exist_ok=True)
-
-        screenshot_files = {}
-        if generate_preview and len(ref_pngs) > 0 and len(usr_pngs) > 0:
-            negative_path = os.path.join(screenshots_dir, "deviation_negative.png")
-            positive_path = os.path.join(screenshots_dir, "pose_match_positive.png")
-            compare_path = os.path.join(screenshots_dir, "comparison.png")
-
-            save_labeled_copy(usr_pngs[0], negative_path, "Deviation (Negative)")
-            save_labeled_copy(ref_pngs[0], positive_path, "Pose Match (Positive)")
-            save_side_by_side(ref_pngs[0], usr_pngs[0], compare_path)
-
-            screenshot_files = {
-                "negative": negative_path,
-                "positive": positive_path,
-                "comparison": compare_path,
-            }
-
-        # upload outputs to Supabase Storage
-        drive_outputs = {"texts": {}, "mot": {}, "screenshots": {}}
-
-        # texts
-        upload_local_file_to_storage(outputs_bucket, f"{folder_run_id}/logs.txt", logs_path, "text/plain")
-        upload_local_file_to_storage(outputs_bucket, f"{folder_run_id}/tips.txt", tips_path, "text/plain")
-        drive_outputs["texts"]["logs_url"] = get_public_storage_url(outputs_bucket, f"{folder_run_id}/logs.txt")
-        drive_outputs["texts"]["tips_url"] = get_public_storage_url(outputs_bucket, f"{folder_run_id}/tips.txt")
-
-        # mot
-        upload_local_file_to_storage(outputs_bucket, f"{folder_run_id}/reference_landmarks.mot", ref_mot_path, "text/plain")
-        upload_local_file_to_storage(outputs_bucket, f"{folder_run_id}/user_landmarks.mot", usr_mot_path, "text/plain")
-        drive_outputs["mot"]["reference_mot_url"] = get_public_storage_url(outputs_bucket, f"{folder_run_id}/reference_landmarks.mot")
-        drive_outputs["mot"]["user_mot_url"] = get_public_storage_url(outputs_bucket, f"{folder_run_id}/user_landmarks.mot")
-
-        # screenshots
-        for k, local_path in screenshot_files.items():
-            storage_path = f"{folder_run_id}/screenshots/{k}.png"
-            upload_local_file_to_storage(outputs_bucket, storage_path, local_path, "image/png")
-            drive_outputs["screenshots"][f"{k}_url"] = get_public_storage_url(outputs_bucket, storage_path)
-
-        # ✅ Update DB row to DONE (so admin dashboard sees it)
-        summary = (feedback or {}).get("summary")
-        db_update_run_done(
-            supabase,
-            run_id=db_run_id,
-            score=score,
-            summary_feedback=summary,
-            run_folder=f"static/outputs/{folder_run_id}",
-            result_json=comparison
-        )
-
+    if not dancer or not choreo:
         return jsonify({
-            "message": "Analysis complete",
-            "score": score,
-            "comparison": comparison,
-            "feedback": feedback,
-            "outputs": {
-                "run_id": folder_run_id,
-                "visuals": visuals,
-                "reference_video": to_public_url(ref_video_path),
-                "user_video": to_public_url(usr_video_path),
-                "reference_csv": ref_csv,
-                "user_csv": usr_csv,
-                "storage": storage_info,
-                "drive_outputs": drive_outputs,  # ✅ online-drive URLs for logs/tips/mot/screenshots
-            }
-        }), 200
+            "error": "Missing upload files",
+            "expected_fields": ["dancer_video", "choreo_video"],
+            "accepted_also": ["video2", "video1"],
+            "received_fields": list(request.files.keys())
+        }), 400
 
-    except Exception as e:
-        msg = str(e)
-        try:
-            if db_run_id:
-                db_update_run_error(supabase, db_run_id, msg)
-        except Exception:
-            pass
-        return jsonify({"error": msg}), 500
+    return _run_analysis_pipeline(dancer=dancer, choreo=choreo, source_label="analyze")
 
 
 # =========================
@@ -1361,6 +1018,192 @@ def test_role(email):
         return jsonify(response.data)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# =========================
+# MERGE COMPATIBILITY PATCH
+# - Keeps old frontend response shape intact
+# - Adds new endpoint aliases used by newer frontend/admin code
+# =========================
+
+def _truthy(v: str) -> bool:
+    return str(v or "").strip().lower() in ("1", "true", "yes", "y", "on")
+
+
+def _run_analysis_pipeline(dancer, choreo, source_label="analyze"):
+    """
+    Shared analysis pipeline so both /analyze and /upload-videos can work.
+    Response keeps the old frontend-compatible shape and adds a few extra keys.
+    """
+    db_run_id = None
+    try:
+        if dancer.filename == "" or choreo.filename == "":
+            return jsonify({"error": "One or both uploaded files are empty"}), 400
+
+        user_id = request.current_profile["id"]
+        db_run_id = db_create_run(supabase, user_id)
+
+        generate_preview = _truthy(request.form.get("generate_preview", "true"))
+        try:
+            preview_max_frames = int(request.form.get("preview_max_frames", "1"))
+        except Exception:
+            preview_max_frames = 1
+
+        store_in_supabase = _truthy(request.form.get("store_in_supabase", "false"))
+        storage_bucket = "videos"
+
+        folder_run_id = datetime.utcnow().strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:8]
+
+        run_root = os.path.join(STATIC_OUTPUTS, folder_run_id)
+        ref_dir = os.path.join(run_root, "reference")
+        usr_dir = os.path.join(run_root, "user")
+        os.makedirs(ref_dir, exist_ok=True)
+        os.makedirs(usr_dir, exist_ok=True)
+
+        ref_video_path = os.path.join(ref_dir, "reference.mp4")
+        usr_video_path = os.path.join(usr_dir, "user.mp4")
+        choreo.save(ref_video_path)
+        dancer.save(usr_video_path)
+
+        storage_info = None
+        if store_in_supabase:
+            ref_ct = mimetypes.guess_type(choreo.filename)[0] or "video/mp4"
+            usr_ct = mimetypes.guess_type(dancer.filename)[0] or "video/mp4"
+            ref_storage_path = f"{folder_run_id}/reference.mp4"
+            usr_storage_path = f"{folder_run_id}/user.mp4"
+            with open(ref_video_path, "rb") as f:
+                upload_bytes_to_storage(storage_bucket, ref_storage_path, f.read(), ref_ct)
+            with open(usr_video_path, "rb") as f:
+                upload_bytes_to_storage(storage_bucket, usr_storage_path, f.read(), usr_ct)
+            storage_info = {
+                "bucket": storage_bucket,
+                "reference_path": ref_storage_path,
+                "user_path": usr_storage_path,
+            }
+
+        ref_csv = os.path.join(OUTPUT_FOLDER, f"{folder_run_id}_reference_motion.csv")
+        usr_csv = os.path.join(OUTPUT_FOLDER, f"{folder_run_id}_user_motion.csv")
+
+        extract_motion_from_video(ref_video_path, ref_csv)
+        extract_motion_from_video(usr_video_path, usr_csv)
+
+        comparison = compare_motion_csvs(ref_csv, usr_csv, frame_rate=30)
+        score = comparison.get("similarity_score", 0.0)
+        feedback = comparison.get("feedback", {})
+
+        visuals = {
+            "reference": {"preview_images": []},
+            "user": {"preview_images": []},
+        }
+
+        if generate_preview:
+            ref_prev_dir = os.path.join(ref_dir, "previews")
+            usr_prev_dir = os.path.join(usr_dir, "previews")
+            ref_pngs = save_pose_preview_frames_tasks(
+                ref_video_path, ref_prev_dir, every_n_frames=30, max_frames=preview_max_frames
+            )
+            usr_pngs = save_pose_preview_frames_tasks(
+                usr_video_path, usr_prev_dir, every_n_frames=30, max_frames=preview_max_frames
+            )
+            visuals["reference"]["preview_images"] = [to_public_url(p) for p in ref_pngs]
+            visuals["user"]["preview_images"] = [to_public_url(p) for p in usr_pngs]
+
+        summary = (feedback or {}).get("summary")
+        db_update_run_done(
+            supabase,
+            run_id=db_run_id,
+            score=score,
+            summary_feedback=summary,
+            run_folder=f"static/outputs/{folder_run_id}",
+            result_json=comparison,
+        )
+
+        response = {
+            "message": "Analysis complete",
+            "score": score,
+            "comparison": comparison,
+            "feedback": feedback,
+            "outputs": {
+                "run_id": folder_run_id,
+                "visuals": visuals,
+                "reference_video": to_public_url(ref_video_path),
+                "user_video": to_public_url(usr_video_path),
+                "reference_csv": ref_csv,
+                "user_csv": usr_csv,
+                "storage": storage_info,
+            },
+            # extra compatibility fields for newer frontend variants
+            "visuals": visuals,
+            "source_endpoint": source_label,
+        }
+        return jsonify(response), 200
+
+    except Exception as e:
+        msg = str(e)
+        try:
+            if db_run_id:
+                db_update_run_error(supabase, db_run_id, msg)
+        except Exception:
+            pass
+        return jsonify({"error": msg}), 500
+
+
+@app.route("/admin/users/active", methods=["GET"])
+@require_auth(["super_admin", "it_admin"])
+def admin_list_active_users_compat():
+    """Compatibility route for newer admin UI that fetches only active users."""
+    try:
+        resp = supabase.table("profiles").select(
+            "id,email,role,is_active,created_at,display_name"
+        ).eq("is_active", True).order("created_at", desc=True).execute()
+        return jsonify({"users": resp.data or []}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/admin/users/role", methods=["PATCH"])
+@require_auth(["super_admin"])
+def admin_set_role_compat():
+    """
+    Compatibility route for frontend calls that send { user_id, role }
+    instead of /admin/users/<user_id>/role.
+    """
+    data = request.get_json(silent=True) or {}
+    user_id = (data.get("user_id") or "").strip()
+    role = (data.get("role") or "").strip()
+
+    if not user_id:
+        return jsonify({"error": "user_id is required"}), 400
+    if role not in ("user", "super_admin", "it_admin"):
+        return jsonify({"error": "Invalid role", "allowed": ["user", "super_admin", "it_admin"]}), 400
+
+    try:
+        resp = supabase.table("profiles").update({"role": role}).eq("id", user_id).execute()
+        return jsonify({"message": "Role updated", "updated": resp.data}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/upload-videos", methods=["POST"])
+@require_auth()
+def upload_videos_compat():
+    """
+    Compatibility endpoint for frontend versions that send:
+      - video1 = reference / choreo video
+      - video2 = user / dancer video
+
+    Returns the same response shape as /analyze so your current frontend can keep working.
+    """
+    if "video1" not in request.files or "video2" not in request.files:
+        return jsonify({
+            "error": "Missing upload files",
+            "expected_fields": ["video1", "video2"],
+            "received_fields": list(request.files.keys())
+        }), 400
+
+    choreo = request.files["video1"]
+    dancer = request.files["video2"]
+    return _run_analysis_pipeline(dancer=dancer, choreo=choreo, source_label="upload-videos")
 
 
 # =========================

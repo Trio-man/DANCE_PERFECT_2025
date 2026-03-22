@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { createClient, Session, User } from '@supabase/supabase-js';
 import { FiArrowLeft, FiLogOut, FiUploadCloud, FiList } from 'react-icons/fi';
-import Image from 'next/image';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -27,11 +26,12 @@ type ResultType = {
   score?: number;
   feedback?: { summary?: string };
   visuals?: Visuals;
+  message?: string;
+  comparison?: any;
+  deviation_comparison_images?: string[];
+  pose_match_comparison_images?: string[];
 };
 
-// -------------------------
-// CMS TYPES
-// -------------------------
 type AppSettingsRow = {
   id: number;
   system_name: string;
@@ -56,41 +56,43 @@ type FaqRow = {
 
 export default function UploadPage() {
   const router = useRouter();
+
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+
   const [dancerVideo, setDancerVideo] = useState<File | null>(null);
   const [choreoVideo, setChoreoVideo] = useState<File | null>(null);
+
   const [previewDancer, setPreviewDancer] = useState<string | null>(null);
   const [previewChoreo, setPreviewChoreo] = useState<string | null>(null);
+
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [result, setResult] = useState<ResultType | null>(null);
 
-  // ✅ ADDED: display name (username) for Welcome text
   const [displayName, setDisplayName] = useState<string>('User');
+  const [userRole, setUserRole] = useState<string>('user');
+  const isAdmin = userRole === 'it_admin' || userRole === 'super_admin';
 
-  // -------------------------
-  // ✅ CMS STATE
-  // -------------------------
   const [appSettings, setAppSettings] = useState<AppSettingsRow | null>(null);
   const [aboutPage, setAboutPage] = useState<ContentPageRow | null>(null);
   const [guidelinesPage, setGuidelinesPage] = useState<ContentPageRow | null>(null);
   const [faqs, setFaqs] = useState<FaqRow[]>([]);
   const [cmsError, setCmsError] = useState<string | null>(null);
 
-  const BACKEND_URL = 'http://localhost:5000';
+  const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
-  // -------------------------
-  // AUTH CHECK
-  // -------------------------
   useEffect(() => {
     const checkUser = async () => {
       setAuthLoading(true);
       const { data } = await supabase.auth.getUser();
+
       if (!data.user) router.replace('/login');
       else setUser(data.user);
+
       setAuthLoading(false);
     };
+
     checkUser();
 
     const { data: listener } = supabase.auth.onAuthStateChange(
@@ -103,49 +105,50 @@ export default function UploadPage() {
     return () => listener.subscription.unsubscribe();
   }, [router]);
 
-  // ✅ ADDED: Load username from profiles when user is available
   useEffect(() => {
     const loadDisplayName = async () => {
       if (!user?.id) return;
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('display_name,email')
-        .eq('id', user.id)
-        .single();
+      try {
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('display_name,email,role')
+          .eq('id', user.id)
+          .single();
 
-      // fallback to email if display_name is missing
-      const name =
-        (profile?.display_name || '').trim() ||
-        (profile?.email || user.email || '').trim() ||
-        'User';
+        if (error) throw error;
 
-      setDisplayName(name);
+        const name =
+          (profile?.display_name || '').trim() ||
+          (profile?.email || user.email || '').trim() ||
+          'User';
+
+        setDisplayName(name);
+
+        const role = ((profile as any)?.role || 'user').toLowerCase().trim();
+        setUserRole(role);
+      } catch (e) {
+        console.warn('profiles fetch failed, continuing:', e);
+        setDisplayName((user.email || 'User').trim());
+        setUserRole('user');
+      }
     };
 
     loadDisplayName();
   }, [user]);
 
-  // -------------------------
-  // ✅ CMS LOAD (settings + pages + faqs)
-  // -------------------------
   useEffect(() => {
     const loadCms = async () => {
       setCmsError(null);
 
-      // app_settings (single row)
       const { data: settingsRow, error: sErr } = await supabase
         .from('app_settings')
         .select('id,system_name,logo_url,primary_color')
         .single();
 
-      if (sErr) {
-        setCmsError(sErr.message);
-      } else {
-        setAppSettings(settingsRow as AppSettingsRow);
-      }
+      if (sErr) setCmsError(sErr.message);
+      else setAppSettings(settingsRow as AppSettingsRow);
 
-      // content_pages (about + guidelines)
       const { data: pages, error: pErr } = await supabase
         .from('content_pages')
         .select('id,slug,title,body,is_active')
@@ -157,10 +160,11 @@ export default function UploadPage() {
       } else {
         const list = (pages ?? []) as ContentPageRow[];
         setAboutPage(list.find((x) => x.slug === 'about' && x.is_active) || null);
-        setGuidelinesPage(list.find((x) => x.slug === 'guidelines' && x.is_active) || null);
+        setGuidelinesPage(
+          list.find((x) => x.slug === 'guidelines' && x.is_active) || null
+        );
       }
 
-      // faqs (active only)
       const { data: faqRows, error: fErr } = await supabase
         .from('faqs')
         .select('id,question,answer,is_active')
@@ -168,20 +172,13 @@ export default function UploadPage() {
         .order('id', { ascending: false })
         .limit(20);
 
-      if (fErr) {
-        setCmsError((prev) => prev || fErr.message);
-      } else {
-        setFaqs(((faqRows ?? []) as unknown) as FaqRow[]);
-      }
+      if (fErr) setCmsError((prev) => prev || fErr.message);
+      else setFaqs((faqRows ?? []) as FaqRow[]);
     };
 
-    // Load even before user is ready (public-ish content is fine)
     loadCms();
   }, []);
 
-  // -------------------------
-  // VIDEO PREVIEWS
-  // -------------------------
   useEffect(() => {
     let url: string | null = null;
 
@@ -212,9 +209,6 @@ export default function UploadPage() {
     };
   }, [choreoVideo]);
 
-  // -------------------------
-  // LIST FILES
-  // -------------------------
   const handleListFiles = async () => {
     if (!user) {
       setStatus('Please log in to view files.');
@@ -224,8 +218,10 @@ export default function UploadPage() {
       const { data, error } = await supabase.storage
         .from('videos')
         .list(user.id, { limit: 100 });
+
       if (error) throw error;
-      const files = data.map((file) => file.name);
+
+      const files = (data ?? []).map((file) => file.name);
       setStatus(files.length > 0 ? 'Files retrieved.' : 'No files found.');
     } catch (err) {
       console.error(err);
@@ -236,19 +232,22 @@ export default function UploadPage() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
 
-    // 🔥 Remove stored Supabase session keys
     Object.keys(localStorage).forEach((key) => {
-      if (key.startsWith('sb-')) {
-        localStorage.removeItem(key);
-      }
+      if (key.startsWith('sb-')) localStorage.removeItem(key);
     });
 
     router.replace('/login');
   };
 
-  // -------------------------
-  // ANALYZE FLOW
-  // -------------------------
+  const removeDancerVideo = () => {
+    setDancerVideo(null);
+    setPreviewDancer(null);
+  };
+
+  const removeChoreoVideo = () => {
+    setChoreoVideo(null);
+    setPreviewChoreo(null);
+  };
 
   const handleAnalyze = async () => {
     if (!dancerVideo || !choreoVideo) {
@@ -257,45 +256,51 @@ export default function UploadPage() {
     }
 
     setLoading(true);
-    setStatus('Preparing videos...');
-
-    const toDataUrl = (file: File): Promise<string> =>
-      new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
+    setStatus('Uploading videos for analysis...');
+    setResult(null);
 
     try {
-      const dancerDataUrl = await toDataUrl(dancerVideo);
-      const choreoDataUrl = await toDataUrl(choreoVideo);
+      const formData = new FormData();
+      formData.append('dancer_video', dancerVideo);
+      formData.append('choreo_video', choreoVideo);
 
-      sessionStorage.setItem('dp_dancer', dancerDataUrl);
-      sessionStorage.setItem('dp_choreo', choreoDataUrl);
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
 
-      // 🔐 Get Supabase session token
-      const { data } = await supabase.auth.getSession();
-      const accessToken = data.session?.access_token;
+      const res = await fetch(`${BACKEND_URL}/analyze`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        body: formData,
+      });
 
-      if (!accessToken) {
-        setStatus('❌ Session token missing. Please log in again.');
+      const json = await res.json();
+
+      if (!res.ok) {
+        setStatus(json?.error || 'Analysis failed.');
         setLoading(false);
         return;
       }
 
-      sessionStorage.setItem('dp_token', accessToken);
+      try {
+        sessionStorage.setItem('dp_dancer_name', dancerVideo.name);
+        sessionStorage.setItem('dp_choreo_name', choreoVideo.name);
+        if (token) sessionStorage.setItem('dp_token', token);
+        sessionStorage.setItem('dp_result', JSON.stringify(json));
+      } catch {}
 
-      router.push('/loading');
-    } catch (err) {
+      setResult(json);
+      setStatus('Analysis complete!');
+      router.push('/results');
+    } catch (err: any) {
       console.error(err);
-      setStatus('❌ Failed to prepare videos.');
+      setStatus(err?.message || 'Something went wrong.');
+    } finally {
       setLoading(false);
     }
   };
 
   const systemName = appSettings?.system_name || 'DancePerfect';
-  const primaryColor = appSettings?.primary_color || '#7C3AED'; // fallback
+  const primaryColor = appSettings?.primary_color || '#7C3AED';
 
   return (
     <motion.div
@@ -303,7 +308,6 @@ export default function UploadPage() {
       animate={{ opacity: 1 }}
       className="min-h-screen flex flex-col items-center justify-center px-4 bg-gradient-to-br from-[#d6c1ff] via-[#cde7ff] to-white animate-gradient"
     >
-      {/* ✅ OUTSIDE THE BOX: CMS CONTENT (original code moved here, unchanged) */}
       <div className="w-full max-w-6xl mb-6">
         <div className="mb-8">
           {cmsError && (
@@ -349,9 +353,7 @@ export default function UploadPage() {
         </div>
       </div>
 
-      {/* ✅ INSIDE THE BOX: upload UI stays here (original code unchanged) */}
       <motion.div className="w-full max-w-6xl bg-white/70 backdrop-blur-lg border border-white/60 shadow-lg rounded-2xl p-8 relative">
-        {/* Loading Overlay */}
         {loading && (
           <div className="absolute inset-0 bg-white/70 backdrop-blur-sm flex items-center justify-center rounded-2xl z-50">
             <div className="text-center">
@@ -364,25 +366,35 @@ export default function UploadPage() {
           </div>
         )}
 
-        {/* Header */}
         <button
           onClick={() => router.back()}
           className="absolute top-4 left-4 text-gray-600 hover:text-gray-800"
+          disabled={loading}
         >
           <FiArrowLeft size={24} />
         </button>
 
+        {isAdmin && (
+          <button
+            onClick={() => router.push('/admin')}
+            className="absolute top-4 right-14 text-gray-700 hover:text-gray-900 font-semibold"
+            disabled={loading}
+            title="Back to Admin Panel"
+          >
+            Admin
+          </button>
+        )}
+
         <button
           onClick={handleLogout}
           className="absolute top-4 right-4 text-red-600 hover:text-red-800"
+          disabled={loading}
         >
           <FiLogOut size={24} />
         </button>
 
-        {/* ✅ CMS Brand Row */}
         <div className="flex items-center justify-center gap-3 mb-2">
           {appSettings?.logo_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={appSettings.logo_url}
               alt="System Logo"
@@ -395,29 +407,27 @@ export default function UploadPage() {
           </h1>
         </div>
 
-        <p className="text-slate-600 text-center mb-4">
-          Welcome {user?.email?.split('@')[0]}
-        </p>
+        <p className="text-slate-600 text-center mb-4">Welcome {displayName}</p>
 
-        {/* Video Uploads */}
         <div className="flex flex-col md:flex-row gap-8">
           <VideoUpload
             label="Dancer Video"
             preview={previewDancer}
             setFile={setDancerVideo}
             loading={loading}
+            onRemove={removeDancerVideo}
           />
           <VideoUpload
             label="Choreographer Video"
             preview={previewChoreo}
             setFile={setChoreoVideo}
             loading={loading}
+            onRemove={removeChoreoVideo}
           />
         </div>
 
         {status && <p className="text-center text-gray-600 mt-3">{status}</p>}
 
-        {/* Buttons */}
         <div className="flex flex-col md:flex-row gap-4 justify-center mt-6">
           <motion.button
             whileTap={{ scale: 0.97 }}
@@ -439,27 +449,53 @@ export default function UploadPage() {
             Analyze 🎯
           </motion.button>
         </div>
+
+        {result?.message && (
+          <div className="mt-6 bg-white/60 border border-white/70 rounded-xl p-4">
+            <p className="font-semibold text-slate-800">{result.message}</p>
+          </div>
+        )}
       </motion.div>
     </motion.div>
   );
 }
 
-// -------------------------
-// VideoUpload Component
-// -------------------------
 interface VideoUploadProps {
   label: string;
   preview: string | null;
   setFile: (file: File | null) => void;
   loading: boolean;
+  onRemove: () => void;
 }
 
-function VideoUpload({ label, preview, setFile, loading }: VideoUploadProps) {
+function VideoUpload({ label, preview, setFile, loading, onRemove }: VideoUploadProps) {
   return preview ? (
     <div className="flex-1 border rounded-xl p-6 bg-gray-50">
       <h2 className="text-lg font-semibold mb-3 text-center">{label}</h2>
       <div className="w-full h-36 md:h-80 rounded-lg overflow-hidden border border-slate-300 bg-black">
         <video src={preview} controls className="w-full h-full object-contain" />
+      </div>
+
+      <div className="flex gap-2 justify-center mt-3">
+        <button
+          type="button"
+          onClick={onRemove}
+          disabled={loading}
+          className="px-4 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-semibold"
+        >
+          Remove
+        </button>
+
+        <label className="px-4 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-semibold cursor-pointer">
+          Change
+          <input
+            type="file"
+            accept="video/*"
+            className="hidden"
+            disabled={loading}
+            onChange={(e) => setFile(e.target.files ? e.target.files[0] : null)}
+          />
+        </label>
       </div>
     </div>
   ) : (

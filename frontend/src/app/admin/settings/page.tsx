@@ -21,12 +21,11 @@ export default function AdminSettingsPage() {
   const [role, setRole] = useState<string | null>(null);
   const [row, setRow] = useState<AppSettingsRow | null>(null);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
-      setError(null);
-
       const { data: authData } = await supabase.auth.getUser();
       if (!authData?.user) return router.push('/login');
 
@@ -40,20 +39,47 @@ export default function AdminSettingsPage() {
       setRole(r);
       if (r !== 'super_admin') return router.push('/admin');
 
-      const { data, error } = await supabase.from('app_settings').select('*').single();
-      if (error) return setError(error.message);
+      const { data } = await supabase.from('app_settings').select('*').single();
       setRow(data as AppSettingsRow);
     };
 
     load();
   }, [router]);
 
+  // ✅ NEW: upload logo to Supabase Storage
+  const handleLogoUpload = async (file: File) => {
+    if (!file) return;
+    setUploading(true);
+
+    const fileName = `logo_${Date.now()}.png`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('logos')
+      .upload(fileName, file, {
+        cacheControl: '3600',
+        upsert: true,
+      });
+
+    if (uploadError) {
+      setError(uploadError.message);
+      setUploading(false);
+      return;
+    }
+
+    const { data } = supabase.storage.from('logos').getPublicUrl(fileName);
+
+    setRow((prev) =>
+      prev ? { ...prev, logo_url: data.publicUrl } : prev
+    );
+
+    setUploading(false);
+  };
+
   const save = async () => {
     if (!row) return;
     setSaving(true);
-    setError(null);
 
-    const { error } = await supabase
+    await supabase
       .from('app_settings')
       .update({
         system_name: row.system_name,
@@ -63,58 +89,55 @@ export default function AdminSettingsPage() {
       })
       .eq('id', row.id);
 
-    if (error) setError(error.message);
     setSaving(false);
   };
 
-  if (!row) return <div style={{ padding: 40 }}>Loading settings...</div>;
+  if (!row) return <div style={{ padding: 40 }}>Loading...</div>;
 
   return (
     <div style={{ padding: 40 }}>
       <h1>System Settings</h1>
-      <p>Role: {role}</p>
-
-      {error && <p style={{ color: 'red' }}>{error}</p>}
 
       <div style={{ marginTop: 20 }}>
-        <label>System Name</label>
-        <br />
+        <label>System Name</label><br />
         <input
           value={row.system_name}
           onChange={(e) => setRow({ ...row, system_name: e.target.value })}
-          style={{ width: 360 }}
         />
       </div>
 
+      {/* ✅ REPLACED: Upload instead of URL */}
       <div style={{ marginTop: 20 }}>
-        <label>Logo URL</label>
-        <br />
+        <label>Upload Logo (Transparent PNG)</label><br />
         <input
-          value={row.logo_url ?? ''}
-          onChange={(e) => setRow({ ...row, logo_url: e.target.value || null })}
-          style={{ width: 520 }}
-          placeholder="https://..."
+          type="file"
+          accept="image/png"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) handleLogoUpload(file);
+          }}
         />
+
+        {uploading && <p>Uploading...</p>}
+
+        {row.logo_url && (
+          <div style={{ marginTop: 10 }}>
+            <img src={row.logo_url} width={80} />
+          </div>
+        )}
       </div>
 
       <div style={{ marginTop: 20 }}>
-        <label>Primary Color (hex)</label>
-        <br />
+        <label>Primary Color</label><br />
         <input
           value={row.primary_color}
           onChange={(e) => setRow({ ...row, primary_color: e.target.value })}
-          style={{ width: 140 }}
-          placeholder="#7C3AED"
         />
       </div>
 
-      <button onClick={save} disabled={saving} style={{ marginTop: 24 }}>
-        {saving ? 'Saving...' : 'Save Settings'}
+      <button onClick={save} disabled={saving}>
+        {saving ? 'Saving...' : 'Save'}
       </button>
-
-      <div style={{ marginTop: 20 }}>
-        <button onClick={() => router.push('/admin')}>Back</button>
-      </div>
     </div>
   );
 }

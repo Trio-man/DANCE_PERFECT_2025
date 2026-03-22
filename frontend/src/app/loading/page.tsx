@@ -15,65 +15,92 @@ function dataURLtoBlob(dataUrl: string) {
   return new Blob([u8arr], { type: mime });
 }
 
-const BACKEND_URL = 'http://localhost:5000';
+// ✅ use 127.0.0.1 (more reliable than localhost)
+const BACKEND_URL = 'http://127.0.0.1:5000';
+
+// ✅ helper: safely read JSON or text
+async function safeRead(res: Response) {
+  const ct = res.headers.get('content-type') || '';
+  if (ct.includes('application/json')) return await res.json();
+  const txt = await res.text();
+  return { error: txt || 'Server error' };
+}
 
 export default function LoadingPage() {
   const router = useRouter();
   const [msg, setMsg] = useState('Starting analysis...');
 
   useEffect(() => {
-  const run = async () => {
-    const dancer = sessionStorage.getItem('dp_dancer');
-    const choreo = sessionStorage.getItem('dp_choreo');
-    const token = sessionStorage.getItem('dp_token');
+    const run = async () => {
+      const dancer = sessionStorage.getItem('dp_dancer');
+      const choreo = sessionStorage.getItem('dp_choreo');
+      const token = sessionStorage.getItem('dp_token');
 
-    if (!dancer || !choreo) {
-      console.error('Missing videos');
-      setMsg('❌ Missing videos. Please go back and upload again.');
-      return;
-    }
+      if (!dancer || !choreo) {
+        console.error('Missing videos');
+        setMsg('❌ Missing videos. Please go back and upload again.');
+        return;
+      }
 
-    if (!token) {
-      console.error('Missing token');
-      setMsg('❌ Missing session. Please log in again.');
-      router.replace('/login');
-      return;
-    }
+      if (!token) {
+        console.error('Missing token');
+        setMsg('❌ Missing session. Please log in again.');
+        router.replace('/login');
+        return;
+      }
 
-    const dancerBlob = dataURLtoBlob(dancer);
-    const choreoBlob = dataURLtoBlob(choreo);
+      const dancerBlob = dataURLtoBlob(dancer);
+      const choreoBlob = dataURLtoBlob(choreo);
 
-    const formData = new FormData();
-    formData.append('dancer_video', dancerBlob, 'dancer.mp4');
-    formData.append('choreo_video', choreoBlob, 'choreo.mp4');
+      const formData = new FormData();
+      formData.append('dancer_video', dancerBlob, 'dancer.mp4');
+      formData.append('choreo_video', choreoBlob, 'choreo.mp4');
 
-    setMsg('Uploading videos to server...');
+      setMsg('Uploading videos to server...');
 
-    const res = await fetch(`${BACKEND_URL}/analyze`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      body: formData,
-    });
+      // ✅ timeout guard
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 120000); // 2 minutes
 
-    const json = await res.json();
-    console.log(json);
+      try {
+        const res = await fetch(`${BACKEND_URL}/analyze`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
+          signal: controller.signal,
+        });
 
-    if (!res.ok) {
-      setMsg(`❌ ${json?.error || 'Analyze failed'}`);
-      return;
-    }
+        clearTimeout(timeout);
 
-    // Save result for the next page (optional)
-    sessionStorage.setItem('dp_result', JSON.stringify(json));
+        const json = await safeRead(res);
+        console.log('Analyze response:', json);
 
-    setMsg('✅ Analysis complete! Redirecting...');
-    router.replace('/results'); // change to your actual results page route
-  };
+        if (!res.ok) {
+          setMsg(`❌ ${json?.error || 'Analyze failed'}`);
+          return;
+        }
 
-  run();
-}, [router]);
+        // Save result for the next page (optional)
+        sessionStorage.setItem('dp_result', JSON.stringify(json));
+
+        setMsg('✅ Analysis complete! Redirecting...');
+        router.replace('/results'); // change to your actual results page route
+      } catch (err: any) {
+        clearTimeout(timeout);
+        if (err?.name === 'AbortError') {
+          setMsg('❌ Request timed out. Try again (shorter videos help).');
+          return;
+        }
+        console.error(err);
+        setMsg('❌ Failed to contact server. Is backend running on port 5000?');
+      }
+    };
+
+    run();
+  }, [router]);
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
