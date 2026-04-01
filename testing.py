@@ -115,6 +115,22 @@ mp_pose = mp.solutions.pose
 mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
 
+# Singleton Pose instance for video extraction — loaded once at startup
+_POSE_VIDEO = mp_pose.Pose(
+    static_image_mode=False,
+    model_complexity=1,
+    smooth_landmarks=True,
+    min_detection_confidence=0.5,
+    min_tracking_confidence=0.5
+)
+
+# Singleton Pose instance for static image processing (screenshots)
+_POSE_IMAGE = mp_pose.Pose(
+    static_image_mode=True,
+    model_complexity=1,
+    min_detection_confidence=0.5,
+)
+
 # ----- DTW (Dynamic Time Warping) settings -----
 # MediaPipe pose landmark IDs to use for DTW (focus on arms, legs, hips; fewer = faster).
 # See: https://developers.google.com/mediapipe/solutions/vision/pose_landmarker
