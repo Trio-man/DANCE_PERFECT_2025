@@ -381,9 +381,8 @@ def save_deviation_comparison_image(
 
     rgb_ref = cv2.cvtColor(frame_ref, cv2.COLOR_BGR2RGB)
     rgb_user = cv2.cvtColor(frame_user, cv2.COLOR_BGR2RGB)
-    with mp_pose.Pose(static_image_mode=True, model_complexity=1, min_detection_confidence=0.5) as pose:
-        res_ref = pose.process(rgb_ref)
-        res_user = pose.process(rgb_user)
+    res_ref = _POSE_IMAGE.process(rgb_ref)
+    res_user = _POSE_IMAGE.process(rgb_user)
     if not res_ref.pose_landmarks or not res_user.pose_landmarks:
         return None
 
