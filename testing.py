@@ -226,13 +226,7 @@ def extract_motion_from_video(video_path, output_csv, max_fps=MAX_FPS):
     step = max(1, round(fps_src / max_fps))
     effective_fps = fps_src / step  # FPS of the output CSV (at most max_fps)
 
-    pose = mp_pose.Pose(
-        static_image_mode=False,
-        model_complexity=1,
-        smooth_landmarks=True,
-        min_detection_confidence=0.5,
-        min_tracking_confidence=0.5
-    )
+   results = _POSE_VIDEO.process(rgb_frame)
 
     data = []
     source_index = 0   # 0-based index of current source frame
