@@ -239,7 +239,7 @@ def extract_motion_from_video(video_path, output_csv, max_fps=MAX_FPS):
         if source_index % step == 0:
             output_frame_number += 1
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            results = pose.process(rgb_frame)
+            results = _POSE_VIDEO.process(rgb_frame)
 
             if results.pose_landmarks:
                 for landmark_id, lm in enumerate(results.pose_landmarks.landmark):
@@ -254,7 +254,6 @@ def extract_motion_from_video(video_path, output_csv, max_fps=MAX_FPS):
         source_index += 1
 
     cap.release()
-    pose.close()
 
     df = pd.DataFrame(
         data,
