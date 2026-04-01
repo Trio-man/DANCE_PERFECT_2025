@@ -282,12 +282,8 @@ def save_deviation_screenshot(video_path, frame_number_1based, output_path, fps=
         return None
 
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    with mp_pose.Pose(
-        static_image_mode=True,
-        model_complexity=1,
-        min_detection_confidence=0.5,
-    ) as pose:
-        results = pose.process(rgb)
+    
+    results = _POSE_IMAGE.process(rgb)
 
     if results.pose_landmarks:
         mp_drawing.draw_landmarks(
