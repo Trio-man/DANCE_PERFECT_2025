@@ -44,7 +44,9 @@ export default function UploadPage() {
   const [previewDancer, setPreviewDancer] = useState<string | null>(null);
   const [previewChoreo, setPreviewChoreo] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState<number>(0);
   const [status, setStatus] = useState<string | null>(null);
+  const [resultUrl, setResultUrl] = useState<string | null>(null);
 
   // -------------------------
   // CMS STATE
@@ -88,11 +90,8 @@ export default function UploadPage() {
         .select('id,system_name,logo_url,primary_color')
         .single();
 
-      if (sErr) {
-        setCmsError(sErr.message);
-      } else {
-        setAppSettings(settingsRow as AppSettingsRow);
-      }
+      if (sErr) setCmsError(sErr.message);
+      else setAppSettings(settingsRow as AppSettingsRow);
 
       const { data: pages, error: pErr } = await supabase
         .from('content_pages')
@@ -100,9 +99,8 @@ export default function UploadPage() {
         .in('slug', ['about', 'guidelines'])
         .limit(2);
 
-      if (pErr) {
-        setCmsError((prev) => prev || pErr.message);
-      } else {
+      if (pErr) setCmsError((prev) => prev || pErr.message);
+      else {
         const list = (pages ?? []) as ContentPageRow[];
         setAboutPage(list.find((x) => x.slug === 'about' && x.is_active) || null);
         setGuidelinesPage(list.find((x) => x.slug === 'guidelines' && x.is_active) || null);
@@ -115,11 +113,8 @@ export default function UploadPage() {
         .order('id', { ascending: false })
         .limit(20);
 
-      if (fErr) {
-        setCmsError((prev) => prev || fErr.message);
-      } else {
-        setFaqs(((faqRows ?? []) as unknown) as FaqRow[]);
-      }
+      if (fErr) setCmsError((prev) => prev || fErr.message);
+      else setFaqs(((faqRows ?? []) as unknown) as FaqRow[]);
     };
 
     loadCms();
@@ -133,12 +128,8 @@ export default function UploadPage() {
     if (dancerVideo) {
       url = URL.createObjectURL(dancerVideo);
       setPreviewDancer(url);
-    } else {
-      setPreviewDancer(null);
-    }
-    return () => {
-      if (url) URL.revokeObjectURL(url);
-    };
+    } else setPreviewDancer(null);
+    return () => { if (url) URL.revokeObjectURL(url); };
   }, [dancerVideo]);
 
   useEffect(() => {
@@ -146,26 +137,17 @@ export default function UploadPage() {
     if (choreoVideo) {
       url = URL.createObjectURL(choreoVideo);
       setPreviewChoreo(url);
-    } else {
-      setPreviewChoreo(null);
-    }
-    return () => {
-      if (url) URL.revokeObjectURL(url);
-    };
+    } else setPreviewChoreo(null);
+    return () => { if (url) URL.revokeObjectURL(url); };
   }, [choreoVideo]);
 
   // -------------------------
   // LIST FILES
   // -------------------------
   const handleListFiles = async () => {
-    if (!user) {
-      setStatus('Please log in to view files.');
-      return;
-    }
+    if (!user) { setStatus('Please log in to view files.'); return; }
     try {
-      const { data, error } = await supabase.storage
-        .from('videos')
-        .list(user.id, { limit: 100 });
+      const { data, error } = await supabase.storage.from('videos').list(user.id, { limit: 100 });
       if (error) throw error;
       const files = data.map((file) => file.name);
       setStatus(files.length > 0 ? 'Files retrieved.' : 'No files found.');
@@ -177,16 +159,12 @@ export default function UploadPage() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    Object.keys(localStorage).forEach((key) => {
-      if (key.startsWith('sb-')) {
-        localStorage.removeItem(key);
-      }
-    });
+    Object.keys(localStorage).forEach((key) => { if (key.startsWith('sb-')) localStorage.removeItem(key); });
     router.replace('/login');
   };
 
   // -------------------------
-  // ANALYZE FLOW
+  // ANALYZE FLOW (Cloudinary + Celery)
   // -------------------------
   const handleAnalyze = async () => {
     if (!dancerVideo || !choreoVideo) {
@@ -195,37 +173,61 @@ export default function UploadPage() {
     }
 
     setLoading(true);
-    setStatus('Preparing videos...');
-
-    const toDataUrl = (file: File): Promise<string> =>
-      new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
+    setStatus('Uploading videos...');
 
     try {
-      const dancerDataUrl = await toDataUrl(dancerVideo);
-      const choreoDataUrl = await toDataUrl(choreoVideo);
+      const uploadToCloudinary = async (file: File) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('upload_preset', process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET!);
 
-      sessionStorage.setItem('dp_dancer', dancerDataUrl);
-      sessionStorage.setItem('dp_choreo', choreoDataUrl);
+        const res = await fetch(`https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/video/upload`, {
+          method: 'POST',
+          body: formData
+        });
 
-      const { data } = await supabase.auth.getSession();
-      const accessToken = data.session?.access_token;
+        const data = await res.json();
+        return data.secure_url;
+      };
 
-      if (!accessToken) {
-        setStatus('❌ Session token missing. Please log in again.');
-        setLoading(false);
-        return;
-      }
+      const dancerUrl = await uploadToCloudinary(dancerVideo);
+      const choreoUrl = await uploadToCloudinary(choreoVideo);
 
-      sessionStorage.setItem('dp_token', accessToken);
-      router.push('/loading');
+      setStatus('Submitting analysis task...');
+      const analyzeRes = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dancer_url: dancerUrl, choreo_url: choreoUrl })
+      });
+
+      const { job_id } = await analyzeRes.json();
+      setStatus('Analysis queued. Processing...');
+      setProgress(0);
+
+      // Polling for progress
+      const interval = setInterval(async () => {
+        const statusRes = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/status/${job_id}`);
+        const data = await statusRes.json();
+
+        if (data.status === 'done') {
+          clearInterval(interval);
+          setProgress(100);
+          setResultUrl(data.result.video_url || null);
+          setStatus('Analysis complete!');
+          setLoading(false);
+        } else if (data.status === 'failed') {
+          clearInterval(interval);
+          setStatus('Analysis failed. Try again.');
+          setLoading(false);
+        } else if (data.status === 'processing') {
+          setProgress(data.progress || 50);
+          setStatus(data.info?.status || 'Processing...');
+        }
+      }, 5000);
+
     } catch (err) {
       console.error(err);
-      setStatus('❌ Failed to prepare videos.');
+      setStatus('❌ Analysis failed.');
       setLoading(false);
     }
   };
@@ -234,121 +236,64 @@ export default function UploadPage() {
   const primaryColor = appSettings?.primary_color || '#7C3AED';
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="min-h-screen flex flex-col items-center justify-center px-4 bg-gradient-to-br from-[#d6c1ff] via-[#cde7ff] to-white animate-gradient"
-    >
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="min-h-screen flex flex-col items-center justify-center px-4 bg-gradient-to-br from-[#d6c1ff] via-[#cde7ff] to-white animate-gradient">
       <div className="w-full max-w-6xl flex flex-col gap-6 py-10">
 
-        {cmsError && (
-          <p className="text-center text-sm text-red-600">
-            CMS load warning: {cmsError}
-          </p>
-        )}
+        {cmsError && <p className="text-center text-sm text-red-600">CMS load warning: {cmsError}</p>}
 
-        {/* 1. RECORDING GUIDELINES */}
+        {/* GUIDELINES */}
         {guidelinesPage && (
           <div className="bg-white/60 border border-white/70 rounded-xl p-6">
-            <h2 className="text-lg font-semibold mb-2" style={{ color: primaryColor }}>
-              {guidelinesPage.title}
-            </h2>
+            <h2 className="text-lg font-semibold mb-2" style={{ color: primaryColor }}>{guidelinesPage.title}</h2>
             <p className="text-slate-700 whitespace-pre-line">{guidelinesPage.body}</p>
           </div>
         )}
 
-        {/* 2. VIDEO UPLOAD */}
+        {/* VIDEO UPLOAD */}
         <motion.div className="bg-white/70 backdrop-blur-lg border border-white/60 shadow-lg rounded-2xl p-8 relative">
           {loading && (
-            <div className="absolute inset-0 bg-white/70 backdrop-blur-sm flex items-center justify-center rounded-2xl z-50">
-              <div className="text-center">
-                <div className="animate-spin h-10 w-10 rounded-full border-4 border-gray-300 border-t-gray-700 mx-auto mb-3" />
-                <p className="text-gray-700 font-semibold">Processing...</p>
-                <p className="text-gray-500 text-sm mt-1">
-                  Please wait while we analyze the videos.
-                </p>
-              </div>
+            <div className="absolute inset-0 bg-white/70 backdrop-blur-sm flex flex-col items-center justify-center rounded-2xl z-50">
+              <div className="animate-spin h-10 w-10 rounded-full border-4 border-gray-300 border-t-gray-700 mb-3" />
+              <p className="text-gray-700 font-semibold">{status}</p>
+              <p className="text-gray-500 text-sm mt-1">Progress: {progress}%</p>
             </div>
           )}
 
-          <button
-            onClick={() => router.back()}
-            className="absolute top-4 left-4 text-gray-600 hover:text-gray-800"
-          >
-            <FiArrowLeft size={24} />
-          </button>
-
-          <button
-            onClick={handleLogout}
-            className="absolute top-4 right-4 text-red-600 hover:text-red-800"
-          >
-            <FiLogOut size={24} />
-          </button>
+          <button onClick={() => router.back()} className="absolute top-4 left-4 text-gray-600 hover:text-gray-800"><FiArrowLeft size={24} /></button>
+          <button onClick={handleLogout} className="absolute top-4 right-4 text-red-600 hover:text-red-800"><FiLogOut size={24} /></button>
 
           <div className="flex items-center justify-center gap-3 mb-2">
-            {appSettings?.logo_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={appSettings.logo_url}
-                alt="System Logo"
-                className="h-10 w-10 rounded-lg object-contain border border-white/60 bg-white/60"
-              />
-            ) : null}
-            <h1 className="text-3xl font-bold text-center mb-0" style={{ color: primaryColor }}>
-              {systemName}
-            </h1>
+            {appSettings?.logo_url && <img src={appSettings.logo_url} alt="System Logo" className="h-10 w-10 rounded-lg object-contain border border-white/60 bg-white/60" />}
+            <h1 className="text-3xl font-bold text-center mb-0" style={{ color: primaryColor }}>{systemName}</h1>
           </div>
-
-          <p className="text-slate-600 text-center mb-4">
-            Welcome {user?.email?.split('@')[0]}
-          </p>
+          <p className="text-slate-600 text-center mb-4">Welcome {user?.email?.split('@')[0]}</p>
 
           <div className="flex flex-col md:flex-row gap-8">
-            <VideoUpload
-              label="Dancer Video"
-              preview={previewDancer}
-              setFile={setDancerVideo}
-              loading={loading}
-            />
-            <VideoUpload
-              label="Choreographer Video"
-              preview={previewChoreo}
-              setFile={setChoreoVideo}
-              loading={loading}
-            />
+            <VideoUpload label="Dancer Video" preview={previewDancer} setFile={setDancerVideo} loading={loading} />
+            <VideoUpload label="Choreographer Video" preview={previewChoreo} setFile={setChoreoVideo} loading={loading} />
           </div>
 
-          {status && <p className="text-center text-gray-600 mt-3">{status}</p>}
+          {resultUrl && (
+            <div className="mt-4 text-center">
+              <h3 className="font-semibold mb-2">Result Video:</h3>
+              <video src={resultUrl} controls className="mx-auto w-full max-w-lg rounded-lg border border-gray-300" />
+            </div>
+          )}
 
           <div className="flex flex-col md:flex-row gap-4 justify-center mt-6">
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              disabled={!user || loading}
-              onClick={handleListFiles}
-              className="text-white py-3 px-6 rounded-lg font-semibold transition"
-              style={{ backgroundColor: primaryColor }}
-            >
+            <motion.button whileTap={{ scale: 0.97 }} disabled={!user || loading} onClick={handleListFiles} className="text-white py-3 px-6 rounded-lg font-semibold transition" style={{ backgroundColor: primaryColor }}>
               <FiList className="inline mr-2" /> List Files
             </motion.button>
-
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              disabled={loading || !user}
-              onClick={handleAnalyze}
-              className="text-white py-3 px-6 rounded-lg font-semibold transition"
-              style={{ backgroundColor: primaryColor }}
-            >
+            <motion.button whileTap={{ scale: 0.97 }} disabled={loading || !user} onClick={handleAnalyze} className="text-white py-3 px-6 rounded-lg font-semibold transition" style={{ backgroundColor: primaryColor }}>
               Analyze 🎯
             </motion.button>
           </div>
         </motion.div>
 
-        {/* 3. FAQs */}
+        {/* FAQ */}
         {faqs.length > 0 && (
           <div className="bg-white/60 border border-white/70 rounded-xl p-6">
-            <h2 className="text-lg font-semibold mb-3" style={{ color: primaryColor }}>
-              FAQs
-            </h2>
+            <h2 className="text-lg font-semibold mb-3" style={{ color: primaryColor }}>FAQs</h2>
             <div className="space-y-3">
               {faqs.map((f) => (
                 <div key={f.id} className="border border-white/70 rounded-lg p-3 bg-white/50">
@@ -360,16 +305,13 @@ export default function UploadPage() {
           </div>
         )}
 
-        {/* 4. ABOUT US */}
+        {/* ABOUT */}
         {aboutPage && (
           <div className="bg-white/60 border border-white/70 rounded-xl p-6">
-            <h2 className="text-lg font-semibold mb-2" style={{ color: primaryColor }}>
-              {aboutPage.title}
-            </h2>
+            <h2 className="text-lg font-semibold mb-2" style={{ color: primaryColor }}>{aboutPage.title}</h2>
             <p className="text-slate-700 whitespace-pre-line">{aboutPage.body}</p>
           </div>
         )}
-
       </div>
     </motion.div>
   );
@@ -378,12 +320,7 @@ export default function UploadPage() {
 // -------------------------
 // VideoUpload Component
 // -------------------------
-interface VideoUploadProps {
-  label: string;
-  preview: string | null;
-  setFile: (file: File | null) => void;
-  loading: boolean;
-}
+interface VideoUploadProps { label: string; preview: string | null; setFile: (file: File | null) => void; loading: boolean }
 
 function VideoUpload({ label, preview, setFile, loading }: VideoUploadProps) {
   return preview ? (
@@ -397,13 +334,7 @@ function VideoUpload({ label, preview, setFile, loading }: VideoUploadProps) {
     <label className="flex-1 flex flex-col items-center justify-center w-full h-36 md:h-80 border border-slate-300 rounded-lg cursor-pointer hover:border-gray-400">
       <FiUploadCloud size={48} className="text-gray-400" />
       <span className="mt-2 text-gray-600">Upload {label}</span>
-      <input
-        type="file"
-        accept="video/*"
-        className="hidden"
-        disabled={loading}
-        onChange={(e) => setFile(e.target.files ? e.target.files[0] : null)}
-      />
+      <input type="file" accept="video/*" className="hidden" disabled={loading} onChange={(e) => setFile(e.target.files ? e.target.files[0] : null)} />
     </label>
   );
 }
