@@ -13,6 +13,9 @@ import os
 import re
 from datetime import datetime
 import json
+import csv
+import heapq
+import gc
 
 # OpenCV, used here to open/read video files and handle frames
 import cv2
@@ -149,9 +152,11 @@ SHOULDER_RIGHT_VEC_IDX = 1 * 3  # 3: landmark 12
 # All motion CSVs are produced at most MOTION_FPS frames per second. Timestamps (e.g. [0:15])
 # are always computed as frame_index / motion_fps, so they match real time regardless of
 # the user's video FPS (24, 30, 60, 120, etc.).
-MOTION_FPS = 30
+MOTION_FPS = 8
 DEFAULT_FPS = MOTION_FPS
 MAX_FPS = MOTION_FPS
+# Downscale frames before pose inference to reduce CPU/RAM. Keep aspect ratio.
+MAX_PROCESS_FRAME_LONG_SIDE = 640
 
 # ----- Acceptable deviation for dancer comparison -----
 ACCEPTABLE_SIMILARITY_PERCENT = 80  # Minimum similarity to be "within acceptable range"
@@ -171,10 +176,10 @@ MOTION_ACTIVITY_THRESHOLD = 0.006
 MIN_ACTIVE_RUN_FRAMES = 5
 # Cooldown: skip this many frames after motion "start" (and before motion "end") so we do not
 # include resting/transition poses. Comparison starts when the dance has actually begun.
-MOTION_START_COOLDOWN_FRAMES = 15   # e.g. ~0.5 s at 30 FPS; avoids first standing/transition frame
-MOTION_END_COOLDOWN_FRAMES = 15     # skip same at end to avoid wind-down pose
+MOTION_START_COOLDOWN_FRAMES = 4    # ~0.5 s at 8 FPS; avoids first standing/transition section
+MOTION_END_COOLDOWN_FRAMES = 4      # same logic at end to avoid wind-down section
 # Skip core ("crunch") feedback for this many frames from start so we don't flag the starting stance.
-FEEDBACK_CORE_START_COOLDOWN_FRAMES = 45  # ~1.5 s at 30 FPS
+FEEDBACK_CORE_START_COOLDOWN_FRAMES = 12  # ~1.5 s at 8 FPS
 # Reference torso vertical span below this = "crunching" (torso lowered). Above = standing.
 REF_TORSO_CRUNCH_THRESHOLD = 0.22  # normalized; ref must be below this to count as crunch
 
@@ -214,7 +219,7 @@ def get_video_info(video_path):
 def extract_motion_from_video(video_path, output_csv, max_fps=MAX_FPS):
     """
     Run pose detection on the video and write motion to CSV. Motion is limited to
-    max_fps (default 30): higher-FPS videos are sampled so output has at most 30 FPS;
+    max_fps (default 8): higher-FPS videos are sampled so output has at most 8 FPS;
     lower-FPS videos keep every frame. Returns the effective FPS of the output CSV
     so timestamps (frame_index / effective_fps) match real time for any upload.
     """
@@ -226,40 +231,55 @@ def extract_motion_from_video(video_path, output_csv, max_fps=MAX_FPS):
     step = max(1, round(fps_src / max_fps))
     effective_fps = fps_src / step  # FPS of the output CSV (at most max_fps)
 
-    data = []
     source_index = 0   # 0-based index of current source frame
     output_frame_number = 0   # 1-based frame number written to CSV (at max_fps rate)
+    with open(output_csv, "w", newline="", encoding="utf-8") as out_f:
+        writer = csv.writer(out_f)
+        writer.writerow(["frame", "landmark_id", "x", "y", "z", "visibility"])
 
-    while cap.isOpened():
-        success, frame = cap.read()
-        if not success:
-            break
+        while cap.isOpened():
+            success, frame = cap.read()
+            if not success:
+                break
 
-        # Only process this frame if it falls on our max_fps grid (limit to 30 FPS)
-        if source_index % step == 0:
-            output_frame_number += 1
-            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            results = _POSE_VIDEO.process(rgb_frame)
+            # Only process this frame if it falls on our max_fps grid.
+            if source_index % step == 0:
+                output_frame_number += 1
 
-            if results.pose_landmarks:
-                for landmark_id, lm in enumerate(results.pose_landmarks.landmark):
-                    data.append([
-                        output_frame_number,
-                        landmark_id,
-                        lm.x,
-                        lm.y,
-                        lm.z,
-                        lm.visibility
-                    ])
-        source_index += 1
+                # Resize large frames before pose processing to reduce memory/CPU.
+                h, w = frame.shape[:2]
+                long_side = max(h, w)
+                if long_side > MAX_PROCESS_FRAME_LONG_SIDE:
+                    scale = MAX_PROCESS_FRAME_LONG_SIDE / float(long_side)
+                    new_w = max(1, int(w * scale))
+                    new_h = max(1, int(h * scale))
+                    frame = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
+
+                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                results = _POSE_VIDEO.process(rgb_frame)
+
+                if results.pose_landmarks:
+                    for landmark_id, lm in enumerate(results.pose_landmarks.landmark):
+                        writer.writerow([
+                            output_frame_number,
+                            landmark_id,
+                            lm.x,
+                            lm.y,
+                            lm.z,
+                            lm.visibility
+                        ])
+
+                # Release per-frame temporaries ASAP in low-memory environments.
+                del rgb_frame, results, frame
+            else:
+                del frame
+            source_index += 1
+
+            # Periodic GC helps long videos on constrained hosts.
+            if source_index % 300 == 0:
+                gc.collect()
 
     cap.release()
-
-    df = pd.DataFrame(
-        data,
-        columns=["frame", "landmark_id", "x", "y", "z", "visibility"]
-    )
-    df.to_csv(output_csv, index=False)
     return round(effective_fps, 2)
 
 
@@ -603,7 +623,8 @@ def compare_motion_csvs(reference_csv_path, user_csv_path):
             "message": "No common frames to compare (check that both videos had pose detections).",
         }
 
-    distances = []
+    dist_sum = 0.0
+    dist_count = 0
     for frame in common_frames:
         ref_f = ref_df.loc[ref_df["frame"] == frame, ["landmark_id", "x", "y", "z"]]
         user_f = user_df.loc[user_df["frame"] == frame, ["landmark_id", "x", "y", "z"]]
@@ -613,9 +634,10 @@ def compare_motion_csvs(reference_csv_path, user_csv_path):
             + (merged["y_ref"] - merged["y_user"]) ** 2
             + (merged["z_ref"] - merged["z_user"]) ** 2
         )
-        distances.extend(merged["dist"].tolist())
+        dist_sum += float(merged["dist"].sum())
+        dist_count += int(len(merged))
 
-    mean_distance = float(np.mean(distances))
+    mean_distance = float(dist_sum / max(dist_count, 1))
     similarity_score = max(0.0, min(100.0, 100 - mean_distance * 100))
 
     return {
@@ -1397,15 +1419,24 @@ def compare_motion_csvs_dtw(reference_csv_path, user_csv_path, fps=DEFAULT_FPS, 
         return f"[{m}:{s:02d}]"
 
     # Per-pair distances for entire path
-    path_distances = [
-        (i, int(ri), int(ui), euclidean(ref_sequence[ri], user_sequence[ui]))
-        for i, (ri, ui) in enumerate(path)
-    ]
-    # Top N worst (highest distance) and top N best (lowest distance)
-    sorted_worst = sorted(path_distances, key=lambda x: x[3], reverse=True)[:NUM_DEVIATION_SCREENSHOTS]
-    # Only include pairs that are actually close (distance <= POSE_MATCH_MAX_DISTANCE)
-    best_candidates = [p for p in path_distances if p[3] <= POSE_MATCH_MAX_DISTANCE]
-    sorted_best = sorted(best_candidates, key=lambda x: x[3])[:NUM_POSE_MATCH_SCREENSHOTS]
+    # Track top-N moments without storing all per-path distances in memory.
+    worst_heap = []  # min-heap by distance; keeps largest N
+    best_heap = []   # max-heap via -distance; keeps smallest N under match threshold
+    for i, (ri, ui) in enumerate(path):
+        d = float(euclidean(ref_sequence[ri], user_sequence[ui]))
+        if len(worst_heap) < NUM_DEVIATION_SCREENSHOTS:
+            heapq.heappush(worst_heap, (d, i, int(ri), int(ui)))
+        elif d > worst_heap[0][0]:
+            heapq.heapreplace(worst_heap, (d, i, int(ri), int(ui)))
+
+        if d <= POSE_MATCH_MAX_DISTANCE:
+            if len(best_heap) < NUM_POSE_MATCH_SCREENSHOTS:
+                heapq.heappush(best_heap, (-d, i, int(ri), int(ui)))
+            elif d < -best_heap[0][0]:
+                heapq.heapreplace(best_heap, (-d, i, int(ri), int(ui)))
+
+    sorted_worst = sorted(worst_heap, key=lambda x: x[0], reverse=True)
+    sorted_best = sorted([(-d, i, ri, ui) for (d, i, ri, ui) in best_heap], key=lambda x: x[0])
 
     worst_deviations = [
         {
@@ -1414,7 +1445,7 @@ def compare_motion_csvs_dtw(reference_csv_path, user_csv_path, fps=DEFAULT_FPS, 
             "distance": round(d, 4),
             "user_time": frame_to_ts(user_start + ui, user_fps_used),
         }
-        for (_, ri, ui, d) in sorted_worst
+        for (d, _, ri, ui) in sorted_worst
     ]
     best_pose_matches = [
         {
@@ -1423,7 +1454,7 @@ def compare_motion_csvs_dtw(reference_csv_path, user_csv_path, fps=DEFAULT_FPS, 
             "distance": round(d, 4),
             "user_time": frame_to_ts(user_start + ui, user_fps_used),
         }
-        for (_, ri, ui, d) in sorted_best
+        for (d, _, ri, ui) in sorted_best
     ]
 
     # Backward compat: single worst frame for existing screenshot logic
