@@ -5,7 +5,7 @@ export async function uploadMotFile(file: File) {
   const formData = new FormData();
   formData.append("file", file);
 
-  const response = await fetch(`${API_URL}/upload-videos`, {
+  const response = await fetch(`/api/upload-videos`, {
     method: "POST",
     body: formData,
   });
