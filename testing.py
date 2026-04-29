@@ -42,7 +42,9 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 app = Flask(__name__)  # Create the Flask application instance
-CORS(app)
+from flask_cors import CORS
+
+CORS(app, resources={r"/*": {"origins": "*"}})
 # ----- Optional: cloud storage for generated files (log, tips, screenshots) -----
 # Set STORAGE_PROVIDER to "supabase" or "s3" and the corresponding env vars (see below).
 # If unset or empty, files stay on disk and response uses local paths only.
