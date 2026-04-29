@@ -1832,6 +1832,13 @@ def _run_analysis(video1_path, video2_path, run_ts):
 
     return response
 
+@app.route("/")
+def home():
+    return {
+        "status": "DancePerfect API running",
+        "endpoints": ["/upload-videos", "/analyze", "/check-dtw"]
+    }
+
 
 @app.route("/upload-videos", methods=["POST"])
 def upload_videos():
@@ -1911,4 +1918,4 @@ if __name__ == "__main__":
     # When this file is run directly (python testing.py), start the Flask dev server.
     # debug=True is convenient for development (auto-reload and detailed error pages),
     # but you would typically disable it in production.
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)
