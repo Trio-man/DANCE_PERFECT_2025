@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     const backendRes = await fetch(`${BACKEND_URL}/analyze`, {
       method: "POST",
       body: formData,
-      // @ts-ignore
+      // @ts-expect-error
       agent,
     });
     const data = await backendRes.json();
