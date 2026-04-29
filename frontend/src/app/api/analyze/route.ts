@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 
+const BACKEND_URL = process.env.BACKEND_URL;
+
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
 
-    const backendRes = await fetch("https://49.13.74.29/analyze", {
+    const backendRes = await fetch(`${BACKEND_URL}/analyze`, {
       method: "POST",
       body: formData,
     });
