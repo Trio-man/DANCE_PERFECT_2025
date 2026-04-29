@@ -15,8 +15,6 @@ function dataURLtoBlob(dataUrl: string) {
   return new Blob([u8arr], { type: mime });
 }
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-
 export default function LoadingPage() {
   const router = useRouter();
   const [msg, setMsg] = useState('Starting analysis...');
@@ -49,7 +47,7 @@ export default function LoadingPage() {
 
     setMsg('Uploading videos to server...');
 
-    const res = await fetch(`${BACKEND_URL}/analyze`, {
+    const res = await fetch(`/api/analyze`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
