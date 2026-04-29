@@ -42,7 +42,6 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 app = Flask(__name__)  # Create the Flask application instance
-from flask_cors import CORS
 
 CORS(app, resources={r"/*": {"origins": "*"}})
 # ----- Optional: cloud storage for generated files (log, tips, screenshots) -----
