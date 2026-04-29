@@ -4,7 +4,7 @@ export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
 
-    const backendRes = await fetch("http://49.13.74.29/analyze", {
+    const backendRes = await fetch("https://49.13.74.29/analyze", {
       method: "POST",
       body: formData,
     });
