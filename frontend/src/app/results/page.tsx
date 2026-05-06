@@ -1,85 +1,145 @@
 'use client';
 
-import { useEffect, useMemo, useState, Suspense } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
-import Image from 'next/image';
 
+// -----------------------------
+// Types
+// -----------------------------
 type TimelineItem = {
-  start?: string;
-  end?: string;
-  message?: string;
+  start: string;
+  end: string;
+  severity: string;
+  body_part: string;
+  joint: string;
+  message: string;
+};
+
+type Feedback = {
+  summary?: string;
+  timing?: string;
+  body_part_comments?: string[];
+  top_errors?: string[];
+  detailed_timeline?: TimelineItem[];
+};
+
+type Comparison = {
+  similarity_score?: number;
+  feedback?: Feedback;
+};
+
+type Visuals = {
+  reference?: { preview_images?: string[]; overlay_video?: string };
+  user?: { preview_images?: string[]; overlay_video?: string };
 };
 
 type AnalysisResult = {
   score?: number;
-  feedback?: {
-    summary?: string;
-    top_errors?: string[];
-    body_part_comments?: string[];
-    detailed_timeline?: TimelineItem[];
-  };
-  visuals?: any;
-  comparison?: {
-    similarity_score?: number;
-  };
+  feedback?: Feedback;
+  comparison?: Comparison;
+  visuals?: Visuals;
+  outputs?: { visuals?: Visuals };
 };
 
+// -----------------------------
+// CONTENT
+// -----------------------------
 function ResultsContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const errorParam = searchParams.get('error');
+
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || '';
+
+  const toBackendUrl = (p: string) => {
+    if (!p) return '';
+    if (p.startsWith('http')) return p;
+    return `${BACKEND_URL}${p.startsWith('/') ? '' : '/'}${p}`;
+  };
+
   // -----------------------------
-  // LOAD SAFE (NO REDIRECT)
+  // Load result safely (FIXED)
   // -----------------------------
   useEffect(() => {
-    const stored = sessionStorage.getItem('dp_result');
+    const run = () => {
+      try {
+        if (errorParam) {
+          setLoading(false);
+          return;
+        }
 
-    if (!stored) {
-      setLoading(false);
-      return;
-    }
+        const stored =
+          sessionStorage.getItem('dp_result') ||
+          localStorage.getItem('dp_result');
 
-    try {
-      setResult(JSON.parse(stored));
-    } catch {
-      setResult(null);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+        if (!stored) {
+          setLoading(false);
+          router.replace('/upload');
+          return;
+        }
+
+        const parsed: unknown = JSON.parse(stored);
+        setResult(parsed as AnalysisResult);
+      } catch (err) {
+        console.error(err);
+        router.replace('/upload');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    run();
+  }, [router, errorParam]);
 
   // -----------------------------
-  const feedback = result?.feedback ?? {};
-  const score = result?.score ?? result?.comparison?.similarity_score ?? 0;
+  // Derived data
+  // -----------------------------
+  const feedback = result?.feedback || result?.comparison?.feedback || {};
+  const visuals = result?.outputs?.visuals || result?.visuals || null;
+
+  const score =
+    result?.score ?? result?.comparison?.similarity_score ?? 0;
 
   const timeline = feedback.detailed_timeline ?? [];
-  const errors = feedback.top_errors ?? [];
-  const body = feedback.body_part_comments ?? [];
+  const topErrors = feedback.top_errors ?? [];
+  const bodyComments = feedback.body_part_comments ?? [];
 
+  const refPreviews = visuals?.reference?.preview_images ?? [];
+  const usrPreviews = visuals?.user?.preview_images ?? [];
+  const refOverlay = visuals?.reference?.overlay_video;
+  const usrOverlay = visuals?.user?.overlay_video;
+
+  // -----------------------------
+  // Loading
   // -----------------------------
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin h-10 w-10 border-4 border-t-purple-700 rounded-full" />
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-white via-[#cde7ff] to-[#d6c1ff]">
+        <div className="text-center bg-white/70 p-10 rounded-xl">
+          <div className="animate-spin h-10 w-10 border-4 border-gray-300 border-t-[#4b0082] mx-auto mb-3" />
+          <p className="font-semibold">Loading results...</p>
+        </div>
       </div>
     );
   }
 
   // -----------------------------
-  // EMPTY STATE (FIXED UX)
+  // Empty
   // -----------------------------
   if (!result) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center bg-white/60 p-10 rounded-xl">
-          <p className="font-semibold">No results found</p>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-white via-[#cde7ff] to-[#d6c1ff]">
+        <div className="text-center bg-white/70 p-10 rounded-xl">
+          <p>No results found</p>
           <button
             onClick={() => router.push('/upload')}
-            className="mt-4 bg-purple-700 text-white px-4 py-2 rounded"
+            className="mt-4 bg-[#4b0082] text-white px-4 py-2 rounded"
           >
-            Go Back
+            Back
           </button>
         </div>
       </div>
@@ -87,79 +147,112 @@ function ResultsContent() {
   }
 
   // -----------------------------
+  // UI
+  // -----------------------------
   return (
-    <div className="min-h-screen bg-gradient-to-br from-white via-blue-100 to-purple-200 p-6 flex justify-center">
-      <motion.div className="w-full max-w-5xl bg-white/70 p-8 rounded-2xl space-y-8">
-
-        {/* HEADER */}
+    <div className="min-h-screen bg-gradient-to-br from-white via-[#cde7ff] to-[#d6c1ff] px-4 py-10 flex justify-center">
+      <motion.div
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="w-full max-w-5xl bg-white/70 backdrop-blur-md rounded-2xl p-8 space-y-8"
+      >
+        {/* SCORE */}
         <div className="text-center">
-          <h1 className="text-3xl font-bold">Here are your results</h1>
-          <p className="text-gray-600">AI movement analysis complete</p>
-          <p className="text-5xl font-bold mt-6">{Number(score).toFixed(1)}</p>
+          <h1 className="text-2xl font-bold text-[#4b0082]">
+            Here are your results
+          </h1>
+
+          <p className="text-6xl font-extrabold mt-4">
+            {Number(score).toFixed(1)}
+          </p>
         </div>
 
         {/* SUMMARY */}
-        <Section title="AI Insights">
-          {feedback.summary || 'No AI summary available yet.'}
-        </Section>
+        {feedback.summary && (
+          <Section title="Summary">
+            <p>{feedback.summary}</p>
+          </Section>
+        )}
 
-        {/* ERRORS */}
-        <Section title="Key Insights">
-          {errors.length === 0 && body.length === 0 ? (
-            <p className="text-gray-500">No issues detected.</p>
-          ) : (
-            <>
-              {errors.map((e, i) => (
-                <div key={i} className="bg-red-50 p-2 rounded mb-2">
-                  {e}
-                </div>
-              ))}
-              {body.map((b, i) => (
-                <div key={i} className="bg-blue-50 p-2 rounded mb-2">
-                  {b}
-                </div>
-              ))}
-            </>
-          )}
-        </Section>
+        {/* VISUALS */}
+        {(refOverlay || usrOverlay || refPreviews.length > 0 || usrPreviews.length > 0) && (
+          <Section title="Visual Comparison">
+            <div className="grid md:grid-cols-2 gap-4">
+              {refOverlay && (
+                <video src={toBackendUrl(refOverlay)} controls className="rounded-xl" />
+              )}
+              {usrOverlay && (
+                <video src={toBackendUrl(usrOverlay)} controls className="rounded-xl" />
+              )}
+            </div>
+          </Section>
+        )}
+
+        {/* INSIGHTS */}
+        {(topErrors.length > 0 || bodyComments.length > 0) && (
+          <Section title="Key Insights">
+            {topErrors.length > 0 && (
+              <ul className="list-disc pl-5">
+                {topErrors.map((e: string, i: number) => (
+                  <li key={i}>{e}</li>
+                ))}
+              </ul>
+            )}
+
+            {bodyComments.length > 0 && (
+              <ul className="list-disc pl-5 mt-3">
+                {bodyComments.map((c: string, i: number) => (
+                  <li key={i}>{c}</li>
+                ))}
+              </ul>
+            )}
+          </Section>
+        )}
 
         {/* TIMELINE */}
-        <Section title="Frame-by-Frame Coaching">
-          {timeline.length === 0 ? (
-            <p className="text-gray-500">No timeline available.</p>
-          ) : (
-            timeline.map((t, i) => (
-              <div key={i} className="border p-3 rounded mb-2">
-                <p className="font-semibold">
-                  {t.start} - {t.end}
-                </p>
-                <p className="text-sm">{t.message}</p>
-              </div>
-            ))
-          )}
-        </Section>
+        {timeline.length > 0 && (
+          <Section title="Coaching Timeline">
+            <div className="space-y-3">
+              {timeline.map((t: TimelineItem, i: number) => (
+                <div key={i} className="border rounded-xl p-4 bg-white/60">
+                  <p className="font-semibold">
+                    {t.start} - {t.end} ({t.body_part})
+                  </p>
+                  <p className="text-sm text-gray-700">{t.message}</p>
+                </div>
+              ))}
+            </div>
+          </Section>
+        )}
 
         <button
           onClick={() => router.push('/upload')}
-          className="w-full bg-purple-800 text-white py-3 rounded-lg"
+          className="w-full bg-[#4b0082] text-white py-3 rounded-lg"
         >
           Analyze Again
         </button>
-
       </motion.div>
     </div>
   );
 }
 
-function Section({ title, children }: any) {
+// -----------------------------
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="bg-white/60 p-5 rounded-xl space-y-3">
-      <h2 className="font-bold">{title}</h2>
+    <div className="bg-white/60 rounded-xl p-5 space-y-3">
+      <h2 className="font-bold text-lg">{title}</h2>
       {children}
     </div>
   );
 }
 
+// -----------------------------
 export default function ResultsPage() {
   return (
     <Suspense fallback={<div className="p-10 text-center">Loading...</div>}>
