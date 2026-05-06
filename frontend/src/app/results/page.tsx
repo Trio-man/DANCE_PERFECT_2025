@@ -1,12 +1,15 @@
 'use client';
 
-import { useEffect, useState, Suspense, useMemo } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useMemo, useRef, useState, Suspense } from 'react';
+import { useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
+import Image from 'next/image';
 import {
-  RadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  Radar,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
   ResponsiveContainer,
 } from 'recharts';
 
@@ -30,6 +33,11 @@ type Feedback = {
   detailed_timeline?: TimelineItem[];
 };
 
+type Visuals = {
+  reference?: { preview_images?: string[]; overlay_video?: string };
+  user?: { preview_images?: string[]; overlay_video?: string };
+};
+
 type AnalysisResult = {
   score?: number;
   feedback?: Feedback;
@@ -37,60 +45,71 @@ type AnalysisResult = {
     similarity_score?: number;
     feedback?: Feedback;
   };
+  visuals?: Visuals;
+  outputs?: { visuals?: Visuals };
 };
 
 // -----------------------------
+// MAIN
+// -----------------------------
 function ResultsContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const errorParam = searchParams.get('error');
 
   const [result, setResult] = useState<AnalysisResult | null>(null);
-  const [frameIndex, setFrameIndex] = useState(0);
-
   const [loading, setLoading] = useState(true);
 
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [time, setTime] = useState(0);
+
   // -----------------------------
-  // Load results safely
+  // LOAD RESULT
   // -----------------------------
   useEffect(() => {
-    const stored = sessionStorage.getItem('dp_result');
-
-    if (!stored || errorParam) {
-      router.replace('/upload');
-      return;
-    }
-
     try {
-      setResult(JSON.parse(stored));
-    } catch {
+      const stored = sessionStorage.getItem('dp_result');
+
+      if (!stored) {
+        router.replace('/upload');
+        return;
+      }
+
+      const parsed: AnalysisResult = JSON.parse(stored);
+      setResult(parsed);
+    } catch (e) {
+      console.error(e);
       router.replace('/upload');
     } finally {
       setLoading(false);
     }
-  }, [router, errorParam]);
+  }, [router]);
 
+  // -----------------------------
+  // DERIVED DATA
   // -----------------------------
   const score =
     result?.score ?? result?.comparison?.similarity_score ?? 0;
 
-  const feedback = result?.feedback || result?.comparison?.feedback || {};
+  const feedback = useMemo(() => {
+    return result?.feedback || result?.comparison?.feedback || {};
+  }, [result]);
+
+  const visuals = result?.outputs?.visuals || result?.visuals;
 
   const timeline = feedback.detailed_timeline ?? [];
+  const topErrors = feedback.top_errors ?? [];
+
+  const chartData = useMemo(() => {
+    return timeline.map((t, i) => ({
+      frame: i + 1,
+      severity: Number(t.severity) || 0,
+    }));
+  }, [timeline]);
+
+  const videoUrl =
+    visuals?.user?.overlay_video || visuals?.reference?.overlay_video || '';
 
   // -----------------------------
-  // Derived "AI metrics" (frontend simulation layer)
-  // -----------------------------
-  const radarData = useMemo(() => {
-    return [
-      { subject: 'Timing', value: Math.min(score + 5, 100) },
-      { subject: 'Accuracy', value: score },
-      { subject: 'Posture', value: Math.max(score - 10, 0) },
-      { subject: 'Flow', value: Math.min(score + 2, 100) },
-      { subject: 'Control', value: Math.max(score - 5, 0) },
-    ];
-  }, [score]);
-
+  // LOADING
   // -----------------------------
   if (loading) {
     return (
@@ -100,111 +119,151 @@ function ResultsContent() {
     );
   }
 
+  // -----------------------------
+  // EMPTY STATE
+  // -----------------------------
   if (!result) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        No results
+        <button onClick={() => router.push('/upload')}>
+          Back to Upload
+        </button>
       </div>
     );
   }
 
   // -----------------------------
+  // UI
+  // -----------------------------
   return (
     <div className="min-h-screen bg-gradient-to-br from-white via-blue-50 to-purple-100 p-6">
-      <div className="max-w-6xl mx-auto space-y-6">
+      <div className="max-w-6xl mx-auto space-y-10">
 
-        {/* HEADER */}
-        <div className="bg-white/70 rounded-2xl p-6 shadow">
-          <h1 className="text-2xl font-bold">Results Dashboard</h1>
-          <p className="text-gray-600">
-            Here is your performance breakdown
+        {/* SCORE HERO */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center"
+        >
+          <h1 className="text-2xl font-bold">Here are your results</h1>
+
+          <div className="text-6xl font-extrabold mt-4 text-purple-700">
+            {score.toFixed(1)}
+          </div>
+
+          <p className="text-gray-600 mt-2">
+            {score > 80
+              ? 'Excellent performance'
+              : score > 60
+              ? 'Good but needs improvement'
+              : 'Needs practice'}
           </p>
+        </motion.div>
+
+        {/* VIDEO SCRUBBER */}
+        {videoUrl && (
+          <div className="bg-white p-4 rounded-xl shadow">
+            <h2 className="font-semibold mb-3">Timeline Scrubber</h2>
+
+            <video
+              ref={videoRef}
+              src={videoUrl}
+              controls
+              className="w-full rounded-lg"
+              onTimeUpdate={(e) =>
+                setTime(e.currentTarget.currentTime)
+              }
+            />
+
+            <input
+              type="range"
+              className="w-full mt-3"
+              min={0}
+              max={videoRef.current?.duration || 100}
+              value={time}
+              onChange={(e) => {
+                const t = Number(e.target.value);
+                setTime(t);
+                if (videoRef.current) {
+                  videoRef.current.currentTime = t;
+                }
+              }}
+            />
+          </div>
+        )}
+
+        {/* CHART */}
+        <div className="bg-white p-4 rounded-xl shadow">
+          <h2 className="font-semibold mb-3">
+            Performance Over Time
+          </h2>
+
+          <ResponsiveContainer width="100%" height={250}>
+            <LineChart data={chartData}>
+              <XAxis dataKey="frame" />
+              <YAxis />
+              <Tooltip />
+              <Line
+                type="monotone"
+                dataKey="severity"
+                stroke="#7c3aed"
+              />
+            </LineChart>
+          </ResponsiveContainer>
         </div>
 
-        {/* SCORE + RADAR */}
-        <div className="grid md:grid-cols-2 gap-6">
+        {/* VISUALS */}
+        {(visuals?.user?.preview_images?.length ||
+          visuals?.reference?.preview_images?.length) && (
+          <div className="bg-white p-4 rounded-xl shadow">
+            <h2 className="font-semibold mb-3">Frame Comparison</h2>
 
-          {/* SCORE CARD */}
-          <div className="bg-white/70 rounded-2xl p-6 shadow text-center">
-            <h2 className="text-lg font-semibold">Overall Score</h2>
-            <p className="text-6xl font-bold text-purple-700 mt-4">
-              {Number(score).toFixed(1)}
-            </p>
-          </div>
-
-          {/* RADAR CHART */}
-          <div className="bg-white/70 rounded-2xl p-6 shadow">
-            <h2 className="text-lg font-semibold mb-3">Performance Profile</h2>
-
-            <ResponsiveContainer width="100%" height={250}>
-              <RadarChart data={radarData}>
-                <PolarGrid />
-                <PolarAngleAxis dataKey="subject" />
-                <Radar
-                  dataKey="value"
-                  stroke="#7c3aed"
-                  fill="#7c3aed"
-                  fillOpacity={0.4}
+            <div className="grid grid-cols-2 gap-4">
+              {visuals?.reference?.preview_images?.map((img, i) => (
+                <Image
+                  key={i}
+                  src={img}
+                  alt="ref"
+                  width={400}
+                  height={250}
                 />
-              </RadarChart>
-            </ResponsiveContainer>
+              ))}
+
+              {visuals?.user?.preview_images?.map((img, i) => (
+                <Image
+                  key={i}
+                  src={img}
+                  alt="user"
+                  width={400}
+                  height={250}
+                />
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* FRAME SCRUBBER */}
-        <div className="bg-white/70 rounded-2xl p-6 shadow">
-          <h2 className="font-semibold mb-3">Frame Scrubber</h2>
+        {/* MISTAKES */}
+        <div className="bg-white p-4 rounded-xl shadow">
+          <h2 className="font-semibold mb-3">Key Mistakes</h2>
 
-          <input
-            type="range"
-            min={0}
-            max={timeline.length - 1}
-            value={frameIndex}
-            onChange={(e) => setFrameIndex(Number(e.target.value))}
-            className="w-full"
-          />
-
-          <div className="mt-4 p-4 bg-gray-50 rounded-xl">
-            {timeline[frameIndex] ? (
-              <>
-                <p className="font-semibold">
-                  {timeline[frameIndex].body_part}
-                </p>
-                <p className="text-sm text-gray-600">
-                  {timeline[frameIndex].message}
-                </p>
-              </>
-            ) : (
-              <p>No timeline data</p>
-            )}
-          </div>
-        </div>
-
-        {/* INSIGHTS */}
-        <div className="bg-white/70 rounded-2xl p-6 shadow">
-          <h2 className="font-semibold mb-3">Key Insights</h2>
-
-          {feedback.summary && (
-            <p className="text-gray-700 mb-3">
-              {feedback.summary}
-            </p>
+          {topErrors.length === 0 ? (
+            <p className="text-gray-500">No major issues detected.</p>
+          ) : (
+            <ul className="list-disc pl-5 space-y-2">
+              {topErrors.map((e, i) => (
+                <li key={i}>{e}</li>
+              ))}
+            </ul>
           )}
-
-          <ul className="list-disc pl-5 text-gray-700">
-            {(feedback.top_errors ?? []).map((e, i) => (
-              <li key={i}>{e}</li>
-            ))}
-          </ul>
         </div>
 
-        {/* ACTION */}
+        {/* BACK */}
         <button
           onClick={() => router.push('/upload')}
-          className="w-full bg-purple-700 text-white py-3 rounded-xl"
+          className="w-full bg-purple-700 text-white py-3 rounded-lg"
         >
-          Run Another Analysis
+          Upload Another Video
         </button>
-
       </div>
     </div>
   );
