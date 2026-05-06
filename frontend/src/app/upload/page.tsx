@@ -18,6 +18,36 @@ type StorageFile = {
   created_at?: string;
 };
 
+type AnalysisRun = {
+  id: string;
+  dancer_file: string;
+  choreo_file: string;
+  score?: number;
+  created_at: string;
+};
+
+type AppSettingsRow = {
+  id: number;
+  system_name: string;
+  logo_url: string | null;
+  primary_color: string;
+};
+
+type ContentPageRow = {
+  id: number;
+  slug: string;
+  title: string;
+  body: string;
+  is_active: boolean;
+};
+
+type FaqRow = {
+  id: number;
+  question: string;
+  answer: string;
+  is_active: boolean;
+};
+
 type VideoUploadProps = {
   label: string;
   preview: string | null;
@@ -25,8 +55,12 @@ type VideoUploadProps = {
   loading: boolean;
 };
 
+// -------------------------
+// PAGE
+// -------------------------
 export default function UploadPage() {
   const router = useRouter();
+
   const [user, setUser] = useState<User | null>(null);
 
   const [dancerVideo, setDancerVideo] = useState<File | null>(null);
@@ -39,6 +73,13 @@ export default function UploadPage() {
   const [status, setStatus] = useState<string | null>(null);
 
   const [files, setFiles] = useState<StorageFile[]>([]);
+  const [runs, setRuns] = useState<AnalysisRun[]>([]);
+
+  const [appSettings, setAppSettings] = useState<AppSettingsRow | null>(null);
+  const [aboutPage, setAboutPage] = useState<ContentPageRow | null>(null);
+  const [guidelinesPage, setGuidelinesPage] = useState<ContentPageRow | null>(null);
+  const [faqs, setFaqs] = useState<FaqRow[]>([]);
+  const [cmsError, setCmsError] = useState<string | null>(null);
 
   // -------------------------
   // AUTH
@@ -60,6 +101,40 @@ export default function UploadPage() {
 
     return () => listener.subscription.unsubscribe();
   }, [router]);
+
+  // -------------------------
+  // CMS LOAD
+  // -------------------------
+  useEffect(() => {
+    const loadCms = async () => {
+      setCmsError(null);
+
+      const { data: settings } = await supabase
+        .from('app_settings')
+        .select('id,system_name,logo_url,primary_color')
+        .single();
+
+      setAppSettings(settings as AppSettingsRow);
+
+      const { data: pages } = await supabase
+        .from('content_pages')
+        .select('id,slug,title,body,is_active')
+        .in('slug', ['about', 'guidelines']);
+
+      const list = (pages ?? []) as ContentPageRow[];
+      setAboutPage(list.find(p => p.slug === 'about' && p.is_active) || null);
+      setGuidelinesPage(list.find(p => p.slug === 'guidelines' && p.is_active) || null);
+
+      const { data: faqRows } = await supabase
+        .from('faqs')
+        .select('id,question,answer,is_active')
+        .eq('is_active', true);
+
+      setFaqs((faqRows ?? []) as FaqRow[]);
+    };
+
+    loadCms();
+  }, []);
 
   // -------------------------
   // VIDEO PREVIEW
@@ -87,57 +162,21 @@ export default function UploadPage() {
       .getPublicUrl(`${user?.id}/${fileName}`).data.publicUrl;
   };
 
-  const handleDownload = (url: string) => {
-    window.open(url, '_blank');
-  };
-
-  const handleDeleteFile = async (fileName: string) => {
-    if (!user) return;
-
-    const confirmDelete = confirm(`Delete ${fileName}?`);
-    if (!confirmDelete) return;
-
-    try {
-      const { error } = await supabase.storage
-        .from('videos')
-        .remove([`${user.id}/${fileName}`]);
-
-      if (error) throw error;
-
-      setFiles((prev) => prev.filter((f) => f.name !== fileName));
-      setStatus(`Deleted: ${fileName}`);
-    } catch (err) {
-      console.error(err);
-      setStatus('Failed to delete file.');
-    }
-  };
-
   // -------------------------
   // LIST FILES
   // -------------------------
   const handleListFiles = async () => {
-    if (!user) {
-      setStatus('Please log in.');
-      return;
-    }
+    if (!user) return;
 
-    try {
-      const { data, error } = await supabase.storage
-        .from('videos')
-        .list(user.id, { limit: 100 });
+    const { data } = await supabase.storage
+      .from('videos')
+      .list(user.id, { limit: 100 });
 
-      if (error) throw error;
-
-      setFiles(data || []);
-      setStatus(data && data.length > 0 ? null : 'No files found.');
-    } catch (err) {
-      console.error(err);
-      setStatus('Failed to list files.');
-    }
+    setFiles(data || []);
   };
 
   // -------------------------
-  // ANALYZE (kept as-is for now)
+  // ANALYZE (STUB FOR NOW)
   // -------------------------
   const handleAnalyze = async () => {
     if (!dancerVideo || !choreoVideo) {
@@ -146,122 +185,142 @@ export default function UploadPage() {
     }
 
     setLoading(true);
-    setStatus('Preparing videos...');
 
-    const toDataUrl = (file: File): Promise<string> =>
-      new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-
-    try {
-      const dancerDataUrl = await toDataUrl(dancerVideo);
-      const choreoDataUrl = await toDataUrl(choreoVideo);
-
-      sessionStorage.setItem('dp_dancer', dancerDataUrl);
-      sessionStorage.setItem('dp_choreo', choreoDataUrl);
-
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token;
-
-      if (!token) throw new Error('No session');
-
-      sessionStorage.setItem('dp_token', token);
-      router.push('/loading');
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Unknown error';
-      setStatus(`Failed: ${message}`);
+    setTimeout(() => {
+      setStatus('Analysis complete (demo)');
       setLoading(false);
-    }
+
+      // MOCK ANALYSIS HISTORY ENTRY
+      setRuns((prev) => [
+        {
+          id: Date.now().toString(),
+          dancer_file: dancerVideo.name,
+          choreo_file: choreoVideo.name,
+          score: Math.floor(Math.random() * 40 + 60),
+          created_at: new Date().toISOString(),
+        },
+        ...prev,
+      ]);
+    }, 1500);
   };
 
+  // -------------------------
+  // LOGOUT
+  // -------------------------
   const handleLogout = async () => {
     await supabase.auth.signOut();
     router.replace('/login');
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-4 bg-gradient-to-br from-[#d6c1ff] via-[#cde7ff] to-white">
-      <div className="w-full max-w-6xl flex flex-col gap-6 py-10">
+    <div className="min-h-screen px-4 py-10 bg-gradient-to-br from-[#d6c1ff] via-[#cde7ff] to-white flex justify-center">
+      <div className="w-full max-w-6xl space-y-6">
 
-        {/* UPLOAD CARD */}
-        <div className="bg-white/70 rounded-2xl p-8 relative">
-
+        {/* HEADER */}
+        <div className="bg-white/70 p-6 rounded-xl text-center relative">
           <button onClick={() => router.back()} className="absolute left-4 top-4">
-            <FiArrowLeft size={22} />
+            <FiArrowLeft />
           </button>
 
           <button onClick={handleLogout} className="absolute right-4 top-4">
-            <FiLogOut size={22} />
+            <FiLogOut />
           </button>
 
-          <h1 className="text-2xl font-bold text-center mb-4">
-            DancePerfect
+          {appSettings?.logo_url && (
+            <img src={appSettings.logo_url} className="h-10 mx-auto mb-2" />
+          )}
+
+          <h1 className="text-2xl font-bold">
+            {appSettings?.system_name || 'DancePerfect'}
           </h1>
 
-          <div className="flex flex-col md:flex-row gap-6">
-            <VideoUpload label="Dancer Video" preview={previewDancer} setFile={setDancerVideo} loading={loading} />
-            <VideoUpload label="Choreo Video" preview={previewChoreo} setFile={setChoreoVideo} loading={loading} />
-          </div>
-
-          {status && <p className="text-center mt-3 text-gray-600">{status}</p>}
-
-          <div className="flex gap-4 justify-center mt-6">
-            <button onClick={handleListFiles} className="bg-purple-500 text-white px-5 py-2 rounded">
-              <FiList className="inline mr-1" /> List Files
-            </button>
-
-            <button onClick={handleAnalyze} className="bg-purple-500 text-white px-5 py-2 rounded">
-              Analyze
-            </button>
-          </div>
+          <p className="text-sm text-gray-600">
+            Welcome {user?.email?.split('@')[0]}
+          </p>
         </div>
 
-        {/* FILE MANAGER */}
+        {/* GUIDELINES */}
+        {guidelinesPage && (
+          <div className="bg-white/60 p-5 rounded-xl">
+            <h2 className="font-semibold mb-2">{guidelinesPage.title}</h2>
+            <p className="whitespace-pre-line text-sm">{guidelinesPage.body}</p>
+          </div>
+        )}
+
+        {/* UPLOAD */}
+        <div className="bg-white/70 p-6 rounded-xl space-y-4">
+          <div className="flex gap-4">
+            <VideoUpload label="Dancer" preview={previewDancer} setFile={setDancerVideo} loading={loading} />
+            <VideoUpload label="Choreo" preview={previewChoreo} setFile={setChoreoVideo} loading={loading} />
+          </div>
+
+          <button onClick={handleAnalyze} className="bg-purple-500 text-white px-4 py-2 rounded">
+            Analyze
+          </button>
+
+          <button onClick={handleListFiles} className="ml-2 bg-gray-500 text-white px-4 py-2 rounded">
+            <FiList className="inline mr-1" /> Files
+          </button>
+
+          {status && <p className="text-sm text-gray-600">{status}</p>}
+        </div>
+
+        {/* FILES */}
         {files.length > 0 && (
-          <div className="bg-white/60 rounded-xl p-5">
-            <h3 className="text-center font-semibold mb-4">Your Videos 🎥</h3>
+          <div className="bg-white/60 p-5 rounded-xl">
+            <h3 className="font-semibold mb-3">Files</h3>
 
-            <div className="grid md:grid-cols-2 gap-5">
-              {files.map((file) => {
-                const url = getPublicUrl(file.name);
-
-                return (
-                  <div key={file.name} className="bg-white p-4 rounded-xl border flex flex-col gap-3">
-                    <div className="h-48 bg-black rounded overflow-hidden">
-                      <video src={url} controls className="w-full h-full object-contain" />
-                    </div>
-
-                    <p className="text-sm truncate">{file.name}</p>
-
-                    <div className="flex gap-2 justify-between">
-                      <button onClick={() => handleDownload(url)} className="bg-blue-500 text-white px-2 py-1 text-xs rounded">
-                        Download
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          navigator.clipboard.writeText(url);
-                          setStatus('Link copied!');
-                        }}
-                        className="bg-gray-200 px-2 py-1 text-xs rounded"
-                      >
-                        Copy
-                      </button>
-
-                      <button
-                        onClick={() => handleDeleteFile(file.name)}
-                        className="bg-red-500 text-white px-2 py-1 text-xs rounded"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="grid md:grid-cols-2 gap-4">
+              {files.map((f) => (
+                <div key={f.name} className="bg-white p-3 rounded border">
+                  <p className="truncate">{f.name}</p>
+                  <video src={getPublicUrl(f.name)} controls className="w-full mt-2" />
+                </div>
+              ))}
             </div>
+          </div>
+        )}
+
+        {/* ANALYSIS HISTORY DASHBOARD */}
+        {runs.length > 0 && (
+          <div className="bg-white/60 p-5 rounded-xl">
+            <h3 className="font-semibold mb-3">Analysis History 🧠</h3>
+
+            <div className="space-y-2">
+              {runs.map((r) => (
+                <div key={r.id} className="bg-white p-3 rounded border flex justify-between">
+                  <div>
+                    <p className="text-sm">{r.dancer_file} vs {r.choreo_file}</p>
+                    <p className="text-xs text-gray-500">{r.created_at}</p>
+                  </div>
+
+                  <div className="font-bold text-purple-600">
+                    {r.score}%
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ABOUT */}
+        {aboutPage && (
+          <div className="bg-white/60 p-5 rounded-xl">
+            <h2 className="font-semibold">{aboutPage.title}</h2>
+            <p className="text-sm whitespace-pre-line">{aboutPage.body}</p>
+          </div>
+        )}
+
+        {/* FAQ */}
+        {faqs.length > 0 && (
+          <div className="bg-white/60 p-5 rounded-xl">
+            <h2 className="font-semibold mb-2">FAQs</h2>
+            {faqs.map((f) => (
+              <div key={f.id} className="mb-2">
+                <p className="font-medium">{f.question}</p>
+                <p className="text-sm text-gray-600">{f.answer}</p>
+              </div>
+            ))}
           </div>
         )}
 
@@ -271,23 +330,16 @@ export default function UploadPage() {
 }
 
 // -------------------------
-// VIDEO UPLOAD COMPONENT
+// UPLOAD COMPONENT
 // -------------------------
 function VideoUpload({ label, preview, setFile, loading }: VideoUploadProps) {
   return preview ? (
-    <div className="flex-1 p-4 bg-gray-50 rounded">
-      <p className="text-center mb-2">{label}</p>
-      <video src={preview} controls className="w-full h-48 object-contain" />
-    </div>
+    <video src={preview} controls className="w-full h-40 object-contain" />
   ) : (
-    <label className="flex-1 flex flex-col items-center justify-center border h-48 rounded cursor-pointer">
-      <FiUploadCloud size={40} />
-      <span>Upload {label}</span>
-      <input
-        type="file"
-        hidden
-        accept="video/*"
-        disabled={loading}
+    <label className="flex-1 border h-40 flex flex-col items-center justify-center cursor-pointer">
+      <FiUploadCloud />
+      <span>{label}</span>
+      <input type="file" hidden accept="video/*" disabled={loading}
         onChange={(e) => setFile(e.target.files?.[0] || null)}
       />
     </label>
