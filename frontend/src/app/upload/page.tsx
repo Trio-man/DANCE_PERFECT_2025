@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
 import { createClient, Session, User } from '@supabase/supabase-js';
 import { FiArrowLeft, FiLogOut, FiUploadCloud, FiList } from 'react-icons/fi';
 
@@ -17,6 +16,13 @@ const supabase = createClient(
 type StorageFile = {
   name: string;
   created_at?: string;
+};
+
+type VideoUploadProps = {
+  label: string;
+  preview: string | null;
+  setFile: (file: File | null) => void;
+  loading: boolean;
 };
 
 export default function UploadPage() {
@@ -131,7 +137,7 @@ export default function UploadPage() {
   };
 
   // -------------------------
-  // ANALYZE
+  // ANALYZE (kept as-is for now)
   // -------------------------
   const handleAnalyze = async () => {
     if (!dancerVideo || !choreoVideo) {
@@ -160,12 +166,13 @@ export default function UploadPage() {
       const { data } = await supabase.auth.getSession();
       const token = data.session?.access_token;
 
-      if (!token) throw new Error();
+      if (!token) throw new Error('No session');
 
       sessionStorage.setItem('dp_token', token);
       router.push('/loading');
-    } catch {
-      setStatus('Failed to prepare videos.');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      setStatus(`Failed: ${message}`);
       setLoading(false);
     }
   };
@@ -264,9 +271,9 @@ export default function UploadPage() {
 }
 
 // -------------------------
-// Upload Component
+// VIDEO UPLOAD COMPONENT
 // -------------------------
-function VideoUpload({ label, preview, setFile, loading }: any) {
+function VideoUpload({ label, preview, setFile, loading }: VideoUploadProps) {
   return preview ? (
     <div className="flex-1 p-4 bg-gray-50 rounded">
       <p className="text-center mb-2">{label}</p>
@@ -276,7 +283,11 @@ function VideoUpload({ label, preview, setFile, loading }: any) {
     <label className="flex-1 flex flex-col items-center justify-center border h-48 rounded cursor-pointer">
       <FiUploadCloud size={40} />
       <span>Upload {label}</span>
-      <input type="file" hidden accept="video/*" disabled={loading}
+      <input
+        type="file"
+        hidden
+        accept="video/*"
+        disabled={loading}
         onChange={(e) => setFile(e.target.files?.[0] || null)}
       />
     </label>
