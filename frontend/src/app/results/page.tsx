@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useState, Suspense, ReactNode } from 'react';
+import { useEffect, useMemo, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
+import Image from 'next/image';
 
 // -----------------------------
-// TYPES
+// Types
 // -----------------------------
 type TimelineItem = {
   start: string;
@@ -19,6 +20,8 @@ type TimelineItem = {
 type Feedback = {
   summary?: string;
   timing?: string;
+  body_part_comments?: string[];
+  top_errors?: string[];
   detailed_timeline?: TimelineItem[];
 };
 
@@ -29,10 +32,18 @@ type Comparison = {
   feedback?: Feedback;
 };
 
+type Visuals = {
+  reference?: { preview_images?: string[]; overlay_video?: string };
+  user?: { preview_images?: string[]; overlay_video?: string };
+};
+
 type AnalysisResult = {
   score?: number;
   feedback?: Feedback;
   comparison?: Comparison;
+  visuals?: Visuals;
+  outputs?: { visuals?: Visuals };
+  message?: string;
 };
 
 // -----------------------------
@@ -42,61 +53,80 @@ function ResultsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  const errorParam = searchParams.get('error');
+
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || '';
+
+  const toBackendUrl = (p: string): string => {
+    if (!p) return '';
+    if (p.startsWith('http')) return p;
+    return `${BACKEND_URL}${p.startsWith('/') ? '' : '/'}${p}`;
+  };
+
   // -----------------------------
-  // LOAD
+  // LOAD DATA
   // -----------------------------
   useEffect(() => {
     try {
-      const stored =
-        sessionStorage.getItem('dp_results') ||
-        sessionStorage.getItem('dp_result') ||
-        localStorage.getItem('dp_last_result');
-
-      if (!stored) {
+      if (errorParam) {
         setLoading(false);
         return;
       }
 
-      setResult(JSON.parse(stored));
+      const stored =
+        sessionStorage.getItem('dp_results') ||
+        localStorage.getItem('dp_last_result');
+
+      if (!stored) {
+        router.replace('/upload');
+        return;
+      }
+
+      const parsed: AnalysisResult = JSON.parse(stored);
+      setResult(parsed);
     } catch (e) {
       console.error(e);
+      router.replace('/upload');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [router, errorParam]);
 
   // -----------------------------
-  // DATA
+  // DERIVED METRICS (ENTERPRISE LAYER)
   // -----------------------------
-  const feedback = result?.feedback || result?.comparison?.feedback || {};
-  const timeline = feedback.detailed_timeline ?? [];
-
   const score = result?.score ?? result?.comparison?.similarity_score ?? 0;
 
-  const metrics = useMemo(() => {
+  const comparison = result?.comparison;
+
+  const visuals = result?.outputs?.visuals || result?.visuals || undefined;
+
+  const feedback = useMemo((): Feedback => {
+    return result?.feedback || result?.comparison?.feedback || {};
+  }, [result]);
+
+  const timeline = useMemo<TimelineItem[]>(() => {
+    return feedback?.detailed_timeline ?? [];
+  }, [feedback]);
+
+  const insights = useMemo(() => {
     return {
-      similarity: result?.comparison?.similarity_score ?? score,
-      frames: result?.comparison?.frames_compared ?? 0,
-      error: result?.comparison?.mean_landmark_distance ?? 0,
+      errors: feedback?.top_errors ?? [],
+      body: feedback?.body_part_comments ?? [],
     };
-  }, [result, score]);
+  }, [feedback]);
 
-  // -----------------------------
-  // JOINT ANALYTICS
-  // -----------------------------
-  const joints = useMemo(() => {
-    const map: Record<string, number> = {};
-
-    timeline.forEach((t) => {
-      if (!t.joint) return;
-      map[t.joint] = (map[t.joint] || 0) + 1;
-    });
-
-    return Object.entries(map).sort((a, b) => b[1] - a[1]);
-  }, [timeline]);
+  const kpis = useMemo(() => {
+    return {
+      score,
+      framesCompared: comparison?.frames_compared ?? 0,
+      meanDistance: comparison?.mean_landmark_distance ?? 0,
+      errorCount: insights.errors.length,
+    };
+  }, [score, comparison, insights]);
 
   // -----------------------------
   // LOADING
@@ -105,8 +135,8 @@ function ResultsContent() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-white via-[#cde7ff] to-[#d6c1ff]">
         <div className="text-center bg-white/70 p-10 rounded-xl">
-          <div className="animate-spin h-10 w-10 border-4 border-t-[#4b0082] border-gray-300 mx-auto mb-3" />
-          <p>Loading dashboard...</p>
+          <div className="animate-spin h-10 w-10 border-4 border-gray-300 border-t-[#4b0082] mx-auto mb-3" />
+          <p className="font-semibold">Analyzing performance...</p>
         </div>
       </div>
     );
@@ -117,148 +147,119 @@ function ResultsContent() {
       <div className="min-h-screen flex items-center justify-center">
         <button
           onClick={() => router.push('/upload')}
-          className="bg-[#4b0082] text-white px-5 py-3 rounded-lg"
+          className="bg-[#4b0082] text-white px-6 py-3 rounded-lg"
         >
-          Go Back
+          Back to Upload
         </button>
       </div>
     );
   }
 
   // -----------------------------
-  // UI
+  // DASHBOARD UI
   // -----------------------------
   return (
-    <div className="min-h-screen bg-gradient-to-br from-white via-[#cde7ff] to-[#d6c1ff] px-4 py-10 flex justify-center">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-6xl space-y-8"
-      >
-        {/* HEADER SCORE */}
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-[#4b0082]">Performance Dashboard</h1>
+    <div className="min-h-screen bg-gradient-to-br from-white via-[#cde7ff] to-[#d6c1ff] px-4 py-10">
+      <div className="max-w-6xl mx-auto space-y-6">
 
-          {/* SCORE RING */}
-          <div className="relative w-40 h-40 mx-auto mt-6">
-            <svg className="w-full h-full" viewBox="0 0 100 100">
-              <circle
-                cx="50"
-                cy="50"
-                r="40"
-                stroke="#e5e7eb"
-                strokeWidth="10"
-                fill="none"
-              />
-              <circle
-                cx="50"
-                cy="50"
-                r="40"
-                stroke="#4b0082"
-                strokeWidth="10"
-                fill="none"
-                strokeDasharray={`${score * 2.5}, 1000`}
-                strokeLinecap="round"
-              />
-            </svg>
+        {/* HEADER */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white/70 backdrop-blur-md rounded-2xl p-6"
+        >
+          <h1 className="text-2xl font-bold text-[#4b0082]">
+            Performance Analytics Dashboard
+          </h1>
+          <p className="text-gray-600">
+            Enterprise motion analysis report
+          </p>
+        </motion.div>
 
-            <div className="absolute inset-0 flex items-center justify-center">
-              <p className="text-2xl font-bold">{Number(score).toFixed(1)}</p>
-            </div>
-          </div>
+        {/* KPI GRID */}
+        <div className="grid md:grid-cols-4 gap-4">
+          <KPI label="Score" value={kpis.score.toFixed(1)} />
+          <KPI label="Frames Compared" value={kpis.framesCompared} />
+          <KPI label="Landmark Distance" value={kpis.meanDistance.toFixed(3)} />
+          <KPI label="Detected Issues" value={kpis.errorCount} />
         </div>
 
-        {/* METRICS */}
-        <Section title="Performance Metrics">
-          <div className="grid md:grid-cols-3 gap-4 text-center">
-            <Metric label="Similarity" value={metrics.similarity} />
-            <Metric label="Frames" value={metrics.frames} />
-            <Metric label="Error" value={metrics.error} />
-          </div>
-        </Section>
-
-        {/* COACH INSIGHT */}
-        <Section title="AI Coach Insight">
-          <p className="text-gray-700">
-            {score > 85
-              ? 'Excellent synchronization. Minor refinements will make it professional-level.'
-              : score > 70
-              ? 'Good performance but timing and joint alignment need improvement.'
-              : 'Significant improvement needed in timing, posture, and coordination.'}
-          </p>
-        </Section>
-
-        {/* JOINT ANALYSIS */}
-        {joints.length > 0 && (
-          <Section title="Weak Body Areas">
-            <div className="space-y-2">
-              {joints.map(([joint, count]) => (
-                <div
-                  key={joint}
-                  className="flex justify-between bg-white/60 p-3 rounded-lg"
-                >
-                  <span>{joint}</span>
-                  <span className="font-bold">{count}</span>
-                </div>
-              ))}
+        {/* VISUALS */}
+        {(visuals?.reference?.overlay_video || visuals?.user?.overlay_video) && (
+          <Panel title="Motion Overlay Comparison">
+            <div className="grid md:grid-cols-2 gap-4">
+              {visuals?.reference?.overlay_video && (
+                <video
+                  className="rounded-xl"
+                  controls
+                  src={toBackendUrl(visuals.reference.overlay_video)}
+                />
+              )}
+              {visuals?.user?.overlay_video && (
+                <video
+                  className="rounded-xl"
+                  controls
+                  src={toBackendUrl(visuals.user.overlay_video)}
+                />
+              )}
             </div>
-          </Section>
+          </Panel>
         )}
+
+        {/* INSIGHTS */}
+        <Panel title="AI Insights">
+          <div className="space-y-2">
+            {insights.errors.map((e: string, i: number) => (
+              <p key={i} className="text-red-600">⚠ {e}</p>
+            ))}
+            {insights.body.map((b: string, i: number) => (
+              <p key={i} className="text-gray-700">• {b}</p>
+            ))}
+          </div>
+        </Panel>
 
         {/* TIMELINE */}
-        {timeline.length > 0 && (
-          <Section title="Timeline Analysis">
-            <div className="space-y-3">
-              {timeline.map((t, i) => (
-                <div key={i} className="p-4 bg-white/60 rounded-xl">
-                  <p className="font-semibold">
-                    {t.start} - {t.end} ({t.joint})
-                  </p>
-                  <p className="text-sm text-gray-700">{t.message}</p>
+        <Panel title="Frame-by-Frame Coaching Timeline">
+          <div className="space-y-3">
+            {timeline.map((t: TimelineItem, i: number) => (
+              <div key={i} className="p-4 bg-white/60 rounded-xl">
+                <p className="font-semibold">
+                  {t.start} - {t.end} ({t.body_part})
+                </p>
+                <p className="text-sm text-gray-700">{t.message}</p>
+              </div>
+            ))}
+          </div>
+        </Panel>
 
-                  <span
-                    className={`text-xs px-2 py-1 rounded mt-2 inline-block ${
-                      t.severity === 'high'
-                        ? 'bg-red-200'
-                        : t.severity === 'medium'
-                        ? 'bg-yellow-200'
-                        : 'bg-green-200'
-                    }`}
-                  >
-                    {t.severity}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </Section>
-        )}
-
-        {/* BUTTON */}
+        {/* ACTION */}
         <button
           onClick={() => router.push('/upload')}
-          className="w-full bg-[#4b0082] text-white py-3 rounded-lg"
+          className="w-full bg-[#4b0082] text-white py-3 rounded-lg font-semibold"
         >
-          Analyze Again
+          Run New Analysis
         </button>
-      </motion.div>
+      </div>
     </div>
   );
 }
 
 // -----------------------------
-function Metric({ label, value }: { label: string; value: number | string }) {
+// COMPONENTS
+// -----------------------------
+function KPI({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="bg-white/60 p-4 rounded-xl">
+    <div className="bg-white/70 rounded-xl p-4">
       <p className="text-sm text-gray-600">{label}</p>
-      <p className="text-xl font-bold">{value}</p>
+      <p className="text-2xl font-bold">{value}</p>
     </div>
   );
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-white/60 rounded-xl p-5 space-y-3">
-      <h2 className="font-bold text-lg">{title}</h2>
+    <div className="bg-white/70 rounded-2xl p-6 space-y-4">
+      <h2 className="font-bold text-lg text-[#4b0082]">{title}</h2>
       {children}
     </div>
   );
