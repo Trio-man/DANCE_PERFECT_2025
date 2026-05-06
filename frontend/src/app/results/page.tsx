@@ -19,8 +19,6 @@ type TimelineItem = {
 type Feedback = {
   summary?: string;
   timing?: string;
-  body_part_comments?: string[];
-  top_errors?: string[];
   detailed_timeline?: TimelineItem[];
 };
 
@@ -43,7 +41,6 @@ type AnalysisResult = {
 function ResultsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const errorParam = searchParams.get('error');
 
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [loading, setLoading] = useState(true);
@@ -53,11 +50,6 @@ function ResultsContent() {
   // -----------------------------
   useEffect(() => {
     try {
-      if (errorParam) {
-        setLoading(false);
-        return;
-      }
-
       const stored =
         sessionStorage.getItem('dp_results') ||
         sessionStorage.getItem('dp_result') ||
@@ -74,19 +66,13 @@ function ResultsContent() {
     } finally {
       setLoading(false);
     }
-  }, [errorParam]);
+  }, []);
 
   // -----------------------------
-  // SAFE DERIVED DATA
+  // DATA
   // -----------------------------
-  const feedback = useMemo(() => {
-    return result?.feedback || result?.comparison?.feedback || {};
-  }, [result]);
-
-  const timeline = useMemo(
-    () => feedback.detailed_timeline ?? [],
-    [feedback.detailed_timeline]
-  );
+  const feedback = result?.feedback || result?.comparison?.feedback || {};
+  const timeline = feedback.detailed_timeline ?? [];
 
   const score = result?.score ?? result?.comparison?.similarity_score ?? 0;
 
@@ -99,34 +85,42 @@ function ResultsContent() {
   }, [result, score]);
 
   // -----------------------------
+  // JOINT ANALYTICS
+  // -----------------------------
+  const joints = useMemo(() => {
+    const map: Record<string, number> = {};
+
+    timeline.forEach((t) => {
+      if (!t.joint) return;
+      map[t.joint] = (map[t.joint] || 0) + 1;
+    });
+
+    return Object.entries(map).sort((a, b) => b[1] - a[1]);
+  }, [timeline]);
+
+  // -----------------------------
   // LOADING
   // -----------------------------
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-white via-[#cde7ff] to-[#d6c1ff]">
         <div className="text-center bg-white/70 p-10 rounded-xl">
-          <div className="animate-spin h-10 w-10 border-4 border-gray-300 border-t-[#4b0082] mx-auto mb-3" />
-          <p className="font-semibold">Loading results...</p>
+          <div className="animate-spin h-10 w-10 border-4 border-t-[#4b0082] border-gray-300 mx-auto mb-3" />
+          <p>Loading dashboard...</p>
         </div>
       </div>
     );
   }
 
-  // -----------------------------
-  // EMPTY
-  // -----------------------------
   if (!result) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-white via-[#cde7ff] to-[#d6c1ff]">
-        <div className="text-center bg-white/70 p-10 rounded-xl">
-          <p>No results found</p>
-          <button
-            onClick={() => router.push('/upload')}
-            className="mt-4 bg-[#4b0082] text-white px-4 py-2 rounded"
-          >
-            Back
-          </button>
-        </div>
+      <div className="min-h-screen flex items-center justify-center">
+        <button
+          onClick={() => router.push('/upload')}
+          className="bg-[#4b0082] text-white px-5 py-3 rounded-lg"
+        >
+          Go Back
+        </button>
       </div>
     );
   }
@@ -137,16 +131,41 @@ function ResultsContent() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-white via-[#cde7ff] to-[#d6c1ff] px-4 py-10 flex justify-center">
       <motion.div
-        initial={{ opacity: 0, y: 15 }}
+        initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-5xl bg-white/70 rounded-2xl p-8 space-y-8"
+        className="w-full max-w-6xl space-y-8"
       >
-        {/* SCORE */}
+        {/* HEADER SCORE */}
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-[#4b0082]">Score</h1>
-          <p className="text-6xl font-extrabold mt-3">
-            {Number(score).toFixed(1)}
-          </p>
+          <h1 className="text-2xl font-bold text-[#4b0082]">Performance Dashboard</h1>
+
+          {/* SCORE RING */}
+          <div className="relative w-40 h-40 mx-auto mt-6">
+            <svg className="w-full h-full" viewBox="0 0 100 100">
+              <circle
+                cx="50"
+                cy="50"
+                r="40"
+                stroke="#e5e7eb"
+                strokeWidth="10"
+                fill="none"
+              />
+              <circle
+                cx="50"
+                cy="50"
+                r="40"
+                stroke="#4b0082"
+                strokeWidth="10"
+                fill="none"
+                strokeDasharray={`${score * 2.5}, 1000`}
+                strokeLinecap="round"
+              />
+            </svg>
+
+            <div className="absolute inset-0 flex items-center justify-center">
+              <p className="text-2xl font-bold">{Number(score).toFixed(1)}</p>
+            </div>
+          </div>
         </div>
 
         {/* METRICS */}
@@ -158,9 +177,37 @@ function ResultsContent() {
           </div>
         </Section>
 
+        {/* COACH INSIGHT */}
+        <Section title="AI Coach Insight">
+          <p className="text-gray-700">
+            {score > 85
+              ? 'Excellent synchronization. Minor refinements will make it professional-level.'
+              : score > 70
+              ? 'Good performance but timing and joint alignment need improvement.'
+              : 'Significant improvement needed in timing, posture, and coordination.'}
+          </p>
+        </Section>
+
+        {/* JOINT ANALYSIS */}
+        {joints.length > 0 && (
+          <Section title="Weak Body Areas">
+            <div className="space-y-2">
+              {joints.map(([joint, count]) => (
+                <div
+                  key={joint}
+                  className="flex justify-between bg-white/60 p-3 rounded-lg"
+                >
+                  <span>{joint}</span>
+                  <span className="font-bold">{count}</span>
+                </div>
+              ))}
+            </div>
+          </Section>
+        )}
+
         {/* TIMELINE */}
         {timeline.length > 0 && (
-          <Section title="Timeline">
+          <Section title="Timeline Analysis">
             <div className="space-y-3">
               {timeline.map((t, i) => (
                 <div key={i} className="p-4 bg-white/60 rounded-xl">
@@ -168,12 +215,25 @@ function ResultsContent() {
                     {t.start} - {t.end} ({t.joint})
                   </p>
                   <p className="text-sm text-gray-700">{t.message}</p>
+
+                  <span
+                    className={`text-xs px-2 py-1 rounded mt-2 inline-block ${
+                      t.severity === 'high'
+                        ? 'bg-red-200'
+                        : t.severity === 'medium'
+                        ? 'bg-yellow-200'
+                        : 'bg-green-200'
+                    }`}
+                  >
+                    {t.severity}
+                  </span>
                 </div>
               ))}
             </div>
           </Section>
         )}
 
+        {/* BUTTON */}
         <button
           onClick={() => router.push('/upload')}
           className="w-full bg-[#4b0082] text-white py-3 rounded-lg"
@@ -186,15 +246,7 @@ function ResultsContent() {
 }
 
 // -----------------------------
-// STRICT TYPES (NO ANY)
-// -----------------------------
-function Metric({
-  label,
-  value,
-}: {
-  label: string;
-  value: string | number;
-}) {
+function Metric({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="bg-white/60 p-4 rounded-xl">
       <p className="text-sm text-gray-600">{label}</p>
@@ -203,13 +255,7 @@ function Metric({
   );
 }
 
-function Section({
-  title,
-  children,
-}: {
-  title: string;
-  children: ReactNode;
-}) {
+function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="bg-white/60 rounded-xl p-5 space-y-3">
       <h2 className="font-bold text-lg">{title}</h2>
