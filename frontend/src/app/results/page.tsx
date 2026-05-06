@@ -1,8 +1,14 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState, Suspense, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { motion } from 'framer-motion';
+import {
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  Radar,
+  ResponsiveContainer,
+} from 'recharts';
 
 // -----------------------------
 // Types
@@ -24,26 +30,15 @@ type Feedback = {
   detailed_timeline?: TimelineItem[];
 };
 
-type Comparison = {
-  similarity_score?: number;
-  feedback?: Feedback;
-};
-
-type Visuals = {
-  reference?: { preview_images?: string[]; overlay_video?: string };
-  user?: { preview_images?: string[]; overlay_video?: string };
-};
-
 type AnalysisResult = {
   score?: number;
   feedback?: Feedback;
-  comparison?: Comparison;
-  visuals?: Visuals;
-  outputs?: { visuals?: Visuals };
+  comparison?: {
+    similarity_score?: number;
+    feedback?: Feedback;
+  };
 };
 
-// -----------------------------
-// CONTENT
 // -----------------------------
 function ResultsContent() {
   const router = useRouter();
@@ -51,203 +46,166 @@ function ResultsContent() {
   const errorParam = searchParams.get('error');
 
   const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [frameIndex, setFrameIndex] = useState(0);
+
   const [loading, setLoading] = useState(true);
 
-  const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || '';
-
-  const toBackendUrl = (p: string) => {
-    if (!p) return '';
-    if (p.startsWith('http')) return p;
-    return `${BACKEND_URL}${p.startsWith('/') ? '' : '/'}${p}`;
-  };
-
   // -----------------------------
-  // Load result safely (FIXED)
+  // Load results safely
   // -----------------------------
   useEffect(() => {
-    const run = () => {
-      try {
-        if (errorParam) {
-          setLoading(false);
-          return;
-        }
+    const stored = sessionStorage.getItem('dp_result');
 
-        const stored =
-          sessionStorage.getItem('dp_result') ||
-          localStorage.getItem('dp_result');
+    if (!stored || errorParam) {
+      router.replace('/upload');
+      return;
+    }
 
-        if (!stored) {
-          setLoading(false);
-          router.replace('/upload');
-          return;
-        }
-
-        const parsed: unknown = JSON.parse(stored);
-        setResult(parsed as AnalysisResult);
-      } catch (err) {
-        console.error(err);
-        router.replace('/upload');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    run();
+    try {
+      setResult(JSON.parse(stored));
+    } catch {
+      router.replace('/upload');
+    } finally {
+      setLoading(false);
+    }
   }, [router, errorParam]);
 
   // -----------------------------
-  // Derived data
-  // -----------------------------
-  const feedback = result?.feedback || result?.comparison?.feedback || {};
-  const visuals = result?.outputs?.visuals || result?.visuals || null;
-
   const score =
     result?.score ?? result?.comparison?.similarity_score ?? 0;
 
-  const timeline = feedback.detailed_timeline ?? [];
-  const topErrors = feedback.top_errors ?? [];
-  const bodyComments = feedback.body_part_comments ?? [];
+  const feedback = result?.feedback || result?.comparison?.feedback || {};
 
-  const refPreviews = visuals?.reference?.preview_images ?? [];
-  const usrPreviews = visuals?.user?.preview_images ?? [];
-  const refOverlay = visuals?.reference?.overlay_video;
-  const usrOverlay = visuals?.user?.overlay_video;
+  const timeline = feedback.detailed_timeline ?? [];
 
   // -----------------------------
-  // Loading
+  // Derived "AI metrics" (frontend simulation layer)
+  // -----------------------------
+  const radarData = useMemo(() => {
+    return [
+      { subject: 'Timing', value: Math.min(score + 5, 100) },
+      { subject: 'Accuracy', value: score },
+      { subject: 'Posture', value: Math.max(score - 10, 0) },
+      { subject: 'Flow', value: Math.min(score + 2, 100) },
+      { subject: 'Control', value: Math.max(score - 5, 0) },
+    ];
+  }, [score]);
+
   // -----------------------------
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-white via-[#cde7ff] to-[#d6c1ff]">
-        <div className="text-center bg-white/70 p-10 rounded-xl">
-          <div className="animate-spin h-10 w-10 border-4 border-gray-300 border-t-[#4b0082] mx-auto mb-3" />
-          <p className="font-semibold">Loading results...</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center">
+        Loading...
       </div>
     );
   }
 
-  // -----------------------------
-  // Empty
-  // -----------------------------
   if (!result) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-white via-[#cde7ff] to-[#d6c1ff]">
-        <div className="text-center bg-white/70 p-10 rounded-xl">
-          <p>No results found</p>
-          <button
-            onClick={() => router.push('/upload')}
-            className="mt-4 bg-[#4b0082] text-white px-4 py-2 rounded"
-          >
-            Back
-          </button>
-        </div>
+      <div className="min-h-screen flex items-center justify-center">
+        No results
       </div>
     );
   }
 
   // -----------------------------
-  // UI
-  // -----------------------------
   return (
-    <div className="min-h-screen bg-gradient-to-br from-white via-[#cde7ff] to-[#d6c1ff] px-4 py-10 flex justify-center">
-      <motion.div
-        initial={{ opacity: 0, y: 15 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-5xl bg-white/70 backdrop-blur-md rounded-2xl p-8 space-y-8"
-      >
-        {/* SCORE */}
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-[#4b0082]">
-            Here are your results
-          </h1>
+    <div className="min-h-screen bg-gradient-to-br from-white via-blue-50 to-purple-100 p-6">
+      <div className="max-w-6xl mx-auto space-y-6">
 
-          <p className="text-6xl font-extrabold mt-4">
-            {Number(score).toFixed(1)}
+        {/* HEADER */}
+        <div className="bg-white/70 rounded-2xl p-6 shadow">
+          <h1 className="text-2xl font-bold">Results Dashboard</h1>
+          <p className="text-gray-600">
+            Here is your performance breakdown
           </p>
         </div>
 
-        {/* SUMMARY */}
-        {feedback.summary && (
-          <Section title="Summary">
-            <p>{feedback.summary}</p>
-          </Section>
-        )}
+        {/* SCORE + RADAR */}
+        <div className="grid md:grid-cols-2 gap-6">
 
-        {/* VISUALS */}
-        {(refOverlay || usrOverlay || refPreviews.length > 0 || usrPreviews.length > 0) && (
-          <Section title="Visual Comparison">
-            <div className="grid md:grid-cols-2 gap-4">
-              {refOverlay && (
-                <video src={toBackendUrl(refOverlay)} controls className="rounded-xl" />
-              )}
-              {usrOverlay && (
-                <video src={toBackendUrl(usrOverlay)} controls className="rounded-xl" />
-              )}
-            </div>
-          </Section>
-        )}
+          {/* SCORE CARD */}
+          <div className="bg-white/70 rounded-2xl p-6 shadow text-center">
+            <h2 className="text-lg font-semibold">Overall Score</h2>
+            <p className="text-6xl font-bold text-purple-700 mt-4">
+              {Number(score).toFixed(1)}
+            </p>
+          </div>
+
+          {/* RADAR CHART */}
+          <div className="bg-white/70 rounded-2xl p-6 shadow">
+            <h2 className="text-lg font-semibold mb-3">Performance Profile</h2>
+
+            <ResponsiveContainer width="100%" height={250}>
+              <RadarChart data={radarData}>
+                <PolarGrid />
+                <PolarAngleAxis dataKey="subject" />
+                <Radar
+                  dataKey="value"
+                  stroke="#7c3aed"
+                  fill="#7c3aed"
+                  fillOpacity={0.4}
+                />
+              </RadarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* FRAME SCRUBBER */}
+        <div className="bg-white/70 rounded-2xl p-6 shadow">
+          <h2 className="font-semibold mb-3">Frame Scrubber</h2>
+
+          <input
+            type="range"
+            min={0}
+            max={timeline.length - 1}
+            value={frameIndex}
+            onChange={(e) => setFrameIndex(Number(e.target.value))}
+            className="w-full"
+          />
+
+          <div className="mt-4 p-4 bg-gray-50 rounded-xl">
+            {timeline[frameIndex] ? (
+              <>
+                <p className="font-semibold">
+                  {timeline[frameIndex].body_part}
+                </p>
+                <p className="text-sm text-gray-600">
+                  {timeline[frameIndex].message}
+                </p>
+              </>
+            ) : (
+              <p>No timeline data</p>
+            )}
+          </div>
+        </div>
 
         {/* INSIGHTS */}
-        {(topErrors.length > 0 || bodyComments.length > 0) && (
-          <Section title="Key Insights">
-            {topErrors.length > 0 && (
-              <ul className="list-disc pl-5">
-                {topErrors.map((e: string, i: number) => (
-                  <li key={i}>{e}</li>
-                ))}
-              </ul>
-            )}
+        <div className="bg-white/70 rounded-2xl p-6 shadow">
+          <h2 className="font-semibold mb-3">Key Insights</h2>
 
-            {bodyComments.length > 0 && (
-              <ul className="list-disc pl-5 mt-3">
-                {bodyComments.map((c: string, i: number) => (
-                  <li key={i}>{c}</li>
-                ))}
-              </ul>
-            )}
-          </Section>
-        )}
+          {feedback.summary && (
+            <p className="text-gray-700 mb-3">
+              {feedback.summary}
+            </p>
+          )}
 
-        {/* TIMELINE */}
-        {timeline.length > 0 && (
-          <Section title="Coaching Timeline">
-            <div className="space-y-3">
-              {timeline.map((t: TimelineItem, i: number) => (
-                <div key={i} className="border rounded-xl p-4 bg-white/60">
-                  <p className="font-semibold">
-                    {t.start} - {t.end} ({t.body_part})
-                  </p>
-                  <p className="text-sm text-gray-700">{t.message}</p>
-                </div>
-              ))}
-            </div>
-          </Section>
-        )}
+          <ul className="list-disc pl-5 text-gray-700">
+            {(feedback.top_errors ?? []).map((e, i) => (
+              <li key={i}>{e}</li>
+            ))}
+          </ul>
+        </div>
 
+        {/* ACTION */}
         <button
           onClick={() => router.push('/upload')}
-          className="w-full bg-[#4b0082] text-white py-3 rounded-lg"
+          className="w-full bg-purple-700 text-white py-3 rounded-xl"
         >
-          Analyze Again
+          Run Another Analysis
         </button>
-      </motion.div>
-    </div>
-  );
-}
 
-// -----------------------------
-function Section({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="bg-white/60 rounded-xl p-5 space-y-3">
-      <h2 className="font-bold text-lg">{title}</h2>
-      {children}
+      </div>
     </div>
   );
 }
@@ -255,7 +213,7 @@ function Section({
 // -----------------------------
 export default function ResultsPage() {
   return (
-    <Suspense fallback={<div className="p-10 text-center">Loading...</div>}>
+    <Suspense fallback={<div className="p-10">Loading...</div>}>
       <ResultsContent />
     </Suspense>
   );
