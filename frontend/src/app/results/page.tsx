@@ -1,28 +1,18 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, Suspense } from 'react';
+import { useEffect, useMemo, useState, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import Image from 'next/image';
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-} from 'recharts';
 
 // -----------------------------
-// Types
+// TYPES (safe + flexible)
 // -----------------------------
 type TimelineItem = {
-  start: string;
-  end: string;
-  severity: string;
-  body_part: string;
-  joint: string;
-  message: string;
+  start?: string;
+  end?: string;
+  body_part?: string;
+  message?: string;
 };
 
 type Feedback = {
@@ -33,11 +23,6 @@ type Feedback = {
   detailed_timeline?: TimelineItem[];
 };
 
-type Visuals = {
-  reference?: { preview_images?: string[]; overlay_video?: string };
-  user?: { preview_images?: string[]; overlay_video?: string };
-};
-
 type AnalysisResult = {
   score?: number;
   feedback?: Feedback;
@@ -45,8 +30,8 @@ type AnalysisResult = {
     similarity_score?: number;
     feedback?: Feedback;
   };
-  visuals?: Visuals;
-  outputs?: { visuals?: Visuals };
+  visuals?: any;
+  outputs?: any;
 };
 
 // -----------------------------
@@ -58,76 +43,82 @@ function ResultsContent() {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const [time, setTime] = useState(0);
-
   // -----------------------------
-  // LOAD RESULT
+  // LOAD RESULT (FIXED SAFE FLOW)
   // -----------------------------
   useEffect(() => {
     try {
-      const stored = sessionStorage.getItem('dp_result');
+      const stored =
+        sessionStorage.getItem('dp_result') ||
+        localStorage.getItem('dp_last_result');
 
       if (!stored) {
-        router.replace('/upload');
+        setResult(null);
+        setLoading(false);
         return;
       }
 
-      const parsed: AnalysisResult = JSON.parse(stored);
+      const parsed = JSON.parse(stored);
       setResult(parsed);
     } catch (e) {
-      console.error(e);
-      router.replace('/upload');
+      console.error('Result parse error:', e);
+      setResult(null);
     } finally {
       setLoading(false);
     }
-  }, [router]);
+  }, []);
 
   // -----------------------------
-  // DERIVED DATA
+  // SAFE DERIVED DATA
   // -----------------------------
   const score =
-    result?.score ?? result?.comparison?.similarity_score ?? 0;
+    result?.score ??
+    result?.comparison?.similarity_score ??
+    0;
 
-  const feedback = useMemo(() => {
-    return result?.feedback || result?.comparison?.feedback || {};
-  }, [result]);
+  const feedback = result?.feedback || result?.comparison?.feedback || {};
 
-  const visuals = result?.outputs?.visuals || result?.visuals;
+  const timeline = feedback?.detailed_timeline ?? [];
+  const topErrors = feedback?.top_errors ?? [];
 
-  const timeline = feedback.detailed_timeline ?? [];
-  const topErrors = feedback.top_errors ?? [];
-
-  const chartData = useMemo(() => {
-    return timeline.map((t, i) => ({
-      frame: i + 1,
-      severity: Number(t.severity) || 0,
-    }));
-  }, [timeline]);
-
-  const videoUrl =
-    visuals?.user?.overlay_video || visuals?.reference?.overlay_video || '';
+  const bodyComments = feedback?.body_part_comments ?? [];
 
   // -----------------------------
   // LOADING
   // -----------------------------
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        Loading...
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-white via-blue-100 to-purple-100">
+        <div className="text-center">
+          <div className="animate-spin h-10 w-10 border-4 border-gray-300 border-t-purple-600 mx-auto mb-4 rounded-full" />
+          <p className="font-semibold">Loading your analysis...</p>
+        </div>
       </div>
     );
   }
 
   // -----------------------------
-  // EMPTY STATE
+  // EMPTY STATE (FIXED)
   // -----------------------------
   if (!result) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <button onClick={() => router.push('/upload')}>
-          Back to Upload
-        </button>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-white via-blue-100 to-purple-100">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center bg-white/70 p-8 rounded-xl"
+        >
+          <h2 className="text-xl font-bold mb-2">No Results Found</h2>
+          <p className="text-gray-600 mb-4">
+            Run an analysis first to see your dashboard.
+          </p>
+          <button
+            onClick={() => router.push('/upload')}
+            className="bg-purple-600 text-white px-5 py-2 rounded-lg"
+          >
+            Go to Upload
+          </button>
+        </motion.div>
       </div>
     );
   }
@@ -136,135 +127,94 @@ function ResultsContent() {
   // UI
   // -----------------------------
   return (
-    <div className="min-h-screen bg-gradient-to-br from-white via-blue-50 to-purple-100 p-6">
-      <div className="max-w-6xl mx-auto space-y-10">
+    <div className="min-h-screen bg-gradient-to-br from-white via-blue-100 to-purple-100 px-4 py-10 flex justify-center">
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="w-full max-w-5xl space-y-6"
+      >
 
-        {/* SCORE HERO */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center"
-        >
-          <h1 className="text-2xl font-bold">Here are your results</h1>
+        {/* HERO */}
+        <div className="bg-white/70 backdrop-blur-md rounded-2xl p-8 text-center shadow-lg">
+          <h1 className="text-2xl font-bold text-purple-700">
+            Here are your results
+          </h1>
 
-          <div className="text-6xl font-extrabold mt-4 text-purple-700">
-            {score.toFixed(1)}
-          </div>
+          <p className="text-6xl font-extrabold mt-4">
+            {Number(score).toFixed(1)}
+          </p>
 
           <p className="text-gray-600 mt-2">
-            {score > 80
-              ? 'Excellent performance'
-              : score > 60
-              ? 'Good but needs improvement'
-              : 'Needs practice'}
+            Overall performance score
           </p>
-        </motion.div>
-
-        {/* VIDEO SCRUBBER */}
-        {videoUrl && (
-          <div className="bg-white p-4 rounded-xl shadow">
-            <h2 className="font-semibold mb-3">Timeline Scrubber</h2>
-
-            <video
-              ref={videoRef}
-              src={videoUrl}
-              controls
-              className="w-full rounded-lg"
-              onTimeUpdate={(e) =>
-                setTime(e.currentTarget.currentTime)
-              }
-            />
-
-            <input
-              type="range"
-              className="w-full mt-3"
-              min={0}
-              max={videoRef.current?.duration || 100}
-              value={time}
-              onChange={(e) => {
-                const t = Number(e.target.value);
-                setTime(t);
-                if (videoRef.current) {
-                  videoRef.current.currentTime = t;
-                }
-              }}
-            />
-          </div>
-        )}
-
-        {/* CHART */}
-        <div className="bg-white p-4 rounded-xl shadow">
-          <h2 className="font-semibold mb-3">
-            Performance Over Time
-          </h2>
-
-          <ResponsiveContainer width="100%" height={250}>
-            <LineChart data={chartData}>
-              <XAxis dataKey="frame" />
-              <YAxis />
-              <Tooltip />
-              <Line
-                type="monotone"
-                dataKey="severity"
-                stroke="#7c3aed"
-              />
-            </LineChart>
-          </ResponsiveContainer>
         </div>
 
-        {/* VISUALS */}
-        {(visuals?.user?.preview_images?.length ||
-          visuals?.reference?.preview_images?.length) && (
-          <div className="bg-white p-4 rounded-xl shadow">
-            <h2 className="font-semibold mb-3">Frame Comparison</h2>
-
-            <div className="grid grid-cols-2 gap-4">
-              {visuals?.reference?.preview_images?.map((img, i) => (
-                <Image
-                  key={i}
-                  src={img}
-                  alt="ref"
-                  width={400}
-                  height={250}
-                />
-              ))}
-
-              {visuals?.user?.preview_images?.map((img, i) => (
-                <Image
-                  key={i}
-                  src={img}
-                  alt="user"
-                  width={400}
-                  height={250}
-                />
-              ))}
-            </div>
-          </div>
+        {/* SUMMARY */}
+        {feedback.summary && (
+          <Section title="AI Summary">
+            <p className="text-gray-700">{feedback.summary}</p>
+          </Section>
         )}
 
-        {/* MISTAKES */}
-        <div className="bg-white p-4 rounded-xl shadow">
-          <h2 className="font-semibold mb-3">Key Mistakes</h2>
-
-          {topErrors.length === 0 ? (
-            <p className="text-gray-500">No major issues detected.</p>
-          ) : (
-            <ul className="list-disc pl-5 space-y-2">
+        {/* KEY MISTAKES */}
+        {(topErrors.length > 0 || bodyComments.length > 0) && (
+          <Section title="Key Mistakes">
+            <ul className="list-disc pl-5 text-gray-700 space-y-1">
               {topErrors.map((e, i) => (
                 <li key={i}>{e}</li>
               ))}
+              {bodyComments.map((c, i) => (
+                <li key={i}>{c}</li>
+              ))}
             </ul>
-          )}
-        </div>
+          </Section>
+        )}
 
-        {/* BACK */}
+        {/* TIMELINE (SAFE) */}
+        {timeline.length > 0 && (
+          <Section title="Frame-by-Frame Coaching">
+            <div className="space-y-3">
+              {timeline.map((t, i) => (
+                <div
+                  key={i}
+                  className="bg-white/60 p-4 rounded-xl border"
+                >
+                  <p className="font-semibold">
+                    {t.start} - {t.end}
+                  </p>
+                  <p className="text-gray-700">{t.message}</p>
+                </div>
+              ))}
+            </div>
+          </Section>
+        )}
+
+        {/* ACTION */}
         <button
           onClick={() => router.push('/upload')}
-          className="w-full bg-purple-700 text-white py-3 rounded-lg"
+          className="w-full bg-purple-700 text-white py-3 rounded-xl font-semibold"
         >
-          Upload Another Video
+          Analyze Another Video
         </button>
-      </div>
+      </motion.div>
+    </div>
+  );
+}
+
+// -----------------------------
+function Section({
+  title,
+  children
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="bg-white/60 rounded-xl p-6 space-y-3">
+      <h2 className="font-bold text-lg text-purple-700">
+        {title}
+      </h2>
+      {children}
     </div>
   );
 }
@@ -272,7 +222,7 @@ function ResultsContent() {
 // -----------------------------
 export default function ResultsPage() {
   return (
-    <Suspense fallback={<div className="p-10">Loading...</div>}>
+    <Suspense fallback={<div className="p-10 text-center">Loading...</div>}>
       <ResultsContent />
     </Suspense>
   );
