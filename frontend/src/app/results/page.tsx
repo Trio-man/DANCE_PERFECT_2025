@@ -142,7 +142,7 @@ function ResultsContent() {
         {/* SCORE */}
         <motion.div className="bg-white/70 p-8 rounded-2xl text-center">
           <h1 className="text-2xl font-bold text-purple-700">
-            Dance Analysis Results V4
+            Dance Analysis Results
           </h1>
 
           <p className="text-6xl font-extrabold mt-4">
