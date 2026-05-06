@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { createClient, Session, User } from '@supabase/supabase-js';
 import { FiArrowLeft, FiLogOut, FiUploadCloud, FiList } from 'react-icons/fi';
 
@@ -237,7 +237,8 @@ export default function UploadPage() {
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="min-h-screen flex flex-col items-center justify-center px-4 bg-gradient-to-br from-[#d6c1ff] via-[#cde7ff] to-white animate-gradient"
+      transition={{ duration: 0.8 }}
+      className="min-h-screen flex flex-col items-center justify-center px-4 bg-gradient-to-br from-[#d6c1ff] via-[#cde7ff] to-white"
     >
       <div className="w-full max-w-6xl flex flex-col gap-6 py-10">
 
@@ -249,27 +250,45 @@ export default function UploadPage() {
 
         {/* 1. RECORDING GUIDELINES */}
         {guidelinesPage && (
-          <div className="bg-white/60 border border-white/70 rounded-xl p-6">
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+            className="bg-white/60 border border-white/70 rounded-xl p-6"
+          >
             <h2 className="text-lg font-semibold mb-2" style={{ color: primaryColor }}>
               {guidelinesPage.title}
             </h2>
             <p className="text-slate-700 whitespace-pre-line">{guidelinesPage.body}</p>
-          </div>
+          </motion.div>
         )}
 
         {/* 2. VIDEO UPLOAD */}
-        <motion.div className="bg-white/70 backdrop-blur-lg border border-white/60 shadow-lg rounded-2xl p-8 relative">
-          {loading && (
-            <div className="absolute inset-0 bg-white/70 backdrop-blur-sm flex items-center justify-center rounded-2xl z-50">
-              <div className="text-center">
-                <div className="animate-spin h-10 w-10 rounded-full border-4 border-gray-300 border-t-gray-700 mx-auto mb-3" />
-                <p className="text-gray-700 font-semibold">Processing...</p>
-                <p className="text-gray-500 text-sm mt-1">
-                  Please wait while we analyze the videos.
-                </p>
-              </div>
-            </div>
-          )}
+        <motion.div
+          initial={{ scale: 0.95, opacity: 0, y: 20 }}
+          animate={{ scale: 1, opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+          className="bg-white/70 backdrop-blur-lg border border-white/60 shadow-lg rounded-2xl p-8 relative"
+        >
+          <AnimatePresence>
+            {loading && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.3 }}
+                className="absolute inset-0 bg-white/70 backdrop-blur-sm flex items-center justify-center rounded-2xl z-50"
+              >
+                <div className="text-center">
+                  <div className="animate-spin h-10 w-10 rounded-full border-4 border-gray-300 border-t-gray-700 mx-auto mb-3" />
+                  <p className="text-gray-700 font-semibold">Processing...</p>
+                  <p className="text-gray-500 text-sm mt-1">
+                    Please wait while we analyze the videos.
+                  </p>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           <button
             onClick={() => router.back()}
@@ -345,7 +364,12 @@ export default function UploadPage() {
 
         {/* 3. FAQs */}
         {faqs.length > 0 && (
-          <div className="bg-white/60 border border-white/70 rounded-xl p-6">
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.3 }}
+            className="bg-white/60 border border-white/70 rounded-xl p-6"
+          >
             <h2 className="text-lg font-semibold mb-3" style={{ color: primaryColor }}>
               FAQs
             </h2>
@@ -357,17 +381,22 @@ export default function UploadPage() {
                 </div>
               ))}
             </div>
-          </div>
+          </motion.div>
         )}
 
         {/* 4. ABOUT US */}
         {aboutPage && (
-          <div className="bg-white/60 border border-white/70 rounded-xl p-6">
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.4 }}
+            className="bg-white/60 border border-white/70 rounded-xl p-6"
+          >
             <h2 className="text-lg font-semibold mb-2" style={{ color: primaryColor }}>
               {aboutPage.title}
             </h2>
             <p className="text-slate-700 whitespace-pre-line">{aboutPage.body}</p>
-          </div>
+          </motion.div>
         )}
 
       </div>
@@ -387,14 +416,24 @@ interface VideoUploadProps {
 
 function VideoUpload({ label, preview, setFile, loading }: VideoUploadProps) {
   return preview ? (
-    <div className="flex-1 border rounded-xl p-6 bg-gray-50">
+    <motion.div
+      initial={{ scale: 0.95, opacity: 0, y: 20 }}
+      animate={{ scale: 1, opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+      className="flex-1 border rounded-xl p-6 bg-gray-50"
+    >
       <h2 className="text-lg font-semibold mb-3 text-center">{label}</h2>
       <div className="w-full h-36 md:h-80 rounded-lg overflow-hidden border border-slate-300 bg-black">
         <video src={preview} controls className="w-full h-full object-contain" />
       </div>
-    </div>
+    </motion.div>
   ) : (
-    <label className="flex-1 flex flex-col items-center justify-center w-full h-36 md:h-80 border border-slate-300 rounded-lg cursor-pointer hover:border-gray-400">
+    <motion.label
+      initial={{ scale: 0.95, opacity: 0, y: 20 }}
+      animate={{ scale: 1, opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+      className="flex-1 flex flex-col items-center justify-center w-full h-36 md:h-80 border border-slate-300 rounded-lg cursor-pointer hover:border-gray-400"
+    >
       <FiUploadCloud size={48} className="text-gray-400" />
       <span className="mt-2 text-gray-600">Upload {label}</span>
       <input
@@ -404,6 +443,6 @@ function VideoUpload({ label, preview, setFile, loading }: VideoUploadProps) {
         disabled={loading}
         onChange={(e) => setFile(e.target.files ? e.target.files[0] : null)}
       />
-    </label>
+    </motion.label>
   );
 }
