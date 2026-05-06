@@ -11,7 +11,9 @@ function dataURLtoBlob(dataUrl: string) {
   const bstr = atob(arr[1]);
   let n = bstr.length;
   const u8arr = new Uint8Array(n);
+
   while (n--) u8arr[n] = bstr.charCodeAt(n);
+
   return new Blob([u8arr], { type: mime });
 }
 
@@ -20,58 +22,69 @@ export default function LoadingPage() {
   const [msg, setMsg] = useState('Starting analysis...');
 
   useEffect(() => {
-  const run = async () => {
-    const dancer = sessionStorage.getItem('dp_dancer');
-    const choreo = sessionStorage.getItem('dp_choreo');
-    const token = sessionStorage.getItem('dp_token');
+    const run = async () => {
+      const dancer = sessionStorage.getItem('dp_dancer');
+      const choreo = sessionStorage.getItem('dp_choreo');
+      const token = sessionStorage.getItem('dp_token');
 
-    if (!dancer || !choreo) {
-      console.error('Missing videos');
-      setMsg('❌ Missing videos. Please go back and upload again.');
-      return;
-    }
+      if (!dancer || !choreo) {
+        console.error('Missing videos');
+        setMsg('❌ Missing videos. Please upload again.');
+        return;
+      }
 
-    if (!token) {
-      console.error('Missing token');
-      setMsg('❌ Missing session. Please log in again.');
-      router.replace('/login');
-      return;
-    }
+      if (!token) {
+        console.error('Missing token');
+        setMsg('❌ Session expired. Please log in again.');
+        router.replace('/login');
+        return;
+      }
 
-    const dancerBlob = dataURLtoBlob(dancer);
-    const choreoBlob = dataURLtoBlob(choreo);
+      try {
+        const dancerBlob = dataURLtoBlob(dancer);
+        const choreoBlob = dataURLtoBlob(choreo);
 
-    const formData = new FormData();
-    formData.append('dancer_video', dancerBlob, 'dancer.mp4');
-    formData.append('choreo_video', choreoBlob, 'choreo.mp4');
+        const formData = new FormData();
+        formData.append('dancer_video', dancerBlob, 'dancer.mp4');
+        formData.append('choreo_video', choreoBlob, 'choreo.mp4');
 
-    setMsg('Uploading videos to server...');
+        setMsg('Uploading videos to server...');
 
-    const res = await fetch(`/api/analyze`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      body: formData,
-    });
+        const res = await fetch(`/api/analyze`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
+        });
 
-    const json = await res.json();
-    console.log(json);
+        const json = await res.json();
 
-    if (!res.ok) {
-      setMsg(`❌ ${json?.error || 'Analyze failed'}`);
-      return;
-    }
+        console.log('ANALYSIS RESPONSE:', json);
 
-    // Save result for the next page (optional)
-    sessionStorage.setItem('dp_result', JSON.stringify(json));
+        if (!res.ok || !json) {
+          setMsg(`❌ Analysis failed: ${json?.error || 'Unknown error'}`);
+          return;
+        }
 
-    setMsg('✅ Analysis complete! Redirecting...');
-    router.replace('/results'); // change to your actual results page route
-  };
+        // ✅ FIXED: consistent key for results page
+        sessionStorage.setItem('dp_results', JSON.stringify(json));
 
-  run();
-}, [router]);
+        setMsg('✅ Analysis complete! Redirecting...');
+
+        // slight delay so UI updates properly
+        setTimeout(() => {
+          router.push('/results');
+        }, 600);
+      } catch (err) {
+        console.error(err);
+        setMsg('❌ Unexpected error during analysis.');
+      }
+    };
+
+    run();
+  }, [router]);
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -88,7 +101,9 @@ export default function LoadingPage() {
         <div className="animate-spin h-10 w-10 rounded-full border-4 border-gray-300 border-t-gray-700 mx-auto mb-4" />
 
         <p className="text-gray-800 font-semibold">{msg}</p>
-        <p className="text-gray-600 text-sm mt-1">Please wait a moment.</p>
+        <p className="text-gray-600 text-sm mt-1">
+          Please wait while we process your dance analysis.
+        </p>
       </motion.div>
     </motion.div>
   );
