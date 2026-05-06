@@ -1,12 +1,11 @@
 'use client';
 
-import { useEffect, useMemo, useState, Suspense } from 'react';
+import { useEffect, useMemo, useState, Suspense, ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
-import Image from 'next/image';
 
 // -----------------------------
-// Types
+// TYPES
 // -----------------------------
 type TimelineItem = {
   start: string;
@@ -32,17 +31,10 @@ type Comparison = {
   feedback?: Feedback;
 };
 
-type Visuals = {
-  reference?: { preview_images?: string[]; overlay_video?: string };
-  user?: { preview_images?: string[]; overlay_video?: string };
-};
-
 type AnalysisResult = {
   score?: number;
   feedback?: Feedback;
   comparison?: Comparison;
-  visuals?: Visuals;
-  outputs?: { visuals?: Visuals };
 };
 
 // -----------------------------
@@ -55,14 +47,6 @@ function ResultsContent() {
 
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [loading, setLoading] = useState(true);
-
-  const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || '';
-
-  const toBackendUrl = (p: string) => {
-    if (!p) return '';
-    if (p.startsWith('http')) return p;
-    return `${BACKEND_URL}${p.startsWith('/') ? '' : '/'}${p}`;
-  };
 
   // -----------------------------
   // LOAD
@@ -84,8 +68,7 @@ function ResultsContent() {
         return;
       }
 
-      const parsed: AnalysisResult = JSON.parse(stored);
-      setResult(parsed);
+      setResult(JSON.parse(stored));
     } catch (e) {
       console.error(e);
     } finally {
@@ -94,23 +77,19 @@ function ResultsContent() {
   }, [errorParam]);
 
   // -----------------------------
-  // DERIVED DATA
+  // SAFE DERIVED DATA
   // -----------------------------
   const feedback = useMemo(() => {
     return result?.feedback || result?.comparison?.feedback || {};
   }, [result]);
 
-  const visuals = useMemo(() => {
-    return result?.outputs?.visuals || result?.visuals || null;
-  }, [result]);
-
-  const timeline = feedback.detailed_timeline ?? [];
+  const timeline = useMemo(
+    () => feedback.detailed_timeline ?? [],
+    [feedback.detailed_timeline]
+  );
 
   const score = result?.score ?? result?.comparison?.similarity_score ?? 0;
 
-  // -----------------------------
-  // METRICS
-  // -----------------------------
   const metrics = useMemo(() => {
     return {
       similarity: result?.comparison?.similarity_score ?? score,
@@ -118,20 +97,6 @@ function ResultsContent() {
       error: result?.comparison?.mean_landmark_distance ?? 0,
     };
   }, [result, score]);
-
-  // -----------------------------
-  // JOINT ANALYTICS
-  // -----------------------------
-  const jointStats = useMemo(() => {
-    const map: Record<string, number> = {};
-
-    timeline.forEach((t) => {
-      if (!t.joint) return;
-      map[t.joint] = (map[t.joint] || 0) + 1;
-    });
-
-    return Object.entries(map).sort((a, b) => b[1] - a[1]);
-  }, [timeline]);
 
   // -----------------------------
   // LOADING
@@ -184,77 +149,31 @@ function ResultsContent() {
           </p>
         </div>
 
-        {/* METRICS CARD */}
+        {/* METRICS */}
         <Section title="Performance Metrics">
           <div className="grid md:grid-cols-3 gap-4 text-center">
             <Metric label="Similarity" value={metrics.similarity} />
             <Metric label="Frames" value={metrics.frames} />
-            <Metric label="Movement Error" value={metrics.error} />
+            <Metric label="Error" value={metrics.error} />
           </div>
         </Section>
 
-        {/* TIMING */}
-        {feedback.timing && (
-          <Section title="Timing Analysis">
-            <p>{feedback.timing}</p>
-          </Section>
-        )}
-
-        {/* JOINT ANALYTICS */}
-        {jointStats.length > 0 && (
-          <Section title="Problem Areas (Joints)">
-            <div className="space-y-2">
-              {jointStats.map(([joint, count]) => (
-                <div
-                  key={joint}
-                  className="flex justify-between bg-white/60 p-2 rounded"
-                >
-                  <span>{joint}</span>
-                  <span className="font-bold">{count}</span>
-                </div>
-              ))}
-            </div>
-          </Section>
-        )}
-
-        {/* SUMMARY */}
-        {feedback.summary && (
-          <Section title="Summary">
-            <p>{feedback.summary}</p>
-          </Section>
-        )}
-
         {/* TIMELINE */}
         {timeline.length > 0 && (
-          <Section title="Timeline (Detailed)">
+          <Section title="Timeline">
             <div className="space-y-3">
               {timeline.map((t, i) => (
                 <div key={i} className="p-4 bg-white/60 rounded-xl">
                   <p className="font-semibold">
                     {t.start} - {t.end} ({t.joint})
                   </p>
-
                   <p className="text-sm text-gray-700">{t.message}</p>
-
-                  {/* Severity badge */}
-                  <span
-                    className={`text-xs px-2 py-1 rounded mt-2 inline-block ${
-                      t.severity === 'high'
-                        ? 'bg-red-200'
-                        : t.severity === 'medium'
-                        ? 'bg-yellow-200'
-                        : 'bg-green-200'
-                    }`}
-                  >
-                    {t.severity}
-                  </span>
                 </div>
               ))}
             </div>
           </Section>
         )}
 
-        {/* ACTION */}
         <button
           onClick={() => router.push('/upload')}
           className="w-full bg-[#4b0082] text-white py-3 rounded-lg"
@@ -267,7 +186,15 @@ function ResultsContent() {
 }
 
 // -----------------------------
-function Metric({ label, value }: any) {
+// STRICT TYPES (NO ANY)
+// -----------------------------
+function Metric({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | number;
+}) {
   return (
     <div className="bg-white/60 p-4 rounded-xl">
       <p className="text-sm text-gray-600">{label}</p>
@@ -276,8 +203,13 @@ function Metric({ label, value }: any) {
   );
 }
 
-// -----------------------------
-function Section({ title, children }: any) {
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
   return (
     <div className="bg-white/60 rounded-xl p-5 space-y-3">
       <h2 className="font-bold text-lg">{title}</h2>
