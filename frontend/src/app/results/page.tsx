@@ -53,47 +53,71 @@ function ResultsContent() {
 
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [loading, setLoading] = useState(true);
+  const [hydrated, setHydrated] = useState(false);
 
   const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
-  const toBackendUrl = (p: string) => {
+  const toBackendUrl = (p?: string) => {
     if (!p) return '';
     if (p.startsWith('http')) return p;
     return `${BACKEND_URL}${p.startsWith('/') ? '' : '/'}${p}`;
   };
 
   // -----------------------------
-  // Load results safely
+  // FIX: hydration guard (IMPORTANT)
   // -----------------------------
   useEffect(() => {
-    try {
-      if (errorParam) {
-        setLoading(false);
-        return;
-      }
-
-      const stored =
-        sessionStorage.getItem('dp_results') ||
-        localStorage.getItem('dp_last_result');
-
-      if (!stored) {
-        setLoading(false);
-        router.replace('/upload');
-        return;
-      }
-
-      const parsed: AnalysisResult = JSON.parse(stored);
-      setResult(parsed);
-    } catch (e) {
-      console.error(e);
-      router.replace('/upload');
-    } finally {
-      setLoading(false);
-    }
-  }, [router, errorParam]);
+    setHydrated(true);
+  }, []);
 
   // -----------------------------
-  // Derived data
+  // FIXED LOAD LOGIC
+  // -----------------------------
+  useEffect(() => {
+    if (!hydrated) return;
+
+    let cancelled = false;
+
+    const run = () => {
+      try {
+        if (errorParam) {
+          setLoading(false);
+          return;
+        }
+
+        // ✅ FIX: accept multiple possible keys
+        const stored =
+          sessionStorage.getItem('dp_results') ||
+          sessionStorage.getItem('dp_result') ||
+          sessionStorage.getItem('dp_analysis_result') ||
+          localStorage.getItem('dp_last_result');
+
+        // ✅ FIX: do NOT instantly redirect (prevents flicker bug)
+        if (!stored) {
+          setTimeout(() => {
+            if (!cancelled) router.replace('/upload');
+          }, 300);
+          return;
+        }
+
+        const parsed: AnalysisResult = JSON.parse(stored);
+
+        if (!cancelled) setResult(parsed);
+      } catch (e) {
+        console.error(e);
+        router.replace('/upload');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated, router, errorParam]);
+
   // -----------------------------
   const feedback = useMemo(() => {
     return result?.feedback || result?.comparison?.feedback || {};
@@ -105,7 +129,6 @@ function ResultsContent() {
 
   const score = result?.score ?? result?.comparison?.similarity_score ?? 0;
 
-  // Score label
   const scoreLabel = useMemo(() => {
     if (score >= 90) return 'Excellent synchronization';
     if (score >= 80) return 'Very good performance';
@@ -114,8 +137,6 @@ function ResultsContent() {
     return 'Needs improvement';
   }, [score]);
 
-  // -----------------------------
-  // Loading UI
   // -----------------------------
   if (loading) {
     return (
@@ -129,9 +150,9 @@ function ResultsContent() {
   }
 
   // -----------------------------
-  // Empty state
+  // FIX: only redirect if truly empty AFTER hydration
   // -----------------------------
-  if (!result) {
+  if (!result && hydrated) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-white via-[#cde7ff] to-[#d6c1ff]">
         <div className="text-center bg-white/70 p-10 rounded-xl">
@@ -157,8 +178,6 @@ function ResultsContent() {
   const refOverlay = visuals?.reference?.overlay_video;
   const usrOverlay = visuals?.user?.overlay_video;
 
-  // -----------------------------
-  // UI
   // -----------------------------
   return (
     <div className="min-h-screen bg-gradient-to-br from-white via-[#cde7ff] to-[#d6c1ff] px-4 py-10 flex justify-center">
@@ -186,7 +205,7 @@ function ResultsContent() {
         )}
 
         {/* VISUALS */}
-        {(refOverlay || usrOverlay || refPreviews.length || usrPreviews.length) && (
+        {(refOverlay || usrOverlay || refPreviews.length > 0 || usrPreviews.length > 0) && (
           <Section title="Visual Comparison">
             <div className="grid md:grid-cols-2 gap-4">
               {refOverlay && (
@@ -196,46 +215,20 @@ function ResultsContent() {
                 <video src={toBackendUrl(usrOverlay)} controls className="rounded-xl" />
               )}
             </div>
-
-            <div className="grid md:grid-cols-2 gap-4 mt-4">
-              {refPreviews.map((img, i) => (
-                <Image
-                  key={i}
-                  src={toBackendUrl(img)}
-                  alt="ref"
-                  width={300}
-                  height={200}
-                  className="rounded-xl"
-                />
-              ))}
-              {usrPreviews.map((img, i) => (
-                <Image
-                  key={i}
-                  src={toBackendUrl(img)}
-                  alt="user"
-                  width={300}
-                  height={200}
-                  className="rounded-xl"
-                />
-              ))}
-            </div>
           </Section>
         )}
 
         {/* INSIGHTS */}
         {(topErrors.length > 0 || bodyComments.length > 0) && (
           <Section title="Key Insights">
-            {topErrors.length > 0 && (
-              <ul className="list-disc pl-5">
-                {topErrors.map((e, i) => <li key={i}>{e}</li>)}
-              </ul>
-            )}
-
-            {bodyComments.length > 0 && (
-              <ul className="list-disc pl-5 mt-3">
-                {bodyComments.map((c, i) => <li key={i}>{c}</li>)}
-              </ul>
-            )}
+            <ul className="list-disc pl-5">
+              {topErrors.map((e, i) => (
+                <li key={i}>{e}</li>
+              ))}
+              {bodyComments.map((c, i) => (
+                <li key={i}>{c}</li>
+              ))}
+            </ul>
           </Section>
         )}
 
@@ -255,7 +248,6 @@ function ResultsContent() {
           </Section>
         )}
 
-        {/* ACTION */}
         <button
           onClick={() => router.push('/upload')}
           className="w-full bg-[#4b0082] text-white py-3 rounded-lg"
@@ -267,8 +259,6 @@ function ResultsContent() {
   );
 }
 
-// -----------------------------
-// Reusable Section
 // -----------------------------
 function Section({
   title,
