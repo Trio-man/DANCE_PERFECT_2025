@@ -26,8 +26,6 @@ type Feedback = {
 };
 
 type Comparison = {
-  frames_compared?: number;
-  mean_landmark_distance?: number;
   similarity_score?: number;
   feedback?: Feedback;
 };
@@ -41,368 +39,226 @@ type AnalysisResult = {
   score?: number;
   feedback?: Feedback;
   comparison?: Comparison;
-  log_file?: string;
   visuals?: Visuals;
   outputs?: { visuals?: Visuals };
-  message?: string;
 };
 
 // -----------------------------
-// Main component
+// CONTENT
 // -----------------------------
 function ResultsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-
   const errorParam = searchParams.get('error');
 
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL;
+  const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
   const toBackendUrl = (p: string) => {
-    if (!p) return p;
-    if (p.startsWith('http://') || p.startsWith('https://')) return p;
-    if (p.startsWith('/')) return `${BACKEND_URL}${p}`;
-    return `${BACKEND_URL}/${p}`;
+    if (!p) return '';
+    if (p.startsWith('http')) return p;
+    return `${BACKEND_URL}${p.startsWith('/') ? '' : '/'}${p}`;
   };
 
   // -----------------------------
-  // Load result from sessionStorage
+  // Load results safely
   // -----------------------------
   useEffect(() => {
-    let cancelled = false;
-
-    const run = () => {
-      try {
-        if (errorParam) {
-          if (!cancelled) setLoading(false);
-          return;
-        }
-
-        const storedErr = sessionStorage.getItem('dp_result_error');
-        const stored = sessionStorage.getItem('dp_result');
-
-        if (storedErr && !stored) {
-          if (!cancelled) setLoading(false);
-          return;
-        }
-
-        if (!stored) {
-          if (!cancelled) setLoading(false);
-          router.replace('/upload');
-          return;
-        }
-
-        const parsed: AnalysisResult = JSON.parse(stored);
-        if (!cancelled) setResult(parsed);
-      } catch (e) {
-        console.error(e);
-        router.replace('/upload');
-      } finally {
-        if (!cancelled) setLoading(false);
+    try {
+      if (errorParam) {
+        setLoading(false);
+        return;
       }
-    };
 
-    run();
+      const stored =
+        sessionStorage.getItem('dp_results') ||
+        localStorage.getItem('dp_last_result');
 
-    return () => {
-      cancelled = true;
-    };
+      if (!stored) {
+        setLoading(false);
+        router.replace('/upload');
+        return;
+      }
+
+      const parsed: AnalysisResult = JSON.parse(stored);
+      setResult(parsed);
+    } catch (e) {
+      console.error(e);
+      router.replace('/upload');
+    } finally {
+      setLoading(false);
+    }
   }, [router, errorParam]);
 
   // -----------------------------
   // Derived data
   // -----------------------------
-  const feedback: Feedback = useMemo(() => {
-    if (!result) return {};
-    return result.feedback || result.comparison?.feedback || {};
+  const feedback = useMemo(() => {
+    return result?.feedback || result?.comparison?.feedback || {};
   }, [result]);
 
-  const bodyPartComments = feedback.body_part_comments ?? [];
-  const topErrors = feedback.top_errors ?? [];
-  const timeline = feedback.detailed_timeline ?? [];
-
-  // Extract visuals safely
-  const visuals: Visuals | null = useMemo(() => {
-    if (!result) return null;
-    return result.outputs?.visuals || result.visuals || null;
+  const visuals = useMemo(() => {
+    return result?.outputs?.visuals || result?.visuals || null;
   }, [result]);
 
-  const refPreviews: string[] = visuals?.reference?.preview_images ?? [];
-  const usrPreviews: string[] = visuals?.user?.preview_images ?? [];
-  const refOverlay: string | null = visuals?.reference?.overlay_video ?? null;
-  const usrOverlay: string | null = visuals?.user?.overlay_video ?? null;
+  const score = result?.score ?? result?.comparison?.similarity_score ?? 0;
+
+  // Score label
+  const scoreLabel = useMemo(() => {
+    if (score >= 90) return 'Excellent synchronization';
+    if (score >= 80) return 'Very good performance';
+    if (score >= 70) return 'Good but needs refinement';
+    if (score >= 60) return 'Average coordination';
+    return 'Needs improvement';
+  }, [score]);
 
   // -----------------------------
-  // Loading state
+  // Loading UI
   // -----------------------------
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-white via-[#cde7ff] to-[#d6c1ff] animate-gradient px-4">
-        <div className="text-center bg-white/70 backdrop-blur-md shadow-lg rounded-2xl p-10 w-full max-w-md">
-          <div className="animate-spin h-10 w-10 rounded-full border-4 border-gray-300 border-t-[#4b0082] mx-auto mb-4" />
-          <p className="text-gray-800 font-semibold">Loading results...</p>
-          <p className="text-gray-600 text-sm mt-1">Please wait a moment.</p>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-white via-[#cde7ff] to-[#d6c1ff]">
+        <div className="text-center bg-white/70 p-10 rounded-xl">
+          <div className="animate-spin h-10 w-10 border-4 border-gray-300 border-t-[#4b0082] mx-auto mb-3" />
+          <p className="font-semibold">Loading results...</p>
         </div>
       </div>
     );
   }
 
-  const storedErr =
-    typeof window !== 'undefined'
-      ? sessionStorage.getItem('dp_result_error')
-      : null;
-
   // -----------------------------
-  // Error state
+  // Empty state
   // -----------------------------
-  if (errorParam || (storedErr && !result)) {
-    const msg = errorParam
-      ? decodeURIComponent(errorParam)
-      : storedErr ?? 'Unknown error';
-
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-white via-[#cde7ff] to-[#d6c1ff] animate-gradient px-4">
-        <motion.div
-          initial={{ opacity: 0, y: 18, scale: 0.97 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: 0.5 }}
-          className="bg-white/70 backdrop-blur-md shadow-lg rounded-2xl p-10 text-center w-full max-w-md"
-        >
-          <h1 className="text-2xl font-bold text-red-700">Analysis Failed</h1>
-          <p className="mt-4 text-gray-700">{msg}</p>
-
-          <button
-            onClick={() => router.push('/upload')}
-            className="mt-8 w-full bg-[#4b0082] text-white px-6 py-3 rounded-lg font-semibold hover:bg-[#37006b] transition"
-          >
-            Back to Upload
-          </button>
-        </motion.div>
-      </div>
-    );
-  }
-
   if (!result) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-white via-[#cde7ff] to-[#d6c1ff] animate-gradient px-4">
-        <div className="text-center bg-white/70 backdrop-blur-md shadow-lg rounded-2xl p-10 w-full max-w-md">
-          <p className="text-gray-800 font-semibold">
-            No results found. Returning to upload…
-          </p>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-white via-[#cde7ff] to-[#d6c1ff]">
+        <div className="text-center bg-white/70 p-10 rounded-xl">
+          <p>No results found</p>
+          <button
+            onClick={() => router.push('/upload')}
+            className="mt-4 bg-[#4b0082] text-white px-4 py-2 rounded"
+          >
+            Back
+          </button>
         </div>
       </div>
     );
   }
 
-  const score = result.score ?? result.comparison?.similarity_score ?? 0;
+  const timeline = feedback.detailed_timeline ?? [];
+  const topErrors = feedback.top_errors ?? [];
+  const bodyComments = feedback.body_part_comments ?? [];
+
+  const refPreviews = visuals?.reference?.preview_images ?? [];
+  const usrPreviews = visuals?.user?.preview_images ?? [];
+
+  const refOverlay = visuals?.reference?.overlay_video;
+  const usrOverlay = visuals?.user?.overlay_video;
 
   // -----------------------------
-  // Main UI
+  // UI
   // -----------------------------
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-white via-[#cde7ff] to-[#d6c1ff] animate-gradient px-4 py-10">
+    <div className="min-h-screen bg-gradient-to-br from-white via-[#cde7ff] to-[#d6c1ff] px-4 py-10 flex justify-center">
       <motion.div
-        initial={{ opacity: 0, y: 18, scale: 0.98 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.55 }}
-        className="w-full max-w-4xl bg-white/70 backdrop-blur-md shadow-xl rounded-2xl p-8 md:p-10"
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="w-full max-w-5xl bg-white/70 backdrop-blur-md rounded-2xl p-8 space-y-8"
       >
-        <h1 className="text-3xl font-bold text-[#4b0082] text-center">
-          Your Score
-        </h1>
+        {/* SCORE */}
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-[#4b0082]">Performance Score</h1>
 
-        <p className="mt-4 text-6xl font-extrabold text-gray-900 text-center">
-          {Number(score).toFixed(2)}
-        </p>
+          <p className="text-6xl font-extrabold mt-4">
+            {Number(score).toFixed(1)}
+          </p>
 
-        {/* Visual Outputs */}
-        {(refOverlay ||
-          usrOverlay ||
-          refPreviews.length > 0 ||
-          usrPreviews.length > 0) && (
-          <div className="mt-10">
-            <h2 className="font-bold text-lg text-gray-900">
-              Visual Outputs
-            </h2>
+          <p className="text-gray-700 mt-2">{scoreLabel}</p>
+        </div>
 
-            {/* Overlay Videos */}
-            {(refOverlay || usrOverlay) && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                {/* Reference Overlay */}
-                <div className="rounded-2xl bg-white/70 border border-white/60 p-4 shadow-sm">
-                  <p className="font-semibold text-gray-900 text-center mb-2">
-                    Reference Overlay
-                  </p>
-
-                  {refOverlay ? (
-                    <video
-                      controls
-                      className="w-full rounded-xl border border-white/70 bg-black"
-                      src={toBackendUrl(refOverlay)}
-                    />
-                  ) : (
-                    <p className="text-sm text-gray-600 text-center">
-                      No reference overlay generated.
-                    </p>
-                  )}
-                </div>
-
-                {/* User Overlay */}
-                <div className="rounded-2xl bg-white/70 border border-white/60 p-4 shadow-sm">
-                  <p className="font-semibold text-gray-900 text-center mb-2">
-                    User Overlay
-                  </p>
-
-                  {usrOverlay ? (
-                    <video
-                      controls
-                      className="w-full rounded-xl border border-white/70 bg-black"
-                      src={toBackendUrl(usrOverlay)}
-                    />
-                  ) : (
-                    <p className="text-sm text-gray-600 text-center">
-                      No user overlay generated.
-                    </p>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Preview Frames */}
-            {(refPreviews.length > 0 || usrPreviews.length > 0) && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5">
-                {/* Reference Previews */}
-                <div className="rounded-2xl bg-white/70 border border-white/60 p-4 shadow-sm">
-                  <p className="font-semibold text-gray-900 text-center mb-3">
-                    Reference Preview Frames
-                  </p>
-
-                  {refPreviews.length > 0 ? (
-                    <div className="flex flex-wrap gap-3 justify-center">
-                      {refPreviews.map((url, idx) => (
-                        <div
-                          key={idx}
-                          className="relative w-44 h-28 rounded-xl overflow-hidden border border-white/70 bg-white shadow-sm"
-                        >
-                          <Image
-                            src={toBackendUrl(url)}
-                            alt={`ref preview ${idx + 1}`}
-                            fill
-                            className="object-cover"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-gray-600 text-center">
-                      No reference frames generated.
-                    </p>
-                  )}
-                </div>
-
-                {/* User Previews */}
-                <div className="rounded-2xl bg-white/70 border border-white/60 p-4 shadow-sm">
-                  <p className="font-semibold text-gray-900 text-center mb-3">
-                    User Preview Frames
-                  </p>
-
-                  {usrPreviews.length > 0 ? (
-                    <div className="flex flex-wrap gap-3 justify-center">
-                      {usrPreviews.map((url, idx) => (
-                        <div
-                          key={idx}
-                          className="relative w-44 h-28 rounded-xl overflow-hidden border border-white/70 bg-white shadow-sm"
-                        >
-                          <Image
-                            src={toBackendUrl(url)}
-                            alt={`user preview ${idx + 1}`}
-                            fill
-                            className="object-cover"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-gray-600 text-center">
-                      No user frames generated.
-                    </p>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Feedback Summary */}
+        {/* SUMMARY */}
         {feedback.summary && (
-          <div className="mt-10 rounded-2xl bg-white/70 border border-white/60 p-5 shadow-sm">
-            <p className="font-bold text-gray-900 mb-1">Feedback Summary</p>
-            <p className="text-gray-700">{feedback.summary}</p>
-          </div>
+          <Section title="Summary">
+            <p>{feedback.summary}</p>
+          </Section>
         )}
 
-        {/* Timing Analysis */}
-        {feedback.timing && (
-          <div className="mt-4 rounded-2xl bg-white/70 border border-white/60 p-5 shadow-sm">
-            <p className="font-bold text-gray-900 mb-1">Timing Analysis</p>
-            <p className="text-gray-700">{feedback.timing}</p>
-          </div>
-        )}
+        {/* VISUALS */}
+        {(refOverlay || usrOverlay || refPreviews.length || usrPreviews.length) && (
+          <Section title="Visual Comparison">
+            <div className="grid md:grid-cols-2 gap-4">
+              {refOverlay && (
+                <video src={toBackendUrl(refOverlay)} controls className="rounded-xl" />
+              )}
+              {usrOverlay && (
+                <video src={toBackendUrl(usrOverlay)} controls className="rounded-xl" />
+              )}
+            </div>
 
-        {/* Body Part Feedback */}
-        {bodyPartComments.length > 0 && (
-          <div className="mt-4 rounded-2xl bg-white/70 border border-white/60 p-5 shadow-sm">
-            <p className="font-bold text-gray-900 mb-2">Body Part Feedback</p>
-            <ul className="list-disc pl-5 space-y-1 text-gray-800">
-              {bodyPartComments.map((c, i) => (
-                <li key={i}>{c}</li>
+            <div className="grid md:grid-cols-2 gap-4 mt-4">
+              {refPreviews.map((img, i) => (
+                <Image
+                  key={i}
+                  src={toBackendUrl(img)}
+                  alt="ref"
+                  width={300}
+                  height={200}
+                  className="rounded-xl"
+                />
               ))}
-            </ul>
-          </div>
-        )}
-
-        {/* Top Errors */}
-        {topErrors.length > 0 && (
-          <div className="mt-4 rounded-2xl bg-white/70 border border-white/60 p-5 shadow-sm">
-            <p className="font-bold text-gray-900 mb-2">Top Errors</p>
-            <ul className="list-disc pl-5 space-y-1 text-gray-800">
-              {topErrors.map((e, i) => (
-                <li key={i}>{e}</li>
+              {usrPreviews.map((img, i) => (
+                <Image
+                  key={i}
+                  src={toBackendUrl(img)}
+                  alt="user"
+                  width={300}
+                  height={200}
+                  className="rounded-xl"
+                />
               ))}
-            </ul>
-          </div>
+            </div>
+          </Section>
         )}
 
-        {/* Detailed Timeline */}
+        {/* INSIGHTS */}
+        {(topErrors.length > 0 || bodyComments.length > 0) && (
+          <Section title="Key Insights">
+            {topErrors.length > 0 && (
+              <ul className="list-disc pl-5">
+                {topErrors.map((e, i) => <li key={i}>{e}</li>)}
+              </ul>
+            )}
+
+            {bodyComments.length > 0 && (
+              <ul className="list-disc pl-5 mt-3">
+                {bodyComments.map((c, i) => <li key={i}>{c}</li>)}
+              </ul>
+            )}
+          </Section>
+        )}
+
+        {/* TIMELINE */}
         {timeline.length > 0 && (
-          <div className="mt-4 rounded-2xl bg-white/70 border border-white/60 p-5 shadow-sm">
-            <p className="font-bold text-gray-900 mb-2">
-              Detailed Timeline Coaching
-            </p>
-
+          <Section title="Timeline Analysis">
             <div className="space-y-3">
-              {timeline.map((t, idx) => (
-                <div
-                  key={idx}
-                  className="rounded-xl bg-white/70 border border-white/60 p-4"
-                >
-                  <p className="font-semibold text-gray-900">
-                    {t.start} – {t.end} • {t.body_part} •{' '}
-                    {String(t.severity).toUpperCase()}
+              {timeline.map((t, i) => (
+                <div key={i} className="border rounded-xl p-4 bg-white/60">
+                  <p className="font-semibold">
+                    {t.start} - {t.end} ({t.body_part})
                   </p>
-                  <p className="text-gray-700 mt-1">{t.message}</p>
+                  <p className="text-sm text-gray-700">{t.message}</p>
                 </div>
               ))}
             </div>
-          </div>
+          </Section>
         )}
 
+        {/* ACTION */}
         <button
           onClick={() => router.push('/upload')}
-          className="mt-8 w-full bg-[#4b0082] text-white py-3 rounded-lg font-semibold hover:bg-[#37006b] transition"
+          className="w-full bg-[#4b0082] text-white py-3 rounded-lg"
         >
           Compare Again
         </button>
@@ -412,20 +268,27 @@ function ResultsContent() {
 }
 
 // -----------------------------
-// Suspense Wrapper
+// Reusable Section
+// -----------------------------
+function Section({
+  title,
+  children
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="bg-white/60 rounded-xl p-5 space-y-3">
+      <h2 className="font-bold text-lg">{title}</h2>
+      {children}
+    </div>
+  );
+}
+
 // -----------------------------
 export default function ResultsPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-white via-[#cde7ff] to-[#d6c1ff] animate-gradient px-4">
-          <div className="text-center bg-white/70 backdrop-blur-md shadow-lg rounded-2xl p-10 w-full max-w-md">
-            <div className="animate-spin h-10 w-10 rounded-full border-4 border-gray-300 border-t-[#4b0082] mx-auto mb-4" />
-            <p className="text-gray-800 font-semibold">Loading results...</p>
-          </div>
-        </div>
-      }
-    >
+    <Suspense fallback={<div className="p-10 text-center">Loading...</div>}>
       <ResultsContent />
     </Suspense>
   );
