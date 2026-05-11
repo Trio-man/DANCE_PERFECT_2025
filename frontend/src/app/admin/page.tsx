@@ -10,7 +10,10 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-const API_BASE = 'http://localhost:5000';
+// ADD THIS LINE
+const BACKEND_URL = process.env.BACKEND_URL;
+
+
 
 type ProfileRow = {
   id: string;
@@ -138,7 +141,7 @@ export default function AdminPage() {
 
     if (!token) throw new Error('No access token found.');
 
-    const res = await fetch(`${API_BASE}/admin/users`, {
+    const res = await fetch(`${BACKEND_URL}/admin/users`, {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -284,7 +287,7 @@ export default function AdminPage() {
 
       if (!token) throw new Error('No access token found.');
 
-      const res = await fetch(`${API_BASE}/admin/users/role`, {
+      const res = await fetch(`${BACKEND_URL}/admin/users`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -321,7 +324,7 @@ export default function AdminPage() {
 
       if (!token) throw new Error('No access token found.');
 
-      const res = await fetch(`${API_BASE}/admin/users/active`, {
+      const res = await fetch(`${BACKEND_URL}/admin/users`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
