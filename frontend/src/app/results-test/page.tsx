@@ -13,7 +13,7 @@ export default function ResultsTestPage() {
     setResult(null);
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/analyze`, {
+      const response = await fetch(`/api/analyze`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

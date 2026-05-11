@@ -1,69 +1,26 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from "next/server";
+import https from "https";
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const BACKEND_URL = process.env.BACKEND_URL;
 
-/**
- * Proxy for /analyze - avoids CORS and handles Render cold starts.
- * Browser → Next.js (same origin) → Backend
- */
-export async function POST(request: NextRequest) {
+// Allow self-signed cert (dev only)
+const agent = new https.Agent({ rejectUnauthorized: false });
+
+export async function POST(req: NextRequest) {
   try {
-    const formData = await request.formData();
-    const auth = request.headers.get('authorization');
-
-    const proxyFormData = new FormData();
-    for (const [key, value] of formData.entries()) {
-      if (value instanceof File) {
-        proxyFormData.append(key, value, value.name || 'file');
-      } else if (typeof value === 'string') {
-        proxyFormData.append(key, value);
-      }
-    }
-
-    const headers: Record<string, string> = {};
-    if (auth) headers['Authorization'] = auth;
-
-    // Longer timeout for Render free tier cold start (~60s)
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 120_000);
-
-    const res = await fetch(`${BACKEND_URL}/analyze`, {
-      method: 'POST',
-      headers,
-      body: proxyFormData,
-      signal: controller.signal,
+    const formData = await req.formData();
+    const backendRes = await fetch(`${BACKEND_URL}/analyze`, {
+      method: "POST",
+      body: formData,
+      // @ts-expect-error -- fetch does not have agent in type definitions
+      agent,
     });
-
-    clearTimeout(timeoutId);
-
-    const data = await res.json().catch(() => ({ error: 'Invalid response from backend' }));
-
-    if (!res.ok) {
-      return NextResponse.json(
-        { error: data?.error || `Backend error (${res.status})` },
-        { status: res.status }
-      );
-    }
-
+    const data = await backendRes.json();
     return NextResponse.json(data);
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    const isTimeout = message.includes('abort') || message.includes('timeout');
-    const is502 = message.includes('502') || message.includes('Bad Gateway');
-
-    if (isTimeout || is502) {
-      return NextResponse.json(
-        {
-          error:
-            'Backend is waking up (Render free tier). Please wait 30–60 seconds and try again.',
-        },
-        { status: 503 }
-      );
-    }
-
     return NextResponse.json(
-      { error: `Proxy error: ${message}` },
-      { status: 502 }
+      { error: "Proxy failed", details: String(err) },
+      { status: 500 }
     );
   }
 }
