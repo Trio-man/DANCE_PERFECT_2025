@@ -115,7 +115,7 @@ export default function AdminDashboardPage() {
     }
 
     try {
-      const res = await fetch(`${API_BASE}/admin/users`, {
+      const res = await fetch(`${}/admin/users`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -160,7 +160,7 @@ export default function AdminDashboardPage() {
       }
 
       try {
-        const res = await fetch(`${API_BASE}/admin/users/${userId}/role`, {
+        const res = await fetch(`${}/admin/users/${userId}/role`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ role: newRole }),
@@ -205,8 +205,8 @@ export default function AdminDashboardPage() {
       }
 
       const endpoint = nextActive
-        ? `${API_BASE}/admin/users/${userId}/activate`
-        : `${API_BASE}/admin/users/${userId}/deactivate`;
+        ? `${}/admin/users/${userId}/activate`
+        : `${}/admin/users/${userId}/deactivate`;
 
       try {
         const res = await fetch(endpoint, {
