@@ -115,7 +115,7 @@ export default function AdminDashboardPage() {
     }
 
     try {
-      const res = await fetch(`}/admin/users`, {
+      const res = await fetch(`${BACKEND_URL}/admin/users`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
