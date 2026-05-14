@@ -123,7 +123,7 @@ function ResultsContent() {
           className="bg-white/60 border border-white/70 p-6 rounded-2xl space-y-6"
         >
           <h2 className="font-bold text-purple-700 text-xl">
-            Coach Overview
+            Performance Overview
           </h2>
 
           <p className="text-gray-700 leading-relaxed whitespace-pre-line">
