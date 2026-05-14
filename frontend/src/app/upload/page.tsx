@@ -1,5 +1,3 @@
-here is the upload dont change anything not needed keep it intanct:
-
 'use client';
 
 import { useState, useEffect } from 'react';
