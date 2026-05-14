@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { createClient, Session, User } from '@supabase/supabase-js';
 import { FiArrowLeft, FiLogOut, FiUploadCloud, FiList } from 'react-icons/fi';
 
@@ -46,9 +46,7 @@ export default function UploadPage() {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
-  // -------------------------
   // CMS STATE
-  // -------------------------
   const [appSettings, setAppSettings] = useState<AppSettingsRow | null>(null);
   const [aboutPage, setAboutPage] = useState<ContentPageRow | null>(null);
   const [guidelinesPage, setGuidelinesPage] = useState<ContentPageRow | null>(null);
@@ -88,11 +86,8 @@ export default function UploadPage() {
         .select('id,system_name,logo_url,primary_color')
         .single();
 
-      if (sErr) {
-        setCmsError(sErr.message);
-      } else {
-        setAppSettings(settingsRow as AppSettingsRow);
-      }
+      if (sErr) setCmsError(sErr.message);
+      else setAppSettings(settingsRow as AppSettingsRow);
 
       const { data: pages, error: pErr } = await supabase
         .from('content_pages')
@@ -100,9 +95,8 @@ export default function UploadPage() {
         .in('slug', ['about', 'guidelines'])
         .limit(2);
 
-      if (pErr) {
-        setCmsError((prev) => prev || pErr.message);
-      } else {
+      if (pErr) setCmsError((prev) => prev || pErr.message);
+      else {
         const list = (pages ?? []) as ContentPageRow[];
         setAboutPage(list.find((x) => x.slug === 'about' && x.is_active) || null);
         setGuidelinesPage(list.find((x) => x.slug === 'guidelines' && x.is_active) || null);
@@ -115,10 +109,8 @@ export default function UploadPage() {
         .order('id', { ascending: false })
         .limit(20);
 
-      if (fErr) {
-        setCmsError((prev) => prev || fErr.message);
-      } else {
-        // ✅ FIXED: removed unsafe cast that breaks build
+      if (fErr) setCmsError((prev) => prev || fErr.message);
+      else {
         setFaqs((faqRows ?? []) as FaqRow[]);
       }
     };
@@ -134,9 +126,8 @@ export default function UploadPage() {
     if (dancerVideo) {
       url = URL.createObjectURL(dancerVideo);
       setPreviewDancer(url);
-    } else {
-      setPreviewDancer(null);
-    }
+    } else setPreviewDancer(null);
+
     return () => {
       if (url) URL.revokeObjectURL(url);
     };
@@ -147,9 +138,8 @@ export default function UploadPage() {
     if (choreoVideo) {
       url = URL.createObjectURL(choreoVideo);
       setPreviewChoreo(url);
-    } else {
-      setPreviewChoreo(null);
-    }
+    } else setPreviewChoreo(null);
+
     return () => {
       if (url) URL.revokeObjectURL(url);
     };
@@ -159,10 +149,7 @@ export default function UploadPage() {
   // LIST FILES
   // -------------------------
   const handleListFiles = async () => {
-    if (!user) {
-      setStatus('Please log in to view files.');
-      return;
-    }
+    if (!user) return setStatus('Please log in to view files.');
 
     try {
       const { data, error } = await supabase.storage
@@ -171,9 +158,9 @@ export default function UploadPage() {
 
       if (error) throw error;
 
-      const files = data.map((file) => file.name);
-      setStatus(files.length > 0 ? 'Files retrieved.' : 'No files found.');
-    } catch (err) {
+      const files = (data ?? []).map((file) => file.name);
+      setStatus(files.length ? 'Files retrieved.' : 'No files found.');
+    } catch (err: unknown) {
       console.error(err);
       setStatus('Failed to list files.');
     }
@@ -182,9 +169,7 @@ export default function UploadPage() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     Object.keys(localStorage).forEach((key) => {
-      if (key.startsWith('sb-')) {
-        localStorage.removeItem(key);
-      }
+      if (key.startsWith('sb-')) localStorage.removeItem(key);
     });
     router.replace('/login');
   };
@@ -220,16 +205,16 @@ export default function UploadPage() {
       const accessToken = data.session?.access_token;
 
       if (!accessToken) {
-        setStatus('❌ Session missing. Please log in again.');
+        setStatus('Session token missing. Please log in again.');
         setLoading(false);
         return;
       }
 
       sessionStorage.setItem('dp_token', accessToken);
       router.push('/loading');
-    } catch (err) {
+    } catch (err: unknown) {
       console.error(err);
-      setStatus('❌ Failed to prepare videos.');
+      setStatus('Failed to prepare videos.');
       setLoading(false);
     }
   };
@@ -241,7 +226,6 @@ export default function UploadPage() {
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ duration: 0.8 }}
       className="min-h-screen flex flex-col items-center justify-center px-4 bg-gradient-to-br from-[#d6c1ff] via-[#cde7ff] to-white"
     >
       <div className="w-full max-w-6xl flex flex-col gap-6 py-10">
@@ -252,63 +236,80 @@ export default function UploadPage() {
           </p>
         )}
 
+        {/* GUIDELINES */}
         {guidelinesPage && (
-          <motion.div className="bg-white/60 border border-white/70 rounded-xl p-6">
+          <div className="bg-white/60 border border-white/70 rounded-xl p-6">
             <h2 className="text-lg font-semibold mb-2" style={{ color: primaryColor }}>
               {guidelinesPage.title}
             </h2>
             <p className="text-slate-700 whitespace-pre-line">
               {guidelinesPage.body}
             </p>
-          </motion.div>
+          </div>
         )}
 
-        <motion.div className="bg-white/70 backdrop-blur-lg border border-white/60 shadow-lg rounded-2xl p-8 relative">
-          <button onClick={() => router.back()} className="absolute top-4 left-4 text-gray-600 hover:text-gray-800">
-            <FiArrowLeft size={24} />
+        {/* UPLOAD UI */}
+        <div className="bg-white/70 border border-white/60 rounded-2xl p-8">
+          <button onClick={() => router.back()} className="absolute top-4 left-4">
+            <FiArrowLeft />
           </button>
 
-          <button onClick={handleLogout} className="absolute top-4 right-4 text-red-600 hover:text-red-800">
-            <FiLogOut size={24} />
+          <button onClick={handleLogout} className="absolute top-4 right-4 text-red-600">
+            <FiLogOut />
           </button>
 
-          <div className="flex items-center justify-center gap-3 mb-2">
-            <h1 className="text-3xl font-bold text-center mb-0" style={{ color: primaryColor }}>
+          {/* LOGO */}
+          <div className="text-center mb-4">
+            {appSettings?.logo_url && (
+              <img src={appSettings.logo_url} className="h-10 mx-auto" />
+            )}
+            <h1 style={{ color: primaryColor }} className="text-3xl font-bold">
               {systemName}
             </h1>
           </div>
 
-          <p className="text-slate-600 text-center mb-4">
+          <p className="text-center mb-4">
             Welcome {user?.email?.split('@')[0]}
           </p>
 
-          <div className="flex flex-col md:flex-row gap-8">
+          <div className="flex gap-6">
             <VideoUpload label="Dancer Video" preview={previewDancer} setFile={setDancerVideo} loading={loading} />
             <VideoUpload label="Choreographer Video" preview={previewChoreo} setFile={setChoreoVideo} loading={loading} />
           </div>
 
-          {status && <p className="text-center text-gray-600 mt-3">{status}</p>}
+          {status && <p className="text-center mt-3">{status}</p>}
 
-          <div className="flex flex-col md:flex-row gap-4 justify-center mt-6">
-            <button
-              onClick={handleListFiles}
-              disabled={!user || loading}
-              className="text-white py-3 px-6 rounded-lg font-semibold"
-              style={{ backgroundColor: primaryColor }}
-            >
-              <FiList className="inline mr-2" /> List Files
-            </button>
+          <button
+            onClick={handleAnalyze}
+            disabled={loading || !user}
+            style={{ background: primaryColor }}
+            className="text-white px-6 py-3 rounded-lg mt-6 w-full"
+          >
+            Analyze 🎯
+          </button>
+        </div>
 
-            <button
-              onClick={handleAnalyze}
-              disabled={loading || !user}
-              className="text-white py-3 px-6 rounded-lg font-semibold"
-              style={{ backgroundColor: primaryColor }}
-            >
-              Analyze 🎯
-            </button>
+        {/* FAQ */}
+        {faqs.length > 0 && (
+          <div className="bg-white/60 border rounded-xl p-6">
+            <h2 className="font-semibold mb-3">FAQs</h2>
+            {faqs.map((f) => (
+              <div key={f.id}>
+                <b>{f.question}</b>
+                <p>{f.answer}</p>
+              </div>
+            ))}
           </div>
-        </motion.div>
+        )}
+
+        {/* ABOUT */}
+        {aboutPage && (
+          <div className="bg-white/60 border rounded-xl p-6">
+            <h2 className="font-semibold mb-2">{aboutPage.title}</h2>
+            <p>{aboutPage.body}</p>
+          </div>
+        )}
+
       </div>
     </motion.div>
   );
@@ -318,7 +319,7 @@ function VideoUpload({
   label,
   preview,
   setFile,
-  loading,
+  loading
 }: {
   label: string;
   preview: string | null;
@@ -326,23 +327,12 @@ function VideoUpload({
   loading: boolean;
 }) {
   return preview ? (
-    <motion.div className="flex-1 border rounded-xl p-6 bg-gray-50">
-      <h2 className="text-lg font-semibold mb-3 text-center">{label}</h2>
-      <div className="w-full h-36 md:h-80 rounded-lg overflow-hidden border border-slate-300 bg-black">
-        <video src={preview} controls className="w-full h-full object-contain" />
-      </div>
-    </motion.div>
+    <video src={preview} controls className="w-full" />
   ) : (
-    <motion.label className="flex-1 flex flex-col items-center justify-center w-full h-36 md:h-80 border border-slate-300 rounded-lg cursor-pointer hover:border-gray-400">
-      <FiUploadCloud size={48} className="text-gray-400" />
-      <span className="mt-2 text-gray-600">Upload {label}</span>
-      <input
-        type="file"
-        accept="video/*"
-        hidden
-        disabled={loading}
-        onChange={(e) => setFile(e.target.files ? e.target.files[0] : null)}
-      />
-    </motion.label>
+    <label>
+      <FiUploadCloud />
+      <input type="file" hidden onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+      Upload {label}
+    </label>
   );
 }
