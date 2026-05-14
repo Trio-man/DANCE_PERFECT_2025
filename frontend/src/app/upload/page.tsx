@@ -1,448 +1,204 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
-import { createClient, Session, User } from '@supabase/supabase-js';
-import { FiArrowLeft, FiLogOut, FiUploadCloud, FiList } from 'react-icons/fi';
+import { motion } from 'framer-motion';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
-
-// -------------------------
-// CMS TYPES
-// -------------------------
-type AppSettingsRow = {
-  id: number;
-  system_name: string;
-  logo_url: string | null;
-  primary_color: string;
+// -----------------------------
+// TYPES (MATCH BACKEND EXACTLY)
+// -----------------------------
+type WorstDeviation = {
+  issue?: string;
+  recommendation?: string;
+  user_time?: string;
+  user_time_clip_start?: number;
 };
 
-type ContentPageRow = {
-  id: number;
-  slug: string;
-  title: string;
-  body: string;
-  is_active: boolean;
+type AnalysisResult = {
+  similarity_score?: number;
+
+  feedback_summary_paragraph?: string;
+  negative_feedback_summary?: string;
+  positive_feedback_summary?: string;
+  recommendation?: string;
+
+  practice_tips?: string[];
+
+  worst_deviations?: WorstDeviation[];
+
+  dtw_distance?: number;
+  dtw_similarity_score?: number;
 };
 
-type FaqRow = {
-  id: number;
-  question: string;
-  answer: string;
-  is_active: boolean;
-};
-
-export default function UploadPage() {
+// -----------------------------
+// MAIN COMPONENT
+// -----------------------------
+function ResultsContent() {
   const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
-  const [dancerVideo, setDancerVideo] = useState<File | null>(null);
-  const [choreoVideo, setChoreoVideo] = useState<File | null>(null);
-  const [previewDancer, setPreviewDancer] = useState<string | null>(null);
-  const [previewChoreo, setPreviewChoreo] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState<string | null>(null);
+  const [result, setResult] = useState<AnalysisResult | null>(null);
 
-  // -------------------------
-  // CMS STATE
-  // -------------------------
-  const [appSettings, setAppSettings] = useState<AppSettingsRow | null>(null);
-  const [aboutPage, setAboutPage] = useState<ContentPageRow | null>(null);
-  const [guidelinesPage, setGuidelinesPage] = useState<ContentPageRow | null>(null);
-  const [faqs, setFaqs] = useState<FaqRow[]>([]);
-  const [cmsError, setCmsError] = useState<string | null>(null);
-
-  // -------------------------
-  // AUTH CHECK
-  // -------------------------
+  // -----------------------------
+  // LOAD FROM SESSION
+  // -----------------------------
   useEffect(() => {
-    const checkUser = async () => {
-      const { data } = await supabase.auth.getUser();
-      if (!data.user) router.replace('/login');
-      else setUser(data.user);
-    };
-    checkUser();
+    const stored = sessionStorage.getItem('dp_result');
 
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      (_event, session: Session | null) => {
-        if (!session?.user) router.replace('/login');
-        else setUser(session.user);
-      }
-    );
+    if (!stored) {
+      setResult(null);
+      return;
+    }
 
-    return () => listener.subscription.unsubscribe();
-  }, [router]);
-
-  // -------------------------
-  // CMS LOAD
-  // -------------------------
-  useEffect(() => {
-    const loadCms = async () => {
-      setCmsError(null);
-
-      const { data: settingsRow, error: sErr } = await supabase
-        .from('app_settings')
-        .select('id,system_name,logo_url,primary_color')
-        .single();
-
-      if (sErr) {
-        setCmsError(sErr.message);
-      } else {
-        setAppSettings(settingsRow as AppSettingsRow);
-      }
-
-      const { data: pages, error: pErr } = await supabase
-        .from('content_pages')
-        .select('id,slug,title,body,is_active')
-        .in('slug', ['about', 'guidelines'])
-        .limit(2);
-
-      if (pErr) {
-        setCmsError((prev) => prev || pErr.message);
-      } else {
-        const list = (pages ?? []) as ContentPageRow[];
-        setAboutPage(list.find((x) => x.slug === 'about' && x.is_active) || null);
-        setGuidelinesPage(list.find((x) => x.slug === 'guidelines' && x.is_active) || null);
-      }
-
-      const { data: faqRows, error: fErr } = await supabase
-        .from('faqs')
-        .select('id,question,answer,is_active')
-        .eq('is_active', true)
-        .order('id', { ascending: false })
-        .limit(20);
-
-      if (fErr) {
-        setCmsError((prev) => prev || fErr.message);
-      } else {
-        setFaqs(((faqRows ?? []) as unknown) as FaqRow[]);
-      }
-    };
-
-    loadCms();
+    try {
+      const parsed: AnalysisResult = JSON.parse(stored);
+      setResult(parsed);
+    } catch (err) {
+      console.error('Failed to parse result:', err);
+      setResult(null);
+    }
   }, []);
 
-  // -------------------------
-  // VIDEO PREVIEWS
-  // -------------------------
-  useEffect(() => {
-    let url: string | null = null;
-    if (dancerVideo) {
-      url = URL.createObjectURL(dancerVideo);
-      setPreviewDancer(url);
-    } else {
-      setPreviewDancer(null);
-    }
-    return () => {
-      if (url) URL.revokeObjectURL(url);
-    };
-  }, [dancerVideo]);
+  // -----------------------------
+  // SAFE VALUES
+  // -----------------------------
+  const score = result?.similarity_score ?? 0;
 
-  useEffect(() => {
-    let url: string | null = null;
-    if (choreoVideo) {
-      url = URL.createObjectURL(choreoVideo);
-      setPreviewChoreo(url);
-    } else {
-      setPreviewChoreo(null);
-    }
-    return () => {
-      if (url) URL.revokeObjectURL(url);
-    };
-  }, [choreoVideo]);
+  const topErrors = result?.negative_feedback_summary
+    ? [result.negative_feedback_summary]
+    : [];
 
-  // -------------------------
-  // LIST FILES
-  // -------------------------
-  const handleListFiles = async () => {
-    if (!user) {
-      setStatus('Please log in to view files.');
-      return;
-    }
-    try {
-      const { data, error } = await supabase.storage
-        .from('videos')
-        .list(user.id, { limit: 100 });
-      if (error) throw error;
-      const files = data.map((file) => file.name);
-      setStatus(files.length > 0 ? 'Files retrieved.' : 'No files found.');
-    } catch (err) {
-      console.error(err);
-      setStatus('Failed to list files.');
-    }
-  };
+  const tips = result?.practice_tips ?? [];
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    Object.keys(localStorage).forEach((key) => {
-      if (key.startsWith('sb-')) {
-        localStorage.removeItem(key);
-      }
-    });
-    router.replace('/login');
-  };
-
-  // -------------------------
-  // ANALYZE FLOW
-  // -------------------------
-  const handleAnalyze = async () => {
-    if (!dancerVideo || !choreoVideo) {
-      setStatus('Please upload both videos first.');
-      return;
-    }
-
-    setLoading(true);
-    setStatus('Preparing videos...');
-
-    const toDataUrl = (file: File): Promise<string> =>
-      new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-
-    try {
-      const dancerDataUrl = await toDataUrl(dancerVideo);
-      const choreoDataUrl = await toDataUrl(choreoVideo);
-
-      sessionStorage.setItem('dp_dancer', dancerDataUrl);
-      sessionStorage.setItem('dp_choreo', choreoDataUrl);
-
-      const { data } = await supabase.auth.getSession();
-      const accessToken = data.session?.access_token;
-
-      if (!accessToken) {
-        setStatus('❌ Session token missing. Please log in again.');
-        setLoading(false);
-        return;
-      }
-
-      sessionStorage.setItem('dp_token', accessToken);
-      router.push('/loading');
-    } catch (err) {
-      console.error(err);
-      setStatus('❌ Failed to prepare videos.');
-      setLoading(false);
-    }
-  };
-
-  const systemName = appSettings?.system_name || 'DancePerfect';
-  const primaryColor = appSettings?.primary_color || '#7C3AED';
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.8 }}
-      className="min-h-screen flex flex-col items-center justify-center px-4 bg-gradient-to-br from-[#d6c1ff] via-[#cde7ff] to-white"
-    >
-      <div className="w-full max-w-6xl flex flex-col gap-6 py-10">
-
-        {cmsError && (
-          <p className="text-center text-sm text-red-600">
-            CMS load warning: {cmsError}
-          </p>
-        )}
-
-        {/* 1. RECORDING GUIDELINES */}
-        {guidelinesPage && (
-          <motion.div
-            initial={{ scale: 0.95, opacity: 0, y: 20 }}
-            animate={{ scale: 1, opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-            className="bg-white/60 border border-white/70 rounded-xl p-6"
-          >
-            <h2 className="text-lg font-semibold mb-2" style={{ color: primaryColor }}>
-              {guidelinesPage.title}
-            </h2>
-            <p className="text-slate-700 whitespace-pre-line">{guidelinesPage.body}</p>
-          </motion.div>
-        )}
-
-        {/* 2. VIDEO UPLOAD */}
-        <motion.div
-          initial={{ scale: 0.95, opacity: 0, y: 20 }}
-          animate={{ scale: 1, opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-          className="bg-white/70 backdrop-blur-lg border border-white/60 shadow-lg rounded-2xl p-8 relative"
+  // -----------------------------
+  // EMPTY STATE
+  // -----------------------------
+  if (!result) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#d6c1ff] via-[#cde7ff] to-white">
+        <button
+          onClick={() => router.push('/upload')}
+          className="bg-purple-700 text-white px-6 py-3 rounded-xl"
         >
-          <AnimatePresence>
-            {loading && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.3 }}
-                className="absolute inset-0 bg-white/70 backdrop-blur-sm flex items-center justify-center rounded-2xl z-50"
-              >
-                <div className="text-center">
-                  <div className="animate-spin h-10 w-10 rounded-full border-4 border-gray-300 border-t-gray-700 mx-auto mb-3" />
-                  <p className="text-gray-700 font-semibold">Processing...</p>
-                  <p className="text-gray-500 text-sm mt-1">
-                    Please wait while we analyze the videos.
-                  </p>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          No results — Go back
+        </button>
+      </div>
+    );
+  }
 
-          <button
-            onClick={() => router.back()}
-            className="absolute top-4 left-4 text-gray-600 hover:text-gray-800"
-          >
-            <FiArrowLeft size={24} />
-          </button>
+  // -----------------------------
+  // UI
+  // -----------------------------
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-[#d6c1ff] via-[#cde7ff] to-white px-4 py-10 flex justify-center">
+      <div className="w-full max-w-6xl space-y-6">
 
-          <button
-            onClick={handleLogout}
-            className="absolute top-4 right-4 text-red-600 hover:text-red-800"
-          >
-            <FiLogOut size={24} />
-          </button>
+        {/* HERO */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white/60 backdrop-blur border border-white/70 p-8 rounded-2xl text-center"
+        >
+          <h1 className="text-2xl font-bold text-purple-700">
+            Here are your results
+          </h1>
 
-          <div className="flex items-center justify-center gap-3 mb-2">
-            {appSettings?.logo_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={appSettings.logo_url}
-                alt="System Logo"
-                className="h-10 w-10 rounded-lg object-contain border border-white/60 bg-white/60"
-              />
-            ) : null}
-            <h1 className="text-3xl font-bold text-center mb-0" style={{ color: primaryColor }}>
-              {systemName}
-            </h1>
-          </div>
-
-          <p className="text-slate-600 text-center mb-4">
-            Welcome {user?.email?.split('@')[0]}
+          <p className="text-6xl font-extrabold mt-4 text-gray-900">
+            {Number(score).toFixed(1)}
           </p>
 
-          <div className="flex flex-col md:flex-row gap-8">
-            <VideoUpload
-              label="Dancer Video"
-              preview={previewDancer}
-              setFile={setDancerVideo}
-              loading={loading}
-            />
-            <VideoUpload
-              label="Choreographer Video"
-              preview={previewChoreo}
-              setFile={setChoreoVideo}
-              loading={loading}
-            />
-          </div>
-
-          {status && <p className="text-center text-gray-600 mt-3">{status}</p>}
-
-          <div className="flex flex-col md:flex-row gap-4 justify-center mt-6">
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              disabled={!user || loading}
-              onClick={handleListFiles}
-              className="text-white py-3 px-6 rounded-lg font-semibold transition"
-              style={{ backgroundColor: primaryColor }}
-            >
-              <FiList className="inline mr-2" /> List Files
-            </motion.button>
-
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              disabled={loading || !user}
-              onClick={handleAnalyze}
-              className="text-white py-3 px-6 rounded-lg font-semibold transition"
-              style={{ backgroundColor: primaryColor }}
-            >
-              Analyze 🎯
-            </motion.button>
-          </div>
+          <p className="text-gray-700 mt-2">
+            Similarity Score
+          </p>
         </motion.div>
 
-        {/* 3. FAQs */}
-        {faqs.length > 0 && (
-          <motion.div
-            initial={{ scale: 0.95, opacity: 0, y: 20 }}
-            animate={{ scale: 1, opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.3 }}
-            className="bg-white/60 border border-white/70 rounded-xl p-6"
-          >
-            <h2 className="text-lg font-semibold mb-3" style={{ color: primaryColor }}>
-              FAQs
-            </h2>
-            <div className="space-y-3">
-              {faqs.map((f) => (
-                <div key={f.id} className="border border-white/70 rounded-lg p-3 bg-white/50">
-                  <p className="font-semibold text-slate-800">{f.question}</p>
-                  <p className="text-slate-700 whitespace-pre-line mt-1">{f.answer}</p>
+        {/* SUMMARY */}
+        <div className="bg-white/60 border border-white/70 p-6 rounded-2xl space-y-4">
+          <h2 className="font-bold text-purple-700 text-xl">
+            Feedback Summary
+          </h2>
+
+          <p className="text-gray-700">
+            {result.feedback_summary_paragraph || result.recommendation}
+          </p>
+
+          <div>
+            <h3 className="font-semibold text-green-700">
+              Positive Feedback
+            </h3>
+            <p>{result.positive_feedback_summary || '—'}</p>
+          </div>
+
+          <div>
+            <h3 className="font-semibold text-orange-700">
+              Recommendation
+            </h3>
+            <p>{result.recommendation || '—'}</p>
+          </div>
+
+          <div>
+            <h3 className="font-semibold text-purple-700">
+              Practice Tips
+            </h3>
+
+            {tips.length ? (
+              <ul className="list-disc pl-5 space-y-1">
+                {tips.map((tip, i) => (
+                  <li key={i}>{tip}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-gray-500">No tips available</p>
+            )}
+          </div>
+        </div>
+
+        {/* DEVIATIONS */}
+        <div className="bg-white/60 border border-white/70 p-6 rounded-2xl">
+          <h2 className="font-bold mb-3 text-purple-700">
+            Key Deviations
+          </h2>
+
+          {result.worst_deviations?.length ? (
+            <div className="space-y-4">
+              {result.worst_deviations.map((d, i) => (
+                <div key={i} className="border rounded-xl p-4 bg-white/70">
+                  <p className="font-semibold">
+                    Issue: {d.issue || '—'}
+                  </p>
+
+                  <p className="text-gray-700">
+                    Recommendation: {d.recommendation || '—'}
+                  </p>
+
+                  <p className="text-sm text-gray-500">
+                    Time: {d.user_time || '—'}
+                  </p>
                 </div>
               ))}
             </div>
-          </motion.div>
-        )}
+          ) : (
+            <p className="text-gray-500">
+              No major deviations detected.
+            </p>
+          )}
+        </div>
 
-        {/* 4. ABOUT US */}
-        {aboutPage && (
-          <motion.div
-            initial={{ scale: 0.95, opacity: 0, y: 20 }}
-            animate={{ scale: 1, opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.4 }}
-            className="bg-white/60 border border-white/70 rounded-xl p-6"
-          >
-            <h2 className="text-lg font-semibold mb-2" style={{ color: primaryColor }}>
-              {aboutPage.title}
-            </h2>
-            <p className="text-slate-700 whitespace-pre-line">{aboutPage.body}</p>
-          </motion.div>
-        )}
-
+        {/* ACTION */}
+        <button
+          onClick={() => router.push('/upload')}
+          className="w-full bg-purple-700 text-white py-3 rounded-xl font-semibold"
+        >
+          Analyze Another Video
+        </button>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
-// -------------------------
-// VideoUpload Component
-// -------------------------
-interface VideoUploadProps {
-  label: string;
-  preview: string | null;
-  setFile: (file: File | null) => void;
-  loading: boolean;
-}
-
-function VideoUpload({ label, preview, setFile, loading }: VideoUploadProps) {
-  return preview ? (
-    <motion.div
-      initial={{ scale: 0.95, opacity: 0, y: 20 }}
-      animate={{ scale: 1, opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-      className="flex-1 border rounded-xl p-6 bg-gray-50"
-    >
-      <h2 className="text-lg font-semibold mb-3 text-center">{label}</h2>
-      <div className="w-full h-36 md:h-80 rounded-lg overflow-hidden border border-slate-300 bg-black">
-        <video src={preview} controls className="w-full h-full object-contain" />
-      </div>
-    </motion.div>
-  ) : (
-    <motion.label
-      initial={{ scale: 0.95, opacity: 0, y: 20 }}
-      animate={{ scale: 1, opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-      className="flex-1 flex flex-col items-center justify-center w-full h-36 md:h-80 border border-slate-300 rounded-lg cursor-pointer hover:border-gray-400"
-    >
-      <FiUploadCloud size={48} className="text-gray-400" />
-      <span className="mt-2 text-gray-600">Upload {label}</span>
-      <input
-        type="file"
-        accept="video/*"
-        className="hidden"
-        disabled={loading}
-        onChange={(e) => setFile(e.target.files ? e.target.files[0] : null)}
-      />
-    </motion.label>
+// -----------------------------
+export default function ResultsPage() {
+  return (
+    <Suspense fallback={<div className="p-10 text-center">Loading...</div>}>
+      <ResultsContent />
+    </Suspense>
   );
 }
