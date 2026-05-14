@@ -25,44 +25,60 @@ export default function LoadingPage() {
       const choreo = sessionStorage.getItem('dp_choreo');
       const token = sessionStorage.getItem('dp_token');
 
+      // ✅ FIX: do NOT trap user in loading page
       if (!dancer || !choreo || !token) {
-        setMsg('Missing data. Please re-upload.');
+        setMsg('Missing data. Redirecting to upload...');
+
+        setTimeout(() => {
+          router.replace('/upload');
+        }, 1200);
+
         return;
       }
 
-      const dancerBlob = dataURLtoBlob(dancer);
-      const choreoBlob = dataURLtoBlob(choreo);
+      try {
+        const dancerBlob = dataURLtoBlob(dancer);
+        const choreoBlob = dataURLtoBlob(choreo);
 
-      const formData = new FormData();
-      formData.append('dancer_video', dancerBlob, 'dancer.mp4');
-      formData.append('choreo_video', choreoBlob, 'choreo.mp4');
+        const formData = new FormData();
+        formData.append('dancer_video', dancerBlob, 'dancer.mp4');
+        formData.append('choreo_video', choreoBlob, 'choreo.mp4');
 
-      setMsg('Uploading & analyzing...');
+        setMsg('Uploading & analyzing...');
 
-      const res = await fetch('/api/analyze', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: formData,
-      });
+        const res = await fetch('/api/analyze', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
+        });
 
-      const json = await res.json();
+        let json;
+        try {
+          json = await res.json();
+        } catch {
+          setMsg('Server returned invalid response');
+          return;
+        }
 
-      if (!res.ok) {
-        setMsg(json?.error || 'Analysis failed');
-        return;
+        if (!res.ok || !json) {
+          setMsg(json?.error || 'Analysis failed');
+          return;
+        }
+
+        // ✅ SINGLE SOURCE OF TRUTH
+        sessionStorage.setItem('dp_result', JSON.stringify(json));
+
+        setMsg('Done! Redirecting...');
+
+        setTimeout(() => {
+          router.replace('/results');
+        }, 500);
+      } catch (err) {
+        console.error(err);
+        setMsg('Unexpected error occurred');
       }
-
-      // ✅ SINGLE SOURCE OF TRUTH
-      sessionStorage.setItem('dp_result', JSON.stringify(json));
-
-      setMsg('Done! Redirecting...');
-      
-      // small delay prevents race condition
-      setTimeout(() => {
-        router.replace('/results');
-      }, 500);
     };
 
     run();
