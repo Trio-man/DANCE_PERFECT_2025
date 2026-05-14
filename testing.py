@@ -20,6 +20,16 @@ import gc
 # OpenCV, used here to open/read video files and handle frames
 import cv2
 
+# Pillow: animated GIFs for top deviation moments (optional at runtime if missing).
+try:
+    from PIL import Image
+
+    _PIL_IMAGE = Image
+    _PIL_AVAILABLE = True
+except ImportError:
+    _PIL_IMAGE = None
+    _PIL_AVAILABLE = False
+
 # MediaPipe, used for pose estimation (body landmarks)
 import mediapipe as mp
 
@@ -68,8 +78,17 @@ def _upload_file_to_storage(local_path, storage_key):
             try:
                 from supabase import create_client
                 client = create_client(url, key)
+                ct = "application/octet-stream"
+                if local_path.endswith(".png"):
+                    ct = "image/png"
+                elif local_path.endswith(".gif"):
+                    ct = "image/gif"
+                elif local_path.endswith(".json"):
+                    ct = "application/json"
+                elif local_path.endswith(".log") or local_path.endswith(".txt"):
+                    ct = "text/plain"
                 with open(local_path, "rb") as f:
-                    client.storage.from_(bucket).upload(storage_key, f, file_options={"content-type": "application/octet-stream"})
+                    client.storage.from_(bucket).upload(storage_key, f, file_options={"content-type": ct})
                 public = client.storage.from_(bucket).get_public_url(storage_key)
                 return public
             except Exception:
@@ -89,7 +108,14 @@ def _upload_file_to_storage(local_path, storage_key):
                     aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY", ""),
                     config=Config(signature_version="s3v4"),
                 )
-                content_type = "text/plain" if local_path.endswith(".log") or local_path.endswith(".txt") else "image/png"
+                if local_path.endswith(".log") or local_path.endswith(".txt"):
+                    content_type = "text/plain"
+                elif local_path.endswith(".gif"):
+                    content_type = "image/gif"
+                elif local_path.endswith(".json"):
+                    content_type = "application/json"
+                else:
+                    content_type = "image/png"
                 s3.upload_file(local_path, bucket, storage_key, ExtraArgs={"ContentType": content_type})
                 base = os.environ.get("S3_PUBLIC_BASE_URL", "").strip()
                 if base:
@@ -107,6 +133,8 @@ LOG_FOLDER = "logs"                # Folder where result log files are written (
 TIPS_FOLDER = "tips"               # Folder for clean practice tips files (one per run)
 DEVIATION_SCREENSHOTS_FOLDER = "deviation_screenshots"  # Screenshots with pose overlay where user deviates most
 POSE_MATCH_SCREENSHOTS_FOLDER = "pose_match_screenshots"  # Screenshots where user pose is most identical to reference
+DEVIATION_GIFS_FOLDER = "deviation_gifs"  # Short GIFs along DTW path for top worst-deviation ranks
+ANALYSIS_UI_FOLDER = "analysis_ui"  # JSON bundles for frontend: tips + per-moment explanations next to GIFs
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
@@ -114,6 +142,8 @@ os.makedirs(LOG_FOLDER, exist_ok=True)
 os.makedirs(TIPS_FOLDER, exist_ok=True)
 os.makedirs(DEVIATION_SCREENSHOTS_FOLDER, exist_ok=True)
 os.makedirs(POSE_MATCH_SCREENSHOTS_FOLDER, exist_ok=True)
+os.makedirs(DEVIATION_GIFS_FOLDER, exist_ok=True)
+os.makedirs(ANALYSIS_UI_FOLDER, exist_ok=True)
 
 mp_pose = mp.solutions.pose
 mp_drawing = mp.solutions.drawing_utils
@@ -166,6 +196,14 @@ ACCEPTABLE_SIMILARITY_PERCENT = 80  # Minimum similarity to be "within acceptabl
 # Number of moments to capture: worst deviations (negative) and most identical pose (positive).
 NUM_DEVIATION_SCREENSHOTS = 3   # Frames where user deviates most from reference
 NUM_POSE_MATCH_SCREENSHOTS = 3  # Frames where user pose is most identical to reference
+# GIFs: only the top-N worst DTW deviations (same ranks as screenshots); clip length along alignment path.
+NUM_DEVIATION_GIFS = 3
+DEVIATION_GIF_PATH_RADIUS = 5   # path steps before/after peak → up to 2*R+1 frames per GIF
+DEVIATION_GIF_PLAYBACK_FPS = 6  # GIF frame delay (not motion CSV FPS)
+# Shown in deviation_moments_ui JSON for the frontend (not burned into GIFs).
+DEVIATION_VISUAL_LEGEND = (
+    "The red glowing lines in the body means that the body part is deviating from the reference"
+)
 # Only count as "pose match" when normalized pose distance is below this (stricter = more identical).
 POSE_MATCH_MAX_DISTANCE = 0.15  # Pairs with distance > this are excluded from best_pose_matches
 
@@ -356,6 +394,214 @@ def _mismatched_landmark_indices(ref_pts, user_pts, distance_thresh=0.08):
     return mismatched
 
 
+def _compose_deviation_side_by_side_bgr(
+    frame_ref,
+    frame_user,
+    user_label=None,
+    landmark_match_thresh=None,
+    tips_list=None,
+    simple_column_headers=False,
+):
+    """
+    Build one side-by-side BGR image: reference (left) with default skeleton; user (right) with
+    green = matching reference, red = mismatched. Optional tips panel at bottom when tips_list non-empty.
+    If simple_column_headers=True, top labels are only "reference" and "you" (for GIFs).
+    Returns uint8 BGR array or None if pose missing on either side.
+    """
+    rgb_ref = cv2.cvtColor(frame_ref, cv2.COLOR_BGR2RGB)
+    rgb_user = cv2.cvtColor(frame_user, cv2.COLOR_BGR2RGB)
+    res_ref = _POSE_IMAGE.process(rgb_ref)
+    res_user = _POSE_IMAGE.process(rgb_user)
+    if not res_ref.pose_landmarks or not res_user.pose_landmarks:
+        return None
+
+    ref_pts = _landmarks_normalized(res_ref.pose_landmarks)
+    user_pts = _landmarks_normalized(res_user.pose_landmarks)
+    thresh = landmark_match_thresh if landmark_match_thresh is not None else 0.08
+    mismatched = _mismatched_landmark_indices(ref_pts, user_pts, distance_thresh=thresh)
+
+    frame_ref_bgr = frame_ref.copy()
+    mp_drawing.draw_landmarks(
+        frame_ref_bgr,
+        res_ref.pose_landmarks,
+        mp_pose.POSE_CONNECTIONS,
+        landmark_drawing_spec=mp_drawing_styles.get_default_pose_landmarks_style(),
+    )
+
+    frame_user_bgr = frame_user.copy()
+    h, w = frame_user_bgr.shape[:2]
+    connections = mp_pose.POSE_CONNECTIONS
+    for conn in connections:
+        a, b = conn
+        if a >= len(user_pts) or b >= len(user_pts):
+            continue
+        pt_a = (int(user_pts[a][0] * w), int(user_pts[a][1] * h))
+        pt_b = (int(user_pts[b][0] * w), int(user_pts[b][1] * h))
+        color = (0, 0, 255) if (a in mismatched or b in mismatched) else (0, 255, 0)
+        cv2.line(frame_user_bgr, pt_a, pt_b, color, 2, cv2.LINE_AA)
+    for i, (x, y) in enumerate(user_pts):
+        pt = (int(x * w), int(y * h))
+        color = (0, 0, 255) if i in mismatched else (0, 255, 0)
+        cv2.circle(frame_user_bgr, pt, 5, color, -1, cv2.LINE_AA)
+        cv2.circle(frame_user_bgr, pt, 5, (255, 255, 255), 1, cv2.LINE_AA)
+
+    h1, w1 = frame_ref_bgr.shape[:2]
+    h2, w2 = frame_user_bgr.shape[:2]
+    target_h = max(h1, h2)
+    if h1 != target_h:
+        frame_ref_bgr = cv2.resize(frame_ref_bgr, (int(w1 * target_h / h1), target_h))
+    if h2 != target_h:
+        frame_user_bgr = cv2.resize(frame_user_bgr, (int(w2 * target_h / h2), target_h))
+    w_left = frame_ref_bgr.shape[1]
+    side_by_side = np.hstack([frame_ref_bgr, frame_user_bgr])
+
+    if simple_column_headers:
+        cv2.putText(side_by_side, "reference", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        cv2.putText(side_by_side, "you", (w_left + 10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+    else:
+        cv2.putText(side_by_side, "Reference", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        if user_label is None:
+            user_label = "You. Red glowing line means the body part is not matching the choreographer."
+        (tw, th), _ = cv2.getTextSize(user_label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+        x_right = side_by_side.shape[1] - tw - 10
+        cv2.putText(side_by_side, user_label, (max(x_right, w_left + 10), 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+
+    tips_list = tips_list or []
+    if tips_list:
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.45
+        thickness = 1
+        line_height = 22
+        margin = 12
+        max_chars_per_line = 80
+        lines = ["Tips:"]
+        for tip in tips_list[:6]:
+            tip = (tip.strip() or "").strip("• ")
+            if not tip:
+                continue
+            while len(tip) > max_chars_per_line:
+                lines.append(tip[:max_chars_per_line])
+                tip = tip[max_chars_per_line:].lstrip()
+            if tip:
+                lines.append(tip)
+        tips_height = margin * 2 + len(lines) * line_height
+        panel = np.zeros((tips_height, side_by_side.shape[1], 3), dtype=np.uint8)
+        panel[:] = (40, 40, 40)
+        y = margin + line_height
+        for i, line in enumerate(lines):
+            color = (180, 255, 180) if i == 0 else (220, 220, 220)
+            cv2.putText(panel, line, (margin, y), font, font_scale if i > 0 else 0.5, color, thickness, cv2.LINE_AA)
+            y += line_height
+        side_by_side = np.vstack([side_by_side, panel])
+
+    return side_by_side
+
+
+def _user_motion_csv_timestamp_str(motion_csv_frame_1based, motion_fps):
+    """Human-readable [m:ss] for a 1-based motion CSV frame index at motion_fps."""
+    sec = (int(motion_csv_frame_1based) - 1) / max(float(motion_fps), 1e-6)
+    m, s = int(sec // 60), int(sec % 60)
+    return f"[{m}:{s:02d}]"
+
+
+def _deviation_gif_clip_time_meta(path_segment, user_start, user_motion_fps):
+    """
+    User-facing time span covered by the GIF (first/last aligned user frame in the segment).
+    Labels use the same motion-FPS timeline as the rest of the API.
+    """
+    if not path_segment:
+        return None
+    u0 = user_start + int(path_segment[0][1])
+    u1 = user_start + int(path_segment[-1][1])
+    t0 = _user_motion_csv_timestamp_str(u0, user_motion_fps)
+    t1 = _user_motion_csv_timestamp_str(u1, user_motion_fps)
+    label = t0 if t0 == t1 else f"{t0}–{t1}"
+    return {
+        "user_time_clip_start": t0,
+        "user_time_clip_end": t1,
+        "user_time_clip_label": label,
+    }
+
+
+def save_deviation_alignment_gif(
+    ref_video_path,
+    user_video_path,
+    path_segment,
+    ref_start,
+    user_start,
+    ref_motion_fps,
+    user_motion_fps,
+    output_path,
+    user_label=None,
+    landmark_match_thresh=None,
+    playback_fps=None,
+):
+    """
+    Encode a GIF of side-by-side ref/user frames along a DTW path segment.
+    path_segment: list of (ri, ui) indices into trimmed sequences; motion CSV frames = ref_start+ri, user_start+ui.
+    """
+    if not _PIL_AVAILABLE or not path_segment:
+        return None
+    playback_fps = playback_fps if playback_fps and playback_fps > 0 else DEVIATION_GIF_PLAYBACK_FPS
+
+    cap_ref = cv2.VideoCapture(ref_video_path)
+    cap_user = cv2.VideoCapture(user_video_path)
+    if not cap_ref.isOpened() or not cap_user.isOpened():
+        if cap_ref.isOpened():
+            cap_ref.release()
+        if cap_user.isOpened():
+            cap_user.release()
+        return None
+
+    ref_video_fps = max(1e-6, cap_ref.get(cv2.CAP_PROP_FPS))
+    user_video_fps = max(1e-6, cap_user.get(cv2.CAP_PROP_FPS))
+    ref_step = max(1, round(ref_video_fps / ref_motion_fps))
+    user_step = max(1, round(user_video_fps / user_motion_fps))
+
+    pil_frames = []
+    try:
+        for rj, uj in path_segment:
+            ref_csv_f = ref_start + int(rj)
+            user_csv_f = user_start + int(uj)
+            cap_ref.set(cv2.CAP_PROP_POS_FRAMES, (ref_csv_f - 1) * ref_step)
+            cap_user.set(cv2.CAP_PROP_POS_FRAMES, (user_csv_f - 1) * user_step)
+            ok_ref, frame_ref = cap_ref.read()
+            ok_user, frame_user = cap_user.read()
+            if not ok_ref or not ok_user or frame_ref is None or frame_user is None:
+                continue
+            composed = _compose_deviation_side_by_side_bgr(
+                frame_ref,
+                frame_user,
+                user_label=user_label,
+                landmark_match_thresh=landmark_match_thresh,
+                tips_list=None,
+                simple_column_headers=True,
+            )
+            if composed is None:
+                continue
+            rgb = cv2.cvtColor(composed, cv2.COLOR_BGR2RGB)
+            pil_frames.append(_PIL_IMAGE.fromarray(rgb))
+    finally:
+        cap_ref.release()
+        cap_user.release()
+
+    if not pil_frames:
+        return None
+    duration_ms = int(round(1000.0 / max(float(playback_fps), 1e-6)))
+    try:
+        pil_frames[0].save(
+            output_path,
+            save_all=True,
+            append_images=pil_frames[1:],
+            duration=duration_ms,
+            loop=0,
+            optimize=False,
+        )
+        return output_path if os.path.isfile(output_path) else None
+    except Exception:
+        return None
+
+
 def save_deviation_comparison_image(
     ref_video_path,
     user_video_path,
@@ -397,92 +643,15 @@ def save_deviation_comparison_image(
     if not ok_ref or not ok_user or frame_ref is None or frame_user is None:
         return None
 
-    rgb_ref = cv2.cvtColor(frame_ref, cv2.COLOR_BGR2RGB)
-    rgb_user = cv2.cvtColor(frame_user, cv2.COLOR_BGR2RGB)
-    res_ref = _POSE_IMAGE.process(rgb_ref)
-    res_user = _POSE_IMAGE.process(rgb_user)
-    if not res_ref.pose_landmarks or not res_user.pose_landmarks:
-        return None
-
-    ref_pts = _landmarks_normalized(res_ref.pose_landmarks)
-    user_pts = _landmarks_normalized(res_user.pose_landmarks)
-    thresh = landmark_match_thresh if landmark_match_thresh is not None else 0.08
-    mismatched = _mismatched_landmark_indices(ref_pts, user_pts, distance_thresh=thresh)
-
-    # Draw reference (left) with default skeleton
-    frame_ref_bgr = frame_ref.copy()
-    mp_drawing.draw_landmarks(
-        frame_ref_bgr,
-        res_ref.pose_landmarks,
-        mp_pose.POSE_CONNECTIONS,
-        landmark_drawing_spec=mp_drawing_styles.get_default_pose_landmarks_style(),
+    side_by_side = _compose_deviation_side_by_side_bgr(
+        frame_ref,
+        frame_user,
+        user_label=user_label,
+        landmark_match_thresh=landmark_match_thresh,
+        tips_list=tips_list,
     )
-
-    # Draw user (right): default style for matching landmarks, RED for mismatched
-    frame_user_bgr = frame_user.copy()
-    h, w = frame_user_bgr.shape[:2]
-    connections = mp_pose.POSE_CONNECTIONS
-    for conn in connections:
-        a, b = conn
-        if a >= len(user_pts) or b >= len(user_pts):
-            continue
-        pt_a = (int(user_pts[a][0] * w), int(user_pts[a][1] * h))
-        pt_b = (int(user_pts[b][0] * w), int(user_pts[b][1] * h))
-        color = (0, 0, 255) if (a in mismatched or b in mismatched) else (0, 255, 0)
-        cv2.line(frame_user_bgr, pt_a, pt_b, color, 2, cv2.LINE_AA)
-    for i, (x, y) in enumerate(user_pts):
-        pt = (int(x * w), int(y * h))
-        color = (0, 0, 255) if i in mismatched else (0, 255, 0)
-        cv2.circle(frame_user_bgr, pt, 5, color, -1, cv2.LINE_AA)
-        cv2.circle(frame_user_bgr, pt, 5, (255, 255, 255), 1, cv2.LINE_AA)
-
-    # Resize to same height
-    h1, w1 = frame_ref_bgr.shape[:2]
-    h2, w2 = frame_user_bgr.shape[:2]
-    target_h = max(h1, h2)
-    if h1 != target_h:
-        frame_ref_bgr = cv2.resize(frame_ref_bgr, (int(w1 * target_h / h1), target_h))
-    if h2 != target_h:
-        frame_user_bgr = cv2.resize(frame_user_bgr, (int(w2 * target_h / h2), target_h))
-    w_left = frame_ref_bgr.shape[1]
-    side_by_side = np.hstack([frame_ref_bgr, frame_user_bgr])
-
-    # Labels above (Reference left; You + legend on the right, right-aligned)
-    cv2.putText(side_by_side, "Reference", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-    if user_label is None:
-        user_label = "You. Red glowing line means the body part is not matching the choreographer."
-    (tw, th), _ = cv2.getTextSize(user_label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-    x_right = side_by_side.shape[1] - tw - 10
-    cv2.putText(side_by_side, user_label, (max(x_right, w_left + 10), 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
-
-    # Tips at the bottom: add a panel and wrap text
-    tips_list = tips_list or []
-    if tips_list:
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        font_scale = 0.45
-        thickness = 1
-        line_height = 22
-        margin = 12
-        max_chars_per_line = 80
-        lines = ["Tips:"]
-        for tip in tips_list[:6]:
-            tip = (tip.strip() or "").strip("• ")
-            if not tip:
-                continue
-            while len(tip) > max_chars_per_line:
-                lines.append(tip[:max_chars_per_line])
-                tip = tip[max_chars_per_line:].lstrip()
-            if tip:
-                lines.append(tip)
-        tips_height = margin * 2 + len(lines) * line_height
-        panel = np.zeros((tips_height, side_by_side.shape[1], 3), dtype=np.uint8)
-        panel[:] = (40, 40, 40)
-        y = margin + line_height
-        for i, line in enumerate(lines):
-            color = (180, 255, 180) if i == 0 else (220, 220, 220)
-            cv2.putText(panel, line, (margin, y), font, font_scale if i > 0 else 0.5, color, thickness, cv2.LINE_AA)
-            y += line_height
-        side_by_side = np.vstack([side_by_side, panel])
+    if side_by_side is None:
+        return None
 
     try:
         cv2.imwrite(output_path, side_by_side)
@@ -1293,6 +1462,8 @@ def build_deviation_findings(comparison):
     deviations = comparison.get("worst_deviations") or []
     feedback_ranges = comparison.get("feedback_analysis") or []
     screenshot_paths = comparison.get("deviation_comparison_images") or []
+    gif_paths = comparison.get("deviation_gifs") or []
+    gif_clips = comparison.get("deviation_gif_clips") or []
     fallback_tips = comparison.get("practice_tips") or []
 
     for i, moment in enumerate(deviations):
@@ -1324,19 +1495,51 @@ def build_deviation_findings(comparison):
         if not recommendation:
             recommendation = fallback_tips[i] if i < len(fallback_tips) else "Match the reference joint angles and timing for this frame."
 
-        findings.append({
+        finding = {
             "rank": i + 1,
             "user_time": user_time,
             "reference_frame": moment.get("ref_frame"),
             "user_frame": moment.get("user_frame"),
             "distance": moment.get("distance"),
             "screenshot_path": screenshot_paths[i] if i < len(screenshot_paths) else None,
+            "gif_path": gif_paths[i] if i < len(gif_paths) else None,
             "issue": issue,
             "recommendation": recommendation,
             "body_focus": _infer_body_focus_from_text(issue),
-        })
+        }
+        if i < len(gif_clips) and isinstance(gif_clips[i], dict):
+            finding.update(gif_clips[i])
+        findings.append(finding)
 
     return findings
+
+
+def write_deviation_moments_ui_json(comparison, run_ts):
+    """
+    Persist a compact JSON bundle for the website: practice tips, summaries, and each
+    worst-deviation moment (paths, issue, recommendation, GIF clip timestamps).
+    Mirrors the same object onto comparison['deviation_moments_ui'] for the API response.
+    """
+    path = os.path.join(ANALYSIS_UI_FOLDER, f"deviation_moments_{run_ts}.json")
+    comparison["deviation_visual_legend"] = DEVIATION_VISUAL_LEGEND
+    payload = {
+        "run_id": run_ts,
+        "deviation_visual_legend": DEVIATION_VISUAL_LEGEND,
+        "practice_tips": comparison.get("practice_tips") or [],
+        "summaries": {
+            "where_to_improve": comparison.get("negative_feedback_summary"),
+            "what_went_well": comparison.get("positive_feedback_summary"),
+        },
+        "feedback_overview": (comparison.get("feedback_summary_paragraph") or "")[:4000],
+        "deviation_moments": comparison.get("deviation_findings") or [],
+    }
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2, ensure_ascii=False)
+    except Exception:
+        return None
+    comparison["deviation_moments_ui"] = payload
+    return path
 
 
 def write_tips_file(comparison, tips_path=None):
@@ -1463,20 +1666,26 @@ def compare_motion_csvs_dtw(reference_csv_path, user_csv_path, fps=DEFAULT_FPS, 
     """
     Compare two motion CSVs using Dynamic Time Warping (DTW).
     ref_fps / user_fps: actual FPS of each video so timestamps match real duration (e.g. 15 s video shows 0:00–0:15).
+
+    Returns (result_dict, dtw_path) where dtw_path is a list of (ref_idx, user_idx) aligned pairs when DTW ran,
+    else None. The path is not included in result_dict so logs stay small.
     """
     if not _DTW_AVAILABLE:
-        return {
-            "dtw_distance": None,
-            "dtw_similarity_score": None,
-            "aligned_moments": [],
-            "feedback_analysis": [],
-            "feedback_summary_paragraph": "DTW was not run. Install fastdtw and scipy to get detailed feedback.",
-            "worst_deviations": [],
-            "best_pose_matches": [],
-            "path_sample_start": [],
-            "path_sample_end": [],
-            "message": "DTW skipped: install fastdtw and scipy (pip install fastdtw scipy).",
-        }
+        return (
+            {
+                "dtw_distance": None,
+                "dtw_similarity_score": None,
+                "aligned_moments": [],
+                "feedback_analysis": [],
+                "feedback_summary_paragraph": "DTW was not run. Install fastdtw and scipy to get detailed feedback.",
+                "worst_deviations": [],
+                "best_pose_matches": [],
+                "path_sample_start": [],
+                "path_sample_end": [],
+                "message": "DTW skipped: install fastdtw and scipy (pip install fastdtw scipy).",
+            },
+            None,
+        )
 
     ref_df = pd.read_csv(reference_csv_path)
     user_df = pd.read_csv(user_csv_path)
@@ -1491,18 +1700,21 @@ def compare_motion_csvs_dtw(reference_csv_path, user_csv_path, fps=DEFAULT_FPS, 
     user_sequence = build_pose_sequence(user_df)
 
     if not ref_sequence or not user_sequence:
-        return {
-            "dtw_distance": None,
-            "dtw_similarity_score": None,
-            "aligned_moments": [],
-            "feedback_analysis": [],
-            "feedback_summary_paragraph": "Could not compare: one or both videos had no pose data.",
-            "worst_deviations": [],
-            "best_pose_matches": [],
-            "path_sample_start": [],
-            "path_sample_end": [],
-            "message": "One or both CSVs had no frames with pose data.",
-        }
+        return (
+            {
+                "dtw_distance": None,
+                "dtw_similarity_score": None,
+                "aligned_moments": [],
+                "feedback_analysis": [],
+                "feedback_summary_paragraph": "Could not compare: one or both videos had no pose data.",
+                "worst_deviations": [],
+                "best_pose_matches": [],
+                "path_sample_start": [],
+                "path_sample_end": [],
+                "message": "One or both CSVs had no frames with pose data.",
+            },
+            None,
+        )
 
     # Run FastDTW: distance = total cost of the best alignment; path = list of (ref_idx, user_idx)
     distance, path = fastdtw(ref_sequence, user_sequence, dist=euclidean)
@@ -1541,8 +1753,9 @@ def compare_motion_csvs_dtw(reference_csv_path, user_csv_path, fps=DEFAULT_FPS, 
             "user_frame": user_start + ui,
             "distance": round(d, 4),
             "user_time": frame_to_ts(user_start + ui, user_fps_used),
+            "path_index": int(path_i),
         }
-        for (d, _, ri, ui) in sorted_worst
+        for (d, path_i, ri, ui) in sorted_worst
     ]
     best_pose_matches = [
         {
@@ -1604,7 +1817,7 @@ def compare_motion_csvs_dtw(reference_csv_path, user_csv_path, fps=DEFAULT_FPS, 
     feedback_analysis = group_feedback_by_time_ranges(feedback_analysis, max_gap_sec=1.5)
     feedback_summary_paragraph = feedback_analysis_to_paragraph(feedback_analysis)
 
-    return {
+    result_dict = {
         "dtw_distance": round(distance, 4),
         "dtw_normalized_distance": round(normalized_distance, 6),
         "dtw_similarity_score": round(dtw_similarity_score, 2),
@@ -1623,6 +1836,8 @@ def compare_motion_csvs_dtw(reference_csv_path, user_csv_path, fps=DEFAULT_FPS, 
         "path_sample_start": path_sample_start,
         "path_sample_end": path_sample_end,
     }
+    path_pairs = [(int(r), int(u)) for r, u in path]
+    return result_dict, path_pairs
 
 
 def write_result_log(video1_path, video2_path, output1, output2, comparison, video_info=None, tips_file_path=None):
@@ -1831,7 +2046,7 @@ def _run_analysis(video1_path, video2_path, run_ts):
     user_motion_fps = extract_motion_from_video(video2_path, output2)
 
     comparison = compare_motion_csvs(output1, output2)
-    dtw_result = compare_motion_csvs_dtw(
+    dtw_result, dtw_path = compare_motion_csvs_dtw(
         output1, output2, ref_fps=ref_motion_fps, user_fps=user_motion_fps
     )
     comparison["dtw_message"] = dtw_result.pop("message", None)
@@ -1872,6 +2087,52 @@ def _run_analysis(video1_path, video2_path, run_ts):
             pass
     comparison["deviation_comparison_image"] = (comparison["deviation_comparison_images"] or [None])[0]
 
+    # Short GIFs along DTW alignment for top-3 worst deviations (red markers on user where mismatched).
+    worst_for_gifs = (comparison.get("worst_deviations") or [])[:NUM_DEVIATION_GIFS]
+    comparison["deviation_gifs"] = [None] * len(worst_for_gifs)
+    comparison["deviation_gif_clips"] = [None] * len(worst_for_gifs)
+    if dtw_path and worst_for_gifs:
+        ref_rng = comparison.get("motion_range_reference") or [1, 1]
+        user_rng = comparison.get("motion_range_user") or [1, 1]
+        ref_start = int(ref_rng[0])
+        user_start = int(user_rng[0])
+        radius = DEVIATION_GIF_PATH_RADIUS
+        for rank, moment in enumerate(worst_for_gifs):
+            pi = moment.get("path_index")
+            if pi is None:
+                continue
+            lo = max(0, int(pi) - radius)
+            hi = min(len(dtw_path) - 1, int(pi) + radius)
+            segment = dtw_path[lo : hi + 1]
+            if not segment:
+                continue
+            clip_meta = _deviation_gif_clip_time_meta(segment, user_start, user_motion_fps)
+            if clip_meta:
+                comparison["deviation_gif_clips"][rank] = clip_meta
+            if not _PIL_AVAILABLE:
+                continue
+            gif_path = os.path.join(
+                DEVIATION_GIFS_FOLDER, f"deviation_rank{rank + 1}_{run_ts}.gif"
+            )
+            try:
+                saved = save_deviation_alignment_gif(
+                    video1_path,
+                    video2_path,
+                    segment,
+                    ref_start,
+                    user_start,
+                    ref_motion_fps,
+                    user_motion_fps,
+                    gif_path,
+                    user_label=None,
+                    landmark_match_thresh=None,
+                    playback_fps=DEVIATION_GIF_PLAYBACK_FPS,
+                )
+                if saved:
+                    comparison["deviation_gifs"][rank] = saved
+            except Exception:
+                pass
+
     # Side-by-side pose-match images: one per best pose-match moment; green = matching choreographer; same format + tips
     comparison["pose_match_comparison_images"] = []
     pose_match_label = "You. Green line means the body part is matching the choreographer."
@@ -1903,6 +2164,7 @@ def _run_analysis(video1_path, video2_path, run_ts):
 
     # Structured findings per worst deviation moment for frontend cards.
     comparison["deviation_findings"] = build_deviation_findings(comparison)
+    deviation_moments_ui_path = write_deviation_moments_ui_json(comparison, run_ts)
 
     apply_acceptable_threshold(comparison)
 
@@ -1922,6 +2184,9 @@ def _run_analysis(video1_path, video2_path, run_ts):
         "tips_file": tips_path,
         "deviation_comparison_image": comparison.get("deviation_comparison_image"),
         "deviation_comparison_images": comparison.get("deviation_comparison_images", []),
+        "deviation_gifs": comparison.get("deviation_gifs", []),
+        "deviation_moments_ui": comparison.get("deviation_moments_ui"),
+        "deviation_moments_ui_file": deviation_moments_ui_path,
         "pose_match_comparison_image": comparison.get("pose_match_comparison_image"),
         "pose_match_comparison_images": comparison.get("pose_match_comparison_images", []),
     }
@@ -1942,6 +2207,22 @@ def _run_analysis(video1_path, video2_path, run_ts):
         u = _upload_file_to_storage(path, f"{run_prefix}/screenshots/pose_match/{os.path.basename(path)}")
         if u:
             response.setdefault("pose_match_comparison_image_urls", []).append(u)
+    deviation_gif_urls = []
+    for path in response.get("deviation_gifs") or []:
+        if not path:
+            deviation_gif_urls.append(None)
+            continue
+        u = _upload_file_to_storage(path, f"{run_prefix}/gifs/deviation/{os.path.basename(path)}")
+        deviation_gif_urls.append(u)
+    if deviation_gif_urls:
+        response["deviation_gif_urls"] = deviation_gif_urls
+    if deviation_moments_ui_path:
+        u = _upload_file_to_storage(
+            deviation_moments_ui_path,
+            f"{run_prefix}/analysis_ui/{os.path.basename(deviation_moments_ui_path)}",
+        )
+        if u:
+            response["deviation_moments_ui_file_url"] = u
 
     return response
 
@@ -2005,7 +2286,7 @@ def check_dtw():
             "error": "No motion CSVs found. Upload two videos first via POST /upload-videos.",
         }), 404
 
-    result = compare_motion_csvs_dtw(output1, output2, ref_fps=DEFAULT_FPS, user_fps=DEFAULT_FPS)
+    result, _ = compare_motion_csvs_dtw(output1, output2, ref_fps=DEFAULT_FPS, user_fps=DEFAULT_FPS)
     dtw_ran = result.get("dtw_distance") is not None
 
     payload = {

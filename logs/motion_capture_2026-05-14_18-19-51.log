@@ -1,0 +1,507 @@
+============================================================
+MOTION CAPTURE RUN RESULT
+============================================================
+Timestamp: 2026-05-14T18:19:51.569004
+
+Input videos:
+  Reference: uploads\dance_reference.mp4
+  User:      uploads\dance_user.mp4
+
+Tips file (clean practice tips):
+  tips\tips_2026-05-14_18-19-51.txt
+
+Video info (original file):
+  Reference: 412 frames, 30.0 FPS, duration 13.73 s
+  User:      353 frames, 30.0 FPS, duration 11.77 s
+
+Output CSVs:
+  Reference motion: motion_outputs\reference_motion.csv
+  User motion:      motion_outputs\user_motion.csv
+
+  Timestamps: frame N = N/FPS seconds (reference FPS: 7.5, user FPS: 7.5).
+
+Active motion range (standing-still trimmed):
+  Reference: frames 19–99
+  User:      frames 7–85
+
+Comparison (frame-by-frame):
+  Similarity score (0-100):  74.83
+  Deviation from reference:  25.2%
+  Within acceptable range:   False (threshold: 80%)
+  Mean landmark distance:   0.251651
+  Frames compared:          79
+
+Recommendation:
+  Your movement differs from the reference. Practice the sections with feedback below to improve.
+
+DTW (Dynamic Time Warping):
+  DTW distance:              337.9128
+  DTW normalized distance:   3.839918
+  DTW similarity score:      0.0
+  Path length:               88
+  Reference sequence (frames): 81
+  User sequence (frames):      79
+
+  DTW sync verification: the path maps each step to (ref_frame, user_frame) so
+  reference and user are aligned by pose, not by time.
+  First 10 alignments (ref_time <-> user_time):
+    [0:00] <-> [0:00]
+    [0:00] <-> [0:00]
+    [0:00] <-> [0:00]
+    [0:00] <-> [0:00]
+    [0:00] <-> [0:00]
+    [0:00] <-> [0:00]
+    [0:00] <-> [0:00]
+    [0:00] <-> [0:01]
+    [0:00] <-> [0:01]
+    [0:00] <-> [0:01]
+  Last 10 alignments (ref_time <-> user_time):
+    [0:09] <-> [0:09]
+    [0:09] <-> [0:09]
+    [0:09] <-> [0:09]
+    [0:10] <-> [0:09]
+    [0:10] <-> [0:09]
+    [0:10] <-> [0:10]
+    [0:10] <-> [0:10]
+    [0:10] <-> [0:10]
+    [0:10] <-> [0:10]
+    [0:10] <-> [0:10]
+
+Negative feedback (where to improve):
+  At 0:00, your left leg is straight while the reference's left leg is
+  bent. From 0:02 to 0:03, your left leg is straight while the
+  reference's left leg is bent. See deviation screenshots below.
+
+Positive feedback (where your pose was most identical to the reference):
+  See pose-match screenshots below for frames where your pose was most
+  identical to the reference.
+
+Top deviation findings (issue + recommendation):
+  #1 at [0:10] (ref_frame=90, user_frame=77, distance=9.7939):
+    Issue: Your left leg is straight while the reference's left leg is
+    bent for [0:09].
+    Recommendation: Straighten your left leg at 0:09.
+    Screenshot: deviation_screenshots\deviation_comparison_1_2026-05-14_18-19-23.png
+  #2 at [0:05] (ref_frame=48, user_frame=40, distance=7.8736):
+    Issue: Your left leg is straight while the reference's left leg is
+    bent for [0:05].
+    Recommendation: Straighten your left leg at 0:05.
+    Screenshot: deviation_screenshots\deviation_comparison_2_2026-05-14_18-19-23.png
+  #3 at [0:05] (ref_frame=49, user_frame=41, distance=7.6316):
+    Issue: Your left leg is straight while the reference's left leg is
+    bent for [0:05].
+    Recommendation: Straighten your left leg at 0:05.
+    Screenshot: deviation_screenshots\deviation_comparison_3_2026-05-14_18-19-23.png
+
+Deviation comparison images (side-by-side, red = not matching choreographer):
+  #1: deviation_screenshots\deviation_comparison_1_2026-05-14_18-19-23.png
+  #2: deviation_screenshots\deviation_comparison_2_2026-05-14_18-19-23.png
+  #3: deviation_screenshots\deviation_comparison_3_2026-05-14_18-19-23.png
+
+Aligned moments (timestamps [min:sec], reference <-> user), sampled every 20 matches:
+  Reference [0:00] <-> User [0:00]
+  Reference [0:01] <-> User [0:02]
+  Reference [0:04] <-> User [0:05]
+  Reference [0:07] <-> User [0:07]
+  Reference [0:09] <-> User [0:09]
+
+Feedback summary (paragraph):
+
+  At 0:00, your left leg is straight while the reference's left leg is
+  bent. From 0:02 to 0:03, your left leg is straight while the
+  reference's left leg is bent. At 0:05, your left leg is straight while
+  the reference's left leg is bent. At 0:09, your left leg is straight
+  while the reference's left leg is bent. At 0:00, your right leg is
+  straight while the reference's right leg is bent. At 0:02, your right
+  leg is straight while the reference's right leg is bent. At 0:05, your
+  right leg is straight while the reference's right leg is bent. At
+  0:09, your right leg is straight while the reference's right leg is
+  bent. From 0:02 to 0:03, timing is off — you are moving too slow
+  (falling behind the reference). From 0:02 to 0:03, your torso is
+  leaning back compared to the reference. At 0:05, your torso is leaning
+  back compared to the reference. At 0:07, your torso is leaning back
+  compared to the reference. At 0:09, your torso is leaning back
+  compared to the reference. At 0:03, your right arm is straighter than
+  the reference (reference arm is bent). At 0:05, your left arm is more
+  bent than the reference (reference arm is bent). At 0:07, your left
+  knee is too bent compared to the reference. At 0:07, reference has
+  left arm raised ; your arms are not in the same pose.
+
+Feedback by time range (where you differ from reference):
+  User [0:00] (ref [0:00]): Your left leg is straight while the reference's left leg is bent for [0:00].
+  User [0:02]–[0:03] (ref [0:01]–[0:03]): Your left leg is straight while the reference's left leg is bent for [0:02]–[0:03].
+  User [0:05] (ref [0:05]): Your left leg is straight while the reference's left leg is bent for [0:05].
+  User [0:09] (ref [0:09]): Your left leg is straight while the reference's left leg is bent for [0:09].
+  User [0:00] (ref [0:00]): Your right leg is straight while the reference's right leg is bent for [0:00].
+  User [0:02] (ref [0:01]): Your right leg is straight while the reference's right leg is bent for [0:02].
+  User [0:05] (ref [0:05]): Your right leg is straight while the reference's right leg is bent for [0:05].
+  User [0:09] (ref [0:09]): Your right leg is straight while the reference's right leg is bent for [0:09].
+  User [0:02]–[0:03] (ref [0:01]–[0:03]): Timing is off — you are moving too slow (falling behind the reference) for [0:02]–[0:03].
+  User [0:02]–[0:03] (ref [0:01]–[0:03]): Your torso is leaning back compared to the reference for [0:02]–[0:03].
+  User [0:05] (ref [0:05]): Your torso is leaning back compared to the reference for [0:05].
+  User [0:07] (ref [0:07]): Your torso is leaning back compared to the reference for [0:07].
+  User [0:09] (ref [0:09]): Your torso is leaning back compared to the reference for [0:09].
+  User [0:03] (ref [0:03]): Your right arm is straighter than the reference (reference arm is bent) for [0:03].
+  User [0:05] (ref [0:05]): Your left arm is more bent than the reference (reference arm is bent) for [0:05].
+  User [0:07] (ref [0:07]): Your left knee is too bent compared to the reference for [0:07].
+  User [0:07] (ref [0:07]): Reference has left arm raised ; your arms are not in the same pose for [0:07].
+
+Full comparison (JSON):
+{
+  "similarity_score": 74.83,
+  "mean_landmark_distance": 0.251651,
+  "frames_compared": 79,
+  "motion_range_reference": [
+    19,
+    99
+  ],
+  "motion_range_user": [
+    7,
+    85
+  ],
+  "dtw_message": null,
+  "dtw_distance": 337.9128,
+  "dtw_normalized_distance": 3.839918,
+  "dtw_similarity_score": 0.0,
+  "path_length": 88,
+  "ref_sequence_length": 81,
+  "user_sequence_length": 79,
+  "aligned_moments": [
+    {
+      "reference_time": "[0:00]",
+      "user_time": "[0:00]"
+    },
+    {
+      "reference_time": "[0:01]",
+      "user_time": "[0:02]"
+    },
+    {
+      "reference_time": "[0:04]",
+      "user_time": "[0:05]"
+    },
+    {
+      "reference_time": "[0:07]",
+      "user_time": "[0:07]"
+    },
+    {
+      "reference_time": "[0:09]",
+      "user_time": "[0:09]"
+    }
+  ],
+  "feedback_analysis": [
+    {
+      "user_time_range": "[0:00]",
+      "reference_time_range": "[0:00]",
+      "feedback": "Your left leg is straight while the reference's left leg is bent for [0:00]."
+    },
+    {
+      "user_time_range": "[0:02]\u2013[0:03]",
+      "reference_time_range": "[0:01]\u2013[0:03]",
+      "feedback": "Your left leg is straight while the reference's left leg is bent for [0:02]\u2013[0:03]."
+    },
+    {
+      "user_time_range": "[0:05]",
+      "reference_time_range": "[0:05]",
+      "feedback": "Your left leg is straight while the reference's left leg is bent for [0:05]."
+    },
+    {
+      "user_time_range": "[0:09]",
+      "reference_time_range": "[0:09]",
+      "feedback": "Your left leg is straight while the reference's left leg is bent for [0:09]."
+    },
+    {
+      "user_time_range": "[0:00]",
+      "reference_time_range": "[0:00]",
+      "feedback": "Your right leg is straight while the reference's right leg is bent for [0:00]."
+    },
+    {
+      "user_time_range": "[0:02]",
+      "reference_time_range": "[0:01]",
+      "feedback": "Your right leg is straight while the reference's right leg is bent for [0:02]."
+    },
+    {
+      "user_time_range": "[0:05]",
+      "reference_time_range": "[0:05]",
+      "feedback": "Your right leg is straight while the reference's right leg is bent for [0:05]."
+    },
+    {
+      "user_time_range": "[0:09]",
+      "reference_time_range": "[0:09]",
+      "feedback": "Your right leg is straight while the reference's right leg is bent for [0:09]."
+    },
+    {
+      "user_time_range": "[0:02]\u2013[0:03]",
+      "reference_time_range": "[0:01]\u2013[0:03]",
+      "feedback": "Timing is off \u2014 you are moving too slow (falling behind the reference) for [0:02]\u2013[0:03]."
+    },
+    {
+      "user_time_range": "[0:02]\u2013[0:03]",
+      "reference_time_range": "[0:01]\u2013[0:03]",
+      "feedback": "Your torso is leaning back compared to the reference for [0:02]\u2013[0:03]."
+    },
+    {
+      "user_time_range": "[0:05]",
+      "reference_time_range": "[0:05]",
+      "feedback": "Your torso is leaning back compared to the reference for [0:05]."
+    },
+    {
+      "user_time_range": "[0:07]",
+      "reference_time_range": "[0:07]",
+      "feedback": "Your torso is leaning back compared to the reference for [0:07]."
+    },
+    {
+      "user_time_range": "[0:09]",
+      "reference_time_range": "[0:09]",
+      "feedback": "Your torso is leaning back compared to the reference for [0:09]."
+    },
+    {
+      "user_time_range": "[0:03]",
+      "reference_time_range": "[0:03]",
+      "feedback": "Your right arm is straighter than the reference (reference arm is bent) for [0:03]."
+    },
+    {
+      "user_time_range": "[0:05]",
+      "reference_time_range": "[0:05]",
+      "feedback": "Your left arm is more bent than the reference (reference arm is bent) for [0:05]."
+    },
+    {
+      "user_time_range": "[0:07]",
+      "reference_time_range": "[0:07]",
+      "feedback": "Your left knee is too bent compared to the reference for [0:07]."
+    },
+    {
+      "user_time_range": "[0:07]",
+      "reference_time_range": "[0:07]",
+      "feedback": "Reference has left arm raised ; your arms are not in the same pose for [0:07]."
+    }
+  ],
+  "feedback_summary_paragraph": "At 0:00, your left leg is straight while the reference's left leg is bent. From 0:02 to 0:03, your left leg is straight while the reference's left leg is bent. At 0:05, your left leg is straight while the reference's left leg is bent. At 0:09, your left leg is straight while the reference's left leg is bent. At 0:00, your right leg is straight while the reference's right leg is bent. At 0:02, your right leg is straight while the reference's right leg is bent. At 0:05, your right leg is straight while the reference's right leg is bent. At 0:09, your right leg is straight while the reference's right leg is bent. From 0:02 to 0:03, timing is off \u2014 you are moving too slow (falling behind the reference). From 0:02 to 0:03, your torso is leaning back compared to the reference. At 0:05, your torso is leaning back compared to the reference. At 0:07, your torso is leaning back compared to the reference. At 0:09, your torso is leaning back compared to the reference. At 0:03, your right arm is straighter than the reference (reference arm is bent). At 0:05, your left arm is more bent than the reference (reference arm is bent). At 0:07, your left knee is too bent compared to the reference. At 0:07, reference has left arm raised ; your arms are not in the same pose.",
+  "worst_deviation_ref_frame": 90,
+  "worst_deviation_user_frame": 77,
+  "worst_deviations": [
+    {
+      "ref_frame": 90,
+      "user_frame": 77,
+      "distance": 9.7939,
+      "user_time": "[0:10]",
+      "path_index": 78
+    },
+    {
+      "ref_frame": 48,
+      "user_frame": 40,
+      "distance": 7.8736,
+      "user_time": "[0:05]",
+      "path_index": 36
+    },
+    {
+      "ref_frame": 49,
+      "user_frame": 41,
+      "distance": 7.6316,
+      "user_time": "[0:05]",
+      "path_index": 37
+    }
+  ],
+  "best_pose_matches": [],
+  "path_sample_start": [
+    {
+      "reference_time": "[0:00]",
+      "user_time": "[0:00]",
+      "ref_idx": 0,
+      "user_idx": 0
+    },
+    {
+      "reference_time": "[0:00]",
+      "user_time": "[0:00]",
+      "ref_idx": 0,
+      "user_idx": 1
+    },
+    {
+      "reference_time": "[0:00]",
+      "user_time": "[0:00]",
+      "ref_idx": 0,
+      "user_idx": 2
+    },
+    {
+      "reference_time": "[0:00]",
+      "user_time": "[0:00]",
+      "ref_idx": 0,
+      "user_idx": 3
+    },
+    {
+      "reference_time": "[0:00]",
+      "user_time": "[0:00]",
+      "ref_idx": 0,
+      "user_idx": 4
+    },
+    {
+      "reference_time": "[0:00]",
+      "user_time": "[0:00]",
+      "ref_idx": 0,
+      "user_idx": 5
+    },
+    {
+      "reference_time": "[0:00]",
+      "user_time": "[0:00]",
+      "ref_idx": 0,
+      "user_idx": 6
+    },
+    {
+      "reference_time": "[0:00]",
+      "user_time": "[0:01]",
+      "ref_idx": 1,
+      "user_idx": 7
+    },
+    {
+      "reference_time": "[0:00]",
+      "user_time": "[0:01]",
+      "ref_idx": 2,
+      "user_idx": 8
+    },
+    {
+      "reference_time": "[0:00]",
+      "user_time": "[0:01]",
+      "ref_idx": 3,
+      "user_idx": 9
+    }
+  ],
+  "path_sample_end": [
+    {
+      "reference_time": "[0:09]",
+      "user_time": "[0:09]",
+      "ref_idx": 71,
+      "user_idx": 70
+    },
+    {
+      "reference_time": "[0:09]",
+      "user_time": "[0:09]",
+      "ref_idx": 72,
+      "user_idx": 71
+    },
+    {
+      "reference_time": "[0:09]",
+      "user_time": "[0:09]",
+      "ref_idx": 73,
+      "user_idx": 71
+    },
+    {
+      "reference_time": "[0:10]",
+      "user_time": "[0:09]",
+      "ref_idx": 74,
+      "user_idx": 72
+    },
+    {
+      "reference_time": "[0:10]",
+      "user_time": "[0:09]",
+      "ref_idx": 75,
+      "user_idx": 73
+    },
+    {
+      "reference_time": "[0:10]",
+      "user_time": "[0:10]",
+      "ref_idx": 76,
+      "user_idx": 74
+    },
+    {
+      "reference_time": "[0:10]",
+      "user_time": "[0:10]",
+      "ref_idx": 77,
+      "user_idx": 75
+    },
+    {
+      "reference_time": "[0:10]",
+      "user_time": "[0:10]",
+      "ref_idx": 78,
+      "user_idx": 76
+    },
+    {
+      "reference_time": "[0:10]",
+      "user_time": "[0:10]",
+      "ref_idx": 79,
+      "user_idx": 77
+    },
+    {
+      "reference_time": "[0:10]",
+      "user_time": "[0:10]",
+      "ref_idx": 80,
+      "user_idx": 78
+    }
+  ],
+  "motion_fps": {
+    "reference": 7.5,
+    "user": 7.5
+  },
+  "negative_feedback_summary": "At 0:00, your left leg is straight while the reference's left leg is bent. From 0:02 to 0:03, your left leg is straight while the reference's left leg is bent. See deviation screenshots below.",
+  "positive_feedback_summary": "See pose-match screenshots below for frames where your pose was most identical to the reference.",
+  "practice_tips": [
+    "Straighten your legs at 0:00.",
+    "Straighten your left leg from 0:02 to 0:03.",
+    "Straighten your legs at 0:05.",
+    "Straighten your legs at 0:09.",
+    "Straighten your right leg at 0:02.",
+    "Keep your right arm bent at 0:03.",
+    "Straighten your left arm at 0:05.",
+    "Straighten your left knee a little at 0:07.",
+    "Speed up to match the reference from 0:02 to 0:03.",
+    "Lean your torso back from 0:02 to 0:03.",
+    "Lean your torso back at 0:05.",
+    "Lean your torso back at 0:07.",
+    "Lean your torso back at 0:09.",
+    "Raise your left arm to match the reference at 0:07."
+  ],
+  "deviation_comparison_images": [
+    "deviation_screenshots\\deviation_comparison_1_2026-05-14_18-19-23.png",
+    "deviation_screenshots\\deviation_comparison_2_2026-05-14_18-19-23.png",
+    "deviation_screenshots\\deviation_comparison_3_2026-05-14_18-19-23.png"
+  ],
+  "deviation_comparison_image": "deviation_screenshots\\deviation_comparison_1_2026-05-14_18-19-23.png",
+  "deviation_gifs": [
+    "deviation_gifs\\deviation_rank1_2026-05-14_18-19-23.gif",
+    "deviation_gifs\\deviation_rank2_2026-05-14_18-19-23.gif",
+    "deviation_gifs\\deviation_rank3_2026-05-14_18-19-23.gif"
+  ],
+  "pose_match_comparison_images": [],
+  "pose_match_comparison_image": null,
+  "deviation_findings": [
+    {
+      "rank": 1,
+      "user_time": "[0:10]",
+      "reference_frame": 90,
+      "user_frame": 77,
+      "distance": 9.7939,
+      "screenshot_path": "deviation_screenshots\\deviation_comparison_1_2026-05-14_18-19-23.png",
+      "gif_path": "deviation_gifs\\deviation_rank1_2026-05-14_18-19-23.gif",
+      "issue": "Your left leg is straight while the reference's left leg is bent for [0:09].",
+      "recommendation": "Straighten your left leg at 0:09.",
+      "body_focus": "left_leg"
+    },
+    {
+      "rank": 2,
+      "user_time": "[0:05]",
+      "reference_frame": 48,
+      "user_frame": 40,
+      "distance": 7.8736,
+      "screenshot_path": "deviation_screenshots\\deviation_comparison_2_2026-05-14_18-19-23.png",
+      "gif_path": "deviation_gifs\\deviation_rank2_2026-05-14_18-19-23.gif",
+      "issue": "Your left leg is straight while the reference's left leg is bent for [0:05].",
+      "recommendation": "Straighten your left leg at 0:05.",
+      "body_focus": "left_leg"
+    },
+    {
+      "rank": 3,
+      "user_time": "[0:05]",
+      "reference_frame": 49,
+      "user_frame": 41,
+      "distance": 7.6316,
+      "screenshot_path": "deviation_screenshots\\deviation_comparison_3_2026-05-14_18-19-23.png",
+      "gif_path": "deviation_gifs\\deviation_rank3_2026-05-14_18-19-23.gif",
+      "issue": "Your left leg is straight while the reference's left leg is bent for [0:05].",
+      "recommendation": "Straighten your left leg at 0:05.",
+      "body_focus": "left_leg"
+    }
+  ],
+  "deviation_percent": 25.2,
+  "within_acceptable_range": false,
+  "recommendation": "Your movement differs from the reference. Practice the sections with feedback below to improve."
+}
+
+============================================================
