@@ -6,14 +6,17 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { createClient, Session, User } from '@supabase/supabase-js';
 import { FiArrowLeft, FiLogOut, FiUploadCloud, FiList } from 'react-icons/fi';
 
+// ─────────────────────────────────────────────
+// SUPABASE CLIENT
+// ─────────────────────────────────────────────
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-// -------------------------
+// ─────────────────────────────────────────────
 // CMS TYPES
-// -------------------------
+// ─────────────────────────────────────────────
 type AppSettingsRow = {
   id: number;
   system_name: string;
@@ -36,53 +39,115 @@ type FaqRow = {
   is_active: boolean;
 };
 
+// ─────────────────────────────────────────────
+// VIDEO UPLOAD COMPONENT
+// ─────────────────────────────────────────────
+interface VideoUploadProps {
+  label: string;
+  preview: string | null;
+  setFile: (file: File | null) => void;
+  loading: boolean;
+}
+
+function VideoUpload({ label, preview, setFile, loading }: VideoUploadProps) {
+  if (preview) {
+    return (
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0, y: 20 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="flex-1 border rounded-xl p-6 bg-gray-50"
+      >
+        <h2 className="text-lg font-semibold mb-3 text-center">{label}</h2>
+        <div className="w-full h-36 md:h-80 rounded-lg overflow-hidden border border-slate-300 bg-black">
+          <video src={preview} controls className="w-full h-full object-contain" />
+        </div>
+      </motion.div>
+    );
+  }
+
+  return (
+    <motion.label
+      initial={{ scale: 0.95, opacity: 0, y: 20 }}
+      animate={{ scale: 1, opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+      className="flex-1 flex flex-col items-center justify-center w-full h-36 md:h-80 border border-slate-300 rounded-lg cursor-pointer hover:border-gray-400"
+    >
+      <FiUploadCloud size={48} className="text-gray-400" />
+      <span className="mt-2 text-gray-600">Upload {label}</span>
+      <input
+        type="file"
+        accept="video/*"
+        className="hidden"
+        disabled={loading}
+        onChange={(e) => setFile(e.target.files ? e.target.files[0] : null)}
+      />
+    </motion.label>
+  );
+}
+
+// ─────────────────────────────────────────────
+// UPLOAD PAGE
+// ─────────────────────────────────────────────
 export default function UploadPage() {
   const router = useRouter();
+
+  // Auth
   const [user, setUser] = useState<User | null>(null);
+
+  // Videos
   const [dancerVideo, setDancerVideo] = useState<File | null>(null);
   const [choreoVideo, setChoreoVideo] = useState<File | null>(null);
   const [previewDancer, setPreviewDancer] = useState<string | null>(null);
   const [previewChoreo, setPreviewChoreo] = useState<string | null>(null);
+
+  // UI
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
-  // -------------------------
-  // CMS STATE
-  // -------------------------
+  // CMS
   const [appSettings, setAppSettings] = useState<AppSettingsRow | null>(null);
   const [aboutPage, setAboutPage] = useState<ContentPageRow | null>(null);
   const [guidelinesPage, setGuidelinesPage] = useState<ContentPageRow | null>(null);
   const [faqs, setFaqs] = useState<FaqRow[]>([]);
   const [cmsError, setCmsError] = useState<string | null>(null);
 
-  // -------------------------
+  // ─────────────────────────────────────────────
   // AUTH CHECK
-  // -------------------------
+  // ─────────────────────────────────────────────
   useEffect(() => {
     const checkUser = async () => {
       const { data } = await supabase.auth.getUser();
-      if (!data.user) router.replace('/login');
-      else setUser(data.user);
+      if (!data.user) {
+        router.replace('/login');
+      } else {
+        setUser(data.user);
+      }
     };
+
     checkUser();
 
     const { data: listener } = supabase.auth.onAuthStateChange(
       (_event, session: Session | null) => {
-        if (!session?.user) router.replace('/login');
-        else setUser(session.user);
+        if (!session?.user) {
+          router.replace('/login');
+        } else {
+          setUser(session.user);
+        }
       }
     );
 
     return () => listener.subscription.unsubscribe();
   }, [router]);
 
-  // -------------------------
+  // ─────────────────────────────────────────────
   // CMS LOAD
-  // -------------------------
+  // ─────────────────────────────────────────────
   useEffect(() => {
     const loadCms = async () => {
       setCmsError(null);
 
+      // App settings
       const { data: settingsRow, error: sErr } = await supabase
         .from('app_settings')
         .select('id,system_name,logo_url,primary_color')
@@ -94,6 +159,7 @@ export default function UploadPage() {
         setAppSettings(settingsRow as AppSettingsRow);
       }
 
+      // Content pages
       const { data: pages, error: pErr } = await supabase
         .from('content_pages')
         .select('id,slug,title,body,is_active')
@@ -104,10 +170,11 @@ export default function UploadPage() {
         setCmsError((prev) => prev || pErr.message);
       } else {
         const list = (pages ?? []) as ContentPageRow[];
-        setAboutPage(list.find((x) => x.slug === 'about' && x.is_active) || null);
-        setGuidelinesPage(list.find((x) => x.slug === 'guidelines' && x.is_active) || null);
+        setAboutPage(list.find((x) => x.slug === 'about' && x.is_active) ?? null);
+        setGuidelinesPage(list.find((x) => x.slug === 'guidelines' && x.is_active) ?? null);
       }
 
+      // FAQs
       const { data: faqRows, error: fErr } = await supabase
         .from('faqs')
         .select('id,question,answer,is_active')
@@ -118,45 +185,39 @@ export default function UploadPage() {
       if (fErr) {
         setCmsError((prev) => prev || fErr.message);
       } else {
-        setFaqs(((faqRows ?? []) as unknown) as FaqRow[]);
+        setFaqs((faqRows ?? []) as FaqRow[]);
       }
     };
 
     loadCms();
   }, []);
 
-  // -------------------------
+  // ─────────────────────────────────────────────
   // VIDEO PREVIEWS
-  // -------------------------
+  // ─────────────────────────────────────────────
   useEffect(() => {
-    let url: string | null = null;
-    if (dancerVideo) {
-      url = URL.createObjectURL(dancerVideo);
-      setPreviewDancer(url);
-    } else {
+    if (!dancerVideo) {
       setPreviewDancer(null);
+      return;
     }
-    return () => {
-      if (url) URL.revokeObjectURL(url);
-    };
+    const url = URL.createObjectURL(dancerVideo);
+    setPreviewDancer(url);
+    return () => URL.revokeObjectURL(url);
   }, [dancerVideo]);
 
   useEffect(() => {
-    let url: string | null = null;
-    if (choreoVideo) {
-      url = URL.createObjectURL(choreoVideo);
-      setPreviewChoreo(url);
-    } else {
+    if (!choreoVideo) {
       setPreviewChoreo(null);
+      return;
     }
-    return () => {
-      if (url) URL.revokeObjectURL(url);
-    };
+    const url = URL.createObjectURL(choreoVideo);
+    setPreviewChoreo(url);
+    return () => URL.revokeObjectURL(url);
   }, [choreoVideo]);
 
-  // -------------------------
-  // LIST FILES
-  // -------------------------
+  // ─────────────────────────────────────────────
+  // HANDLERS
+  // ─────────────────────────────────────────────
   const handleListFiles = async () => {
     if (!user) {
       setStatus('Please log in to view files.');
@@ -181,16 +242,11 @@ export default function UploadPage() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     Object.keys(localStorage).forEach((key) => {
-      if (key.startsWith('sb-')) {
-        localStorage.removeItem(key);
-      }
+      if (key.startsWith('sb-')) localStorage.removeItem(key);
     });
     router.replace('/login');
   };
 
-  // -------------------------
-  // ANALYZE FLOW
-  // -------------------------
   const handleAnalyze = async () => {
     if (!dancerVideo || !choreoVideo) {
       setStatus('Please upload both videos first.');
@@ -233,69 +289,116 @@ export default function UploadPage() {
     }
   };
 
-  const systemName = appSettings?.system_name || 'DancePerfect';
-  const primaryColor = appSettings?.primary_color || '#7C3AED';
+  // ─────────────────────────────────────────────
+  // DERIVED VALUES
+  // ─────────────────────────────────────────────
+  const systemName = appSettings?.system_name ?? 'DancePerfect';
+  const primaryColor = appSettings?.primary_color ?? '#7C3AED';
 
+  // ─────────────────────────────────────────────
+  // RENDER
+  // ─────────────────────────────────────────────
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
+      transition={{ duration: 0.8 }}
       className="min-h-screen flex flex-col items-center justify-center px-4 bg-gradient-to-br from-[#d6c1ff] via-[#cde7ff] to-white"
     >
       <div className="w-full max-w-6xl flex flex-col gap-6 py-10">
 
+        {/* CMS Error Banner */}
         {cmsError && (
           <p className="text-center text-sm text-red-600">
             CMS load warning: {cmsError}
           </p>
         )}
 
-        {/* GUIDELINES */}
+        {/* 1. Recording Guidelines */}
         {guidelinesPage && (
-          <div className="bg-white/60 border border-white/70 rounded-xl p-6">
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+            className="bg-white/60 border border-white/70 rounded-xl p-6"
+          >
             <h2 className="text-lg font-semibold mb-2" style={{ color: primaryColor }}>
               {guidelinesPage.title}
             </h2>
-            <p className="text-slate-700 whitespace-pre-line">
-              {guidelinesPage.body}
-            </p>
-          </div>
+            <p className="text-slate-700 whitespace-pre-line">{guidelinesPage.body}</p>
+          </motion.div>
         )}
 
-        {/* UPLOAD SECTION */}
-        <div className="bg-white/70 border border-white/60 rounded-2xl p-8">
-
-          <button onClick={() => router.back()} className="absolute top-4 left-4">
-            <FiArrowLeft />
-          </button>
-
-          <button onClick={handleLogout} className="absolute top-4 right-4 text-red-600">
-            <FiLogOut />
-          </button>
-
-          {/* LOGO */}
-          <div className="text-center mb-4">
-            {appSettings?.logo_url && (
-              <img src={appSettings.logo_url} className="h-10 mx-auto" />
+        {/* 2. Video Upload */}
+        <motion.div
+          initial={{ scale: 0.95, opacity: 0, y: 20 }}
+          animate={{ scale: 1, opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+          className="bg-white/70 backdrop-blur-lg border border-white/60 shadow-lg rounded-2xl p-8 relative"
+        >
+          {/* Loading Overlay */}
+          <AnimatePresence>
+            {loading && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.3 }}
+                className="absolute inset-0 bg-white/70 backdrop-blur-sm flex items-center justify-center rounded-2xl z-50"
+              >
+                <div className="text-center">
+                  <div className="animate-spin h-10 w-10 rounded-full border-4 border-gray-300 border-t-gray-700 mx-auto mb-3" />
+                  <p className="text-gray-700 font-semibold">Processing...</p>
+                  <p className="text-gray-500 text-sm mt-1">
+                    Please wait while we analyze the videos.
+                  </p>
+                </div>
+              </motion.div>
             )}
+          </AnimatePresence>
 
-            <h1 className="text-3xl font-bold" style={{ color: primaryColor }}>
+          {/* Nav Buttons */}
+          <button
+            onClick={() => router.back()}
+            className="absolute top-4 left-4 text-gray-600 hover:text-gray-800"
+          >
+            <FiArrowLeft size={24} />
+          </button>
+
+          <button
+            onClick={handleLogout}
+            className="absolute top-4 right-4 text-red-600 hover:text-red-800"
+          >
+            <FiLogOut size={24} />
+          </button>
+
+          {/* Header */}
+          <div className="flex items-center justify-center gap-3 mb-2">
+            {appSettings?.logo_url && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={appSettings.logo_url}
+                alt="System Logo"
+                className="h-10 w-10 rounded-lg object-contain border border-white/60 bg-white/60"
+              />
+            )}
+            <h1 className="text-3xl font-bold text-center" style={{ color: primaryColor }}>
               {systemName}
             </h1>
           </div>
 
-          <p className="text-center mb-4">
+          <p className="text-slate-600 text-center mb-4">
             Welcome {user?.email?.split('@')[0]}
           </p>
 
-          <div className="flex gap-6">
+          {/* Video Uploads */}
+          <div className="flex flex-col md:flex-row gap-8">
             <VideoUpload
               label="Dancer Video"
               preview={previewDancer}
               setFile={setDancerVideo}
               loading={loading}
             />
-
             <VideoUpload
               label="Choreographer Video"
               preview={previewChoreo}
@@ -304,64 +407,77 @@ export default function UploadPage() {
             />
           </div>
 
-          {status && <p className="text-center mt-3">{status}</p>}
+          {/* Status */}
+          {status && (
+            <p className="text-center text-gray-600 mt-3">{status}</p>
+          )}
 
-          <div className="flex gap-4 justify-center mt-6">
-            <button onClick={handleListFiles} className="px-6 py-3 text-white bg-purple-700 rounded-lg">
+          {/* Action Buttons */}
+          <div className="flex flex-col md:flex-row gap-4 justify-center mt-6">
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              disabled={!user || loading}
+              onClick={handleListFiles}
+              className="text-white py-3 px-6 rounded-lg font-semibold transition"
+              style={{ backgroundColor: primaryColor }}
+            >
               <FiList className="inline mr-2" />
               List Files
-            </button>
+            </motion.button>
 
-            <button onClick={handleAnalyze} className="px-6 py-3 text-white bg-purple-700 rounded-lg">
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              disabled={loading || !user}
+              onClick={handleAnalyze}
+              className="text-white py-3 px-6 rounded-lg font-semibold transition"
+              style={{ backgroundColor: primaryColor }}
+            >
               Analyze 🎯
-            </button>
+            </motion.button>
           </div>
-        </div>
+        </motion.div>
 
-        {/* FAQ */}
+        {/* 3. FAQs */}
         {faqs.length > 0 && (
-          <div className="bg-white/60 border border-white/70 rounded-xl p-6">
-            <h2 className="font-semibold mb-3">FAQs</h2>
-            {faqs.map((f) => (
-              <div key={f.id}>
-                <p className="font-semibold">{f.question}</p>
-                <p>{f.answer}</p>
-              </div>
-            ))}
-          </div>
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.3 }}
+            className="bg-white/60 border border-white/70 rounded-xl p-6"
+          >
+            <h2 className="text-lg font-semibold mb-3" style={{ color: primaryColor }}>
+              FAQs
+            </h2>
+            <div className="space-y-3">
+              {faqs.map((f) => (
+                <div
+                  key={f.id}
+                  className="border border-white/70 rounded-lg p-3 bg-white/50"
+                >
+                  <p className="font-semibold text-slate-800">{f.question}</p>
+                  <p className="text-slate-700 whitespace-pre-line mt-1">{f.answer}</p>
+                </div>
+              ))}
+            </div>
+          </motion.div>
         )}
 
-        {/* ABOUT */}
+        {/* 4. About Us */}
         {aboutPage && (
-          <div className="bg-white/60 border border-white/70 rounded-xl p-6">
-            <h2 className="font-semibold mb-2">{aboutPage.title}</h2>
-            <p>{aboutPage.body}</p>
-          </div>
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.4 }}
+            className="bg-white/60 border border-white/70 rounded-xl p-6"
+          >
+            <h2 className="text-lg font-semibold mb-2" style={{ color: primaryColor }}>
+              {aboutPage.title}
+            </h2>
+            <p className="text-slate-700 whitespace-pre-line">{aboutPage.body}</p>
+          </motion.div>
         )}
 
       </div>
     </motion.div>
-  );
-}
-
-function VideoUpload({
-  label,
-  preview,
-  setFile,
-  loading
-}: {
-  label: string;
-  preview: string | null;
-  setFile: (file: File | null) => void;
-  loading: boolean;
-}) {
-  return preview ? (
-    <video src={preview} controls className="w-full" />
-  ) : (
-    <label>
-      <FiUploadCloud />
-      <input type="file" hidden onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-      Upload {label}
-    </label>
   );
 }
