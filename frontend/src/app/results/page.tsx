@@ -26,11 +26,9 @@ type Comparison = {
   dtw_similarity_score?: number;
 };
 
-// Backend wraps everything in { comparison: { ... } }
 type BackendResult = {
   message?: string;
   comparison?: Comparison;
-  // Allow the old flat shape too (fallback)
   similarity_score?: number;
   feedback_summary_paragraph?: string;
   negative_feedback_summary?: string;
@@ -41,14 +39,12 @@ type BackendResult = {
 };
 
 // ─────────────────────────────────────────────
-// HELPER — unwrap nested or flat response
+// HELPER
 // ─────────────────────────────────────────────
 function extractComparison(raw: BackendResult): Comparison {
-  // Backend returns { comparison: { similarity_score, ... } }
   if (raw.comparison && typeof raw.comparison === 'object') {
     return raw.comparison;
   }
-  // Fallback: flat shape (old or alternative backend)
   return raw as Comparison;
 }
 
@@ -74,7 +70,6 @@ function ResultsContent() {
     }
   }, []);
 
-  // ── Empty state ──────────────────────────────
   if (!result) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#d6c1ff] via-[#cde7ff] to-white">
@@ -91,14 +86,15 @@ function ResultsContent() {
     );
   }
 
-  const score    = result.similarity_score ?? 0;
-  const tips     = result.practice_tips ?? [];
-  const summary  = result.feedback_summary_paragraph
-                || result.negative_feedback_summary
-                || result.recommendation
-                || 'No summary available.';
+  const score = result.similarity_score ?? 0;
+  const tips = result.practice_tips ?? [];
 
-  // ── Render ───────────────────────────────────
+  const summary =
+    result.feedback_summary_paragraph ||
+    result.negative_feedback_summary ||
+    result.recommendation ||
+    'No summary available.';
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#d6c1ff] via-[#cde7ff] to-white px-4 py-10 flex justify-center">
       <div className="w-full max-w-6xl space-y-6">
@@ -110,42 +106,64 @@ function ResultsContent() {
           className="bg-white/60 backdrop-blur border border-white/70 p-8 rounded-2xl text-center"
         >
           <h1 className="text-2xl font-bold text-purple-700">Here are your results</h1>
+
           <p className="text-6xl font-extrabold mt-4 text-gray-900">
             {Number(score).toFixed(1)}
           </p>
+
           <p className="text-gray-500 mt-1 text-sm">out of 100</p>
           <p className="text-gray-700 mt-1">Similarity Score</p>
         </motion.div>
 
-        {/* FEEDBACK SUMMARY */}
+        {/* FEEDBACK */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="bg-white/60 border border-white/70 p-6 rounded-2xl space-y-4"
+          className="bg-white/60 border border-white/70 p-6 rounded-2xl space-y-6"
         >
-          <h2 className="font-bold text-purple-700 text-xl">Feedback Summary</h2>
+          <h2 className="font-bold text-purple-700 text-xl">
+            Coach Overview
+          </h2>
 
-          <p className="text-gray-700">{summary}</p>
+          <p className="text-gray-700 leading-relaxed whitespace-pre-line">
+            {summary}
+          </p>
 
+          {/* POSITIVE */}
           {result.positive_feedback_summary && (
-            <div>
-              <h3 className="font-semibold text-green-700">Positive Feedback</h3>
-              <p className="text-gray-700 mt-1">{result.positive_feedback_summary}</p>
+            <div className="space-y-2 border-t border-white/60 pt-4">
+              <h3 className="font-semibold text-green-700">
+                Strengths
+              </h3>
+              <p className="text-gray-700 leading-relaxed">
+                {result.positive_feedback_summary}
+              </p>
             </div>
           )}
 
-          <div>
-            <h3 className="font-semibold text-orange-700">Recommendation</h3>
-            <p className="text-gray-700 mt-1">{result.recommendation || '—'}</p>
+          {/* RECOMMENDATION */}
+          <div className="space-y-2 border-t border-white/60 pt-4">
+            <h3 className="font-semibold text-orange-700">
+              Next Focus
+            </h3>
+            <p className="text-gray-700 leading-relaxed">
+              {result.recommendation || '—'}
+            </p>
           </div>
 
-          <div>
-            <h3 className="font-semibold text-purple-700">Practice Tips</h3>
+          {/* PRACTICE TIPS */}
+          <div className="space-y-2 border-t border-white/60 pt-4">
+            <h3 className="font-semibold text-purple-700">
+              Practice Drills
+            </h3>
+
             {tips.length > 0 ? (
-              <ul className="list-disc pl-5 space-y-1 mt-1 text-gray-700">
+              <ul className="list-disc pl-5 space-y-2 mt-2 text-gray-700 leading-relaxed">
                 {tips.map((tip, i) => (
-                  <li key={i}>{tip}</li>
+                  <li key={i} className="marker:text-purple-500">
+                    {tip}
+                  </li>
                 ))}
               </ul>
             ) : (
