@@ -12,94 +12,40 @@ import {
   ResponsiveContainer
 } from 'recharts';
 
-import type {
-  AnalysisResponse,
-  DeviationMomentsUI
-} from '@/types/analysis';
-
 // -----------------------------
-// TYPES
+// TYPES (MATCH YOUR BACKEND)
 // -----------------------------
-type TimelineItem = {
-  start?: string;
-  end?: string;
-  body_part?: string;
-  message?: string;
-  score?: number;
-};
-
-type Feedback = {
-  summary?: string;
-  top_errors?: string[];
-  body_part_comments?: string[];
-  detailed_timeline?: TimelineItem[];
-};
-
-type Visuals = {
-  reference?: {
-    preview_images?: string[];
-    overlay_video?: string;
-  };
-  user?: {
-    preview_images?: string[];
-    overlay_video?: string;
-  };
-};
-
 type AnalysisResult = {
-  score?: number;
-  feedback?: Feedback;
+  similarity_score?: number;
 
-  comparison?: {
-    similarity_score?: number;
+  practice_tips?: string[];
 
-    feedback?: Feedback;
+  feedback_summary_paragraph?: string;
 
-    deviation_findings?: {
-      issue?: string;
-      recommendation?: string;
-      user_time?: string;
-      user_time_clip_start?: number;
-      user_time_clip_end?: number;
-      user_time_clip_label?: string;
-      gif_path?: string | null;
-      screenshot_path?: string | null;
-    }[];
+  negative_feedback_summary?: string;
 
-    practice_tips?: string[];
+  positive_feedback_summary?: string;
 
-    summaries?: {
-      where_to_improve?: string;
-      what_went_well?: string;
-    };
-  };
+  recommendation?: string;
 
-  visuals?: Visuals;
-  outputs?: {
-    visuals?: Visuals;
-  };
+  aligned_moments?: any[];
 
-  // NEW BACKEND DATA
-  deviation_moments_ui?: DeviationMomentsUI;
+  worst_deviations?: {
+    issue?: string;
+    recommendation?: string;
+    user_time?: string;
+    user_time_clip_start?: number;
+  }[];
+
+  deviation_comparison_images?: string[];
+
+  dtw_distance?: number;
+  dtw_similarity_score?: number;
 };
 
 // -----------------------------
-// SAFE HELPERS
+// HELPERS
 // -----------------------------
-function getVideo(result: AnalysisResult | null) {
-  return (
-    result?.visuals?.user?.overlay_video ||
-    result?.outputs?.visuals?.user?.overlay_video ||
-    result?.visuals?.reference?.overlay_video ||
-    ''
-  );
-}
-
-function normalizeTimeline(t?: TimelineItem[]) {
-  if (!Array.isArray(t)) return [];
-  return t.filter(Boolean);
-}
-
 function resolveMediaUrl(path?: string | null) {
   if (!path) return '';
 
@@ -121,9 +67,6 @@ function ResultsContent() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const [result, setResult] = useState<AnalysisResult | null>(null);
-  const [analysisUI, setAnalysisUI] =
-    useState<DeviationMomentsUI | null>(null);
-
   const [time, setTime] = useState(0);
 
   // -----------------------------
@@ -138,10 +81,8 @@ function ResultsContent() {
     }
 
     try {
-      const parsed: AnalysisResponse = JSON.parse(stored);
-
+      const parsed: AnalysisResult = JSON.parse(stored);
       setResult(parsed);
-      setAnalysisUI(parsed.deviation_moments_ui ?? null);
     } catch {
       setResult(null);
     }
@@ -150,43 +91,13 @@ function ResultsContent() {
   // -----------------------------
   // CORE DATA
   // -----------------------------
-  const score =
-    result?.score ??
-    result?.comparison?.similarity_score ??
-    0;
+  const score = result?.similarity_score ?? 0;
 
-  const feedback =
-    result?.feedback ||
-    result?.comparison?.feedback ||
-    {};
+  const topErrors = result?.negative_feedback_summary
+    ? [result.negative_feedback_summary]
+    : [];
 
-  const timeline = useMemo(
-    () => normalizeTimeline(feedback?.detailed_timeline),
-    [feedback]
-  );
-
-  const topErrors = feedback?.top_errors ?? [];
-
-  const videoSrc = getVideo(result);
-
-  // -----------------------------
-  // CHART
-  // -----------------------------
-  const chartData = useMemo(() => {
-    return timeline.map((t, i) => ({
-      frame: i + 1,
-      score: t.score ?? Math.max(50, score - i * 2)
-    }));
-  }, [timeline, score]);
-
-  // -----------------------------
-  // VIDEO SCRUBBER
-  // -----------------------------
-  const handleTimeUpdate = () => {
-    if (videoRef.current) {
-      setTime(videoRef.current.currentTime);
-    }
-  };
+  const videoSrc = '';
 
   // -----------------------------
   // EMPTY STATE
@@ -226,113 +137,77 @@ function ResultsContent() {
           </p>
 
           <p className="text-gray-700 mt-2">
-            Overall performance score
+            Similarity Score
           </p>
         </motion.div>
 
-        {/* VIDEO SCRUBBER */}
-        <div className="bg-white/60 border border-white/70 p-6 rounded-2xl">
-          <h2 className="font-bold mb-3 text-purple-700">
-            Frame Scrubber
+        {/* SUMMARY */}
+        <div className="bg-white/60 border border-white/70 p-6 rounded-2xl space-y-4">
+          <h2 className="font-bold text-purple-700 text-xl">
+            Feedback Summary
           </h2>
 
-          {videoSrc ? (
-            <>
-              <video
-                ref={videoRef}
-                onTimeUpdate={handleTimeUpdate}
-                controls
-                className="w-full rounded-xl"
-                src={videoSrc}
-              />
+          <p className="text-gray-700">
+            {result?.feedback_summary_paragraph}
+          </p>
 
-              <p className="text-sm text-gray-600 mt-2">
-                Time: {time.toFixed(2)}s
-              </p>
-            </>
-          ) : (
-            <p className="text-gray-500">
-              No video available
-            </p>
-          )}
-        </div>
-
-        {/* FEEDBACK OVERVIEW */}
-        {analysisUI && (
-          <div className="bg-white/60 border border-white/70 p-6 rounded-2xl space-y-4">
-            <h2 className="font-bold text-purple-700 text-xl">
-              Feedback Overview
-            </h2>
-
-            <p className="text-gray-700">
-              {analysisUI.feedback_overview}
-            </p>
-
-            <div>
-              <h3 className="font-semibold text-green-700">
-                What Went Well
-              </h3>
-              <p>{analysisUI.summaries?.what_went_well}</p>
-            </div>
-
-            <div>
-              <h3 className="font-semibold text-orange-700">
-                Where To Improve
-              </h3>
-              <p>{analysisUI.summaries?.where_to_improve}</p>
-            </div>
-
-            <div>
-              <h3 className="font-semibold text-purple-700">
-                Practice Tips
-              </h3>
-              <ul className="list-disc pl-5 space-y-1">
-                {analysisUI.practice_tips?.map((tip, i) => (
-                  <li key={i}>{tip}</li>
-                ))}
-              </ul>
-            </div>
+          <div>
+            <h3 className="font-semibold text-green-700">
+              Positive Feedback
+            </h3>
+            <p>{result?.positive_feedback_summary}</p>
           </div>
-        )}
 
-        {/* PERFORMANCE GRAPH */}
-        <div className="bg-white/60 border border-white/70 p-6 rounded-2xl">
-          <h2 className="font-bold mb-3 text-purple-700">
-            Performance Trend
-          </h2>
-
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData}>
-                <XAxis dataKey="frame" />
-                <YAxis />
-                <Tooltip />
-                <Line
-                  type="monotone"
-                  dataKey="score"
-                  stroke="#7c3aed"
-                  strokeWidth={2}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+          <div>
+            <h3 className="font-semibold text-orange-700">
+              Recommendation
+            </h3>
+            <p>{result?.recommendation}</p>
           </div>
-        </div>
 
-        {/* KEY ERRORS */}
-        <div className="bg-white/60 border border-white/70 p-6 rounded-2xl">
-          <h2 className="font-bold mb-3 text-purple-700">
-            Key Mistakes
-          </h2>
+          <div>
+            <h3 className="font-semibold text-purple-700">
+              Practice Tips
+            </h3>
 
-          {topErrors.length ? (
             <ul className="list-disc pl-5 space-y-1">
-              {topErrors.map((e, i) => (
-                <li key={i}>{e}</li>
+              {result?.practice_tips?.map((tip, i) => (
+                <li key={i}>{tip}</li>
               ))}
             </ul>
+          </div>
+        </div>
+
+        {/* DEVIATIONS */}
+        <div className="bg-white/60 border border-white/70 p-6 rounded-2xl">
+          <h2 className="font-bold mb-3 text-purple-700">
+            Key Deviations
+          </h2>
+
+          {result?.worst_deviations?.length ? (
+            <div className="space-y-4">
+              {result.worst_deviations.map((d, i) => (
+                <div
+                  key={i}
+                  className="border rounded-xl p-4 bg-white/70"
+                >
+                  <p className="font-semibold">
+                    Issue: {d.issue}
+                  </p>
+
+                  <p className="text-gray-700">
+                    Recommendation: {d.recommendation}
+                  </p>
+
+                  <p className="text-sm text-gray-500">
+                    Time: {d.user_time}
+                  </p>
+                </div>
+              ))}
+            </div>
           ) : (
             <p className="text-gray-500">
-              No major errors detected.
+              No major deviations detected.
             </p>
           )}
         </div>
