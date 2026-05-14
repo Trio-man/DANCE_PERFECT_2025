@@ -5,76 +5,71 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 
 // ─────────────────────────────────────────────
-// TYPES
+// TYPES (UPDATED FOR OPTION B)
 // ─────────────────────────────────────────────
-type WorstDeviation = {
+type DeviationMoment = {
   issue?: string;
   recommendation?: string;
   user_time?: string;
   user_time_clip_start?: number;
+  user_time_clip_end?: number;
+  user_time_clip_label?: string;
+  gif_path?: string;
+  screenshot_path?: string;
 };
 
-type Comparison = {
-  similarity_score?: number;
-  feedback_summary_paragraph?: string;
-  negative_feedback_summary?: string;
-  positive_feedback_summary?: string;
-  recommendation?: string;
+type DeviationMomentsUI = {
   practice_tips?: string[];
-  worst_deviations?: WorstDeviation[];
-  dtw_distance?: number;
-  dtw_similarity_score?: number;
+  summaries?: {
+    where_to_improve?: string;
+    what_went_well?: string;
+  };
+  feedback_overview?: string;
+  deviation_moments?: DeviationMoment[];
 };
 
 type BackendResult = {
-  message?: string;
-  comparison?: Comparison;
+  deviation_moments_ui?: DeviationMomentsUI;
   similarity_score?: number;
-  feedback_summary_paragraph?: string;
-  negative_feedback_summary?: string;
-  positive_feedback_summary?: string;
-  recommendation?: string;
-  practice_tips?: string[];
-  worst_deviations?: WorstDeviation[];
 };
-
-// ─────────────────────────────────────────────
-// HELPER
-// ─────────────────────────────────────────────
-function extractComparison(raw: BackendResult): Comparison {
-  if (raw.comparison && typeof raw.comparison === 'object') {
-    return raw.comparison;
-  }
-  return raw as Comparison;
-}
 
 // ─────────────────────────────────────────────
 // RESULTS CONTENT
 // ─────────────────────────────────────────────
 function ResultsContent() {
   const router = useRouter();
-  const [result, setResult] = useState<Comparison | null>(null);
+  const [result, setResult] = useState<BackendResult | null>(null);
 
   useEffect(() => {
-    const stored = sessionStorage.getItem('dp_result');
-    if (!stored) {
-      setResult(null);
-      return;
-    }
-    try {
-      const parsed: BackendResult = JSON.parse(stored);
-      setResult(extractComparison(parsed));
-    } catch (err) {
-      console.error('Failed to parse result:', err);
-      setResult(null);
-    }
+    const fetchResult = async () => {
+      try {
+        // You will replace this with your real endpoint
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/analyze`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({}),
+        });
+
+        const data = await res.json();
+        setResult(data);
+      } catch (err) {
+        console.error('Failed to fetch result:', err);
+        setResult(null);
+      }
+    };
+
+    fetchResult();
   }, []);
 
   if (!result) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#d6c1ff] via-[#cde7ff] to-white">
         <div className="text-center space-y-4">
-          <p className="text-lg font-semibold text-gray-700">No analysis found.</p>
+          <p className="text-lg font-semibold text-gray-700">
+            No analysis found.
+          </p>
           <button
             onClick={() => router.push('/upload')}
             className="bg-purple-700 text-white px-6 py-3 rounded-xl font-semibold"
@@ -86,13 +81,14 @@ function ResultsContent() {
     );
   }
 
+  const ui = result.deviation_moments_ui;
+
   const score = result.similarity_score ?? 0;
-  const tips = result.practice_tips ?? [];
+  const tips = ui?.practice_tips ?? [];
 
   const summary =
-    result.feedback_summary_paragraph ||
-    result.negative_feedback_summary ||
-    result.recommendation ||
+    ui?.feedback_overview ||
+    ui?.summaries?.where_to_improve ||
     'No summary available.';
 
   return (
@@ -105,7 +101,9 @@ function ResultsContent() {
           animate={{ opacity: 1, y: 0 }}
           className="bg-white/60 backdrop-blur border border-white/70 p-8 rounded-2xl text-center"
         >
-          <h1 className="text-2xl font-bold text-purple-700">Here are your results</h1>
+          <h1 className="text-2xl font-bold text-purple-700">
+            Here are your results
+          </h1>
 
           <p className="text-6xl font-extrabold mt-4 text-gray-900">
             {Number(score).toFixed(1)}
@@ -130,28 +128,6 @@ function ResultsContent() {
             {summary}
           </p>
 
-          {/* POSITIVE */}
-          {result.positive_feedback_summary && (
-            <div className="space-y-2 border-t border-white/60 pt-4">
-              <h3 className="font-semibold text-green-700">
-                Strengths
-              </h3>
-              <p className="text-gray-700 leading-relaxed">
-                {result.positive_feedback_summary}
-              </p>
-            </div>
-          )}
-
-          {/* RECOMMENDATION */}
-          <div className="space-y-2 border-t border-white/60 pt-4">
-            <h3 className="font-semibold text-orange-700">
-              Next Focus
-            </h3>
-            <p className="text-gray-700 leading-relaxed">
-              {result.recommendation || '—'}
-            </p>
-          </div>
-
           {/* PRACTICE TIPS */}
           <div className="space-y-2 border-t border-white/60 pt-4">
             <h3 className="font-semibold text-purple-700">
@@ -168,6 +144,46 @@ function ResultsContent() {
               </ul>
             ) : (
               <p className="text-gray-500 mt-1">No tips available.</p>
+            )}
+          </div>
+
+          {/* DEVIATION MOMENTS (GIF READY STRUCTURE) */}
+          <div className="space-y-2 border-t border-white/60 pt-4">
+            <h3 className="font-semibold text-purple-700">
+              Key Mistakes
+            </h3>
+
+            {ui?.deviation_moments?.length ? (
+              ui.deviation_moments.map((item, i) => (
+                <div
+                  key={i}
+                  className="bg-white/40 p-4 rounded-xl space-y-2"
+                >
+                  {item.gif_path && (
+                    <img
+                      src={item.gif_path}
+                      className="rounded-lg w-full"
+                      alt="deviation gif"
+                    />
+                  )}
+
+                  <p className="text-sm text-gray-500">
+                    This clip (your time): {item.user_time_clip_label || item.user_time}
+                  </p>
+
+                  <p className="text-red-700 font-semibold">
+                    Issue: {item.issue}
+                  </p>
+
+                  <p className="text-gray-700">
+                    Fix: {item.recommendation}
+                  </p>
+                </div>
+              ))
+            ) : (
+              <p className="text-gray-500 mt-1">
+                No deviation moments found.
+              </p>
             )}
           </div>
         </motion.div>
