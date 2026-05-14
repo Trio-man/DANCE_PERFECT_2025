@@ -12,6 +12,11 @@ import {
   ResponsiveContainer
 } from 'recharts';
 
+import type {
+  AnalysisResponse,
+  DeviationMomentsUI
+} from '@/types/analysis';
+
 // -----------------------------
 // TYPES
 // -----------------------------
@@ -52,6 +57,9 @@ type AnalysisResult = {
   outputs?: {
     visuals?: Visuals;
   };
+
+  // NEW BACKEND DATA
+  deviation_moments_ui?: DeviationMomentsUI;
 };
 
 // -----------------------------
@@ -71,6 +79,21 @@ function normalizeTimeline(t?: TimelineItem[]) {
   return t.filter(Boolean);
 }
 
+function resolveMediaUrl(path?: string | null) {
+  if (!path) return '';
+
+  if (path.startsWith('http')) {
+    return path;
+  }
+
+  const BACKEND_URL =
+    process.env.NEXT_PUBLIC_BACKEND_URL ||
+    process.env.NEXT_PUBLIC_API_URL ||
+    '';
+
+  return `${BACKEND_URL}/${path}`;
+}
+
 // -----------------------------
 // MAIN
 // -----------------------------
@@ -79,6 +102,9 @@ function ResultsContent() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [analysisUI, setAnalysisUI] =
+    useState<DeviationMomentsUI | null>(null);
+
   const [time, setTime] = useState(0);
 
   // -----------------------------
@@ -93,7 +119,14 @@ function ResultsContent() {
     }
 
     try {
-      setResult(JSON.parse(stored));
+      const parsed: AnalysisResponse =
+        JSON.parse(stored);
+
+      setResult(parsed);
+
+      setAnalysisUI(
+        parsed.deviation_moments_ui ?? null
+      );
     } catch {
       setResult(null);
     }
@@ -107,7 +140,10 @@ function ResultsContent() {
     result?.comparison?.similarity_score ??
     0;
 
-  const feedback = result?.feedback || result?.comparison?.feedback || {};
+  const feedback =
+    result?.feedback ||
+    result?.comparison?.feedback ||
+    {};
 
   const timeline = useMemo(
     () => normalizeTimeline(feedback?.detailed_timeline),
@@ -181,7 +217,9 @@ function ResultsContent() {
 
         {/* VIDEO SCRUBBER */}
         <div className="bg-white/60 border border-white/70 p-6 rounded-2xl">
-          <h2 className="font-bold mb-3 text-purple-700">Frame Scrubber</h2>
+          <h2 className="font-bold mb-3 text-purple-700">
+            Frame Scrubber
+          </h2>
 
           {videoSrc ? (
             <>
@@ -198,13 +236,64 @@ function ResultsContent() {
               </p>
             </>
           ) : (
-            <p className="text-gray-500">No video available</p>
+            <p className="text-gray-500">
+              No video available
+            </p>
           )}
         </div>
 
+        {/* FEEDBACK OVERVIEW */}
+        {analysisUI && (
+          <div className="bg-white/60 border border-white/70 p-6 rounded-2xl space-y-4">
+            <h2 className="font-bold text-purple-700 text-xl">
+              Feedback Overview
+            </h2>
+
+            <p className="text-gray-700">
+              {analysisUI.feedback_overview}
+            </p>
+
+            <div>
+              <h3 className="font-semibold text-green-700">
+                What Went Well
+              </h3>
+
+              <p>
+                {analysisUI.summaries?.what_went_well}
+              </p>
+            </div>
+
+            <div>
+              <h3 className="font-semibold text-orange-700">
+                Where To Improve
+              </h3>
+
+              <p>
+                {analysisUI.summaries?.where_to_improve}
+              </p>
+            </div>
+
+            <div>
+              <h3 className="font-semibold text-purple-700">
+                Practice Tips
+              </h3>
+
+              <ul className="list-disc pl-5 space-y-1">
+                {analysisUI.practice_tips?.map(
+                  (tip, i) => (
+                    <li key={i}>{tip}</li>
+                  )
+                )}
+              </ul>
+            </div>
+          </div>
+        )}
+
         {/* PERFORMANCE GRAPH */}
         <div className="bg-white/60 border border-white/70 p-6 rounded-2xl">
-          <h2 className="font-bold mb-3 text-purple-700">Performance Trend</h2>
+          <h2 className="font-bold mb-3 text-purple-700">
+            Performance Trend
+          </h2>
 
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
@@ -225,7 +314,9 @@ function ResultsContent() {
 
         {/* KEY ERRORS */}
         <div className="bg-white/60 border border-white/70 p-6 rounded-2xl">
-          <h2 className="font-bold mb-3 text-purple-700">Key Mistakes</h2>
+          <h2 className="font-bold mb-3 text-purple-700">
+            Key Mistakes
+          </h2>
 
           {topErrors.length ? (
             <ul className="list-disc pl-5 space-y-1">
@@ -234,28 +325,131 @@ function ResultsContent() {
               ))}
             </ul>
           ) : (
-            <p className="text-gray-500">No major errors detected.</p>
+            <p className="text-gray-500">
+              No major errors detected.
+            </p>
           )}
         </div>
 
+        {/* DEVIATION MOMENTS */}
+        {analysisUI?.deviation_moments?.length ? (
+          <div className="bg-white/60 border border-white/70 p-6 rounded-2xl">
+            <h2 className="font-bold mb-6 text-purple-700 text-xl">
+              Key Deviations
+            </h2>
+
+            <div className="space-y-6">
+              {analysisUI.deviation_moments.map(
+                (moment, idx) => (
+                  <div
+                    key={idx}
+                    className="border rounded-2xl p-5 bg-white/70 space-y-4"
+                  >
+                    <div>
+                      <h3 className="font-bold text-lg">
+                        Deviation #{idx + 1}
+                      </h3>
+
+                      <p className="text-sm text-gray-600">
+                        Peak Time: {moment.user_time}
+                      </p>
+
+                      <p className="text-sm text-gray-600">
+                        Clip Range:{' '}
+                        {moment.user_time_clip_label}
+                      </p>
+                    </div>
+
+                    {moment.gif_path && (
+                      <img
+                        src={resolveMediaUrl(moment.gif_path)}
+                        alt={`Deviation ${idx + 1}`}
+                        className="rounded-xl w-full"
+                      />
+                    )}
+
+                    {moment.screenshot_path && (
+                      <img
+                        src={resolveMediaUrl(
+                          moment.screenshot_path
+                        )}
+                        alt={`Deviation still ${idx + 1}`}
+                        className="rounded-xl w-full"
+                      />
+                    )}
+
+                    <div>
+                      <h4 className="font-semibold">
+                        Issue
+                      </h4>
+
+                      <p className="text-gray-700">
+                        {moment.issue}
+                      </p>
+                    </div>
+
+                    <div>
+                      <h4 className="font-semibold">
+                        Recommendation
+                      </h4>
+
+                      <p className="text-gray-700">
+                        {moment.recommendation}
+                      </p>
+                    </div>
+
+                    {moment.user_time_clip_start !==
+                      undefined && (
+                      <button
+                        onClick={() => {
+                          if (videoRef.current) {
+                            videoRef.current.currentTime =
+                              moment.user_time_clip_start || 0;
+
+                            videoRef.current.play();
+                          }
+                        }}
+                        className="bg-purple-700 text-white px-4 py-2 rounded-xl"
+                      >
+                        Jump To Clip
+                      </button>
+                    )}
+                  </div>
+                )
+              )}
+            </div>
+          </div>
+        ) : null}
+
         {/* TIMELINE */}
         <div className="bg-white/60 border border-white/70 p-6 rounded-2xl">
-          <h2 className="font-bold mb-3 text-purple-700">Frame Insights</h2>
+          <h2 className="font-bold mb-3 text-purple-700">
+            Frame Insights
+          </h2>
 
           {timeline.length ? (
             <div className="space-y-3">
               {timeline.map((t, i) => (
-                <div key={i} className="border rounded-xl p-4 bg-white/70">
+                <div
+                  key={i}
+                  className="border rounded-xl p-4 bg-white/70"
+                >
                   <p className="font-semibold">
-                    {t.start} - {t.end} • {t.body_part}
+                    {t.start} - {t.end} •{' '}
+                    {t.body_part}
                   </p>
-                  <p className="text-gray-700">{t.message}</p>
+
+                  <p className="text-gray-700">
+                    {t.message}
+                  </p>
                 </div>
               ))}
             </div>
           ) : (
             <p className="text-gray-500">
-              Frame breakdown not available (backend did not return timeline data).
+              Frame breakdown not available
+              (backend did not return timeline
+              data).
             </p>
           )}
         </div>
@@ -275,7 +469,13 @@ function ResultsContent() {
 // -----------------------------
 export default function ResultsPage() {
   return (
-    <Suspense fallback={<div className="p-10 text-center">Loading...</div>}>
+    <Suspense
+      fallback={
+        <div className="p-10 text-center">
+          Loading...
+        </div>
+      }
+    >
       <ResultsContent />
     </Suspense>
   );
