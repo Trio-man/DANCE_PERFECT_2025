@@ -1,19 +1,11 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, Suspense } from 'react';
+import { useEffect, useRef, useState, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer
-} from 'recharts';
 
 // -----------------------------
-// TYPES (MATCH YOUR BACKEND)
+// TYPES (CLEAN + STRICT)
 // -----------------------------
 type AnalysisResult = {
   similarity_score?: number;
@@ -28,7 +20,7 @@ type AnalysisResult = {
 
   recommendation?: string;
 
-  aligned_moments?: any[];
+  aligned_moments?: Record<string, unknown>[];
 
   worst_deviations?: {
     issue?: string;
@@ -44,22 +36,6 @@ type AnalysisResult = {
 };
 
 // -----------------------------
-// HELPERS
-// -----------------------------
-function resolveMediaUrl(path?: string | null) {
-  if (!path) return '';
-
-  if (path.startsWith('http')) return path;
-
-  const BACKEND_URL =
-    process.env.NEXT_PUBLIC_BACKEND_URL ||
-    process.env.NEXT_PUBLIC_API_URL ||
-    '';
-
-  return `${BACKEND_URL}/${path}`;
-}
-
-// -----------------------------
 // MAIN
 // -----------------------------
 function ResultsContent() {
@@ -67,7 +43,6 @@ function ResultsContent() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const [result, setResult] = useState<AnalysisResult | null>(null);
-  const [time, setTime] = useState(0);
 
   // -----------------------------
   // LOAD
@@ -96,8 +71,6 @@ function ResultsContent() {
   const topErrors = result?.negative_feedback_summary
     ? [result.negative_feedback_summary]
     : [];
-
-  const videoSrc = '';
 
   // -----------------------------
   // EMPTY STATE
