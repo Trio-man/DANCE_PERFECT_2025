@@ -1243,6 +1243,102 @@ def get_practice_tips_sentences(comparison):
     return unique
 
 
+def _range_mid_seconds(user_time_range):
+    """
+    Return midpoint seconds of a user time range string:
+    '[m:ss]' -> that timestamp, '[m:ss]–[m:ss]' -> midpoint.
+    """
+    if not user_time_range or not isinstance(user_time_range, str):
+        return None
+    s = user_time_range.strip()
+    single = re.match(r"\[(\d+):(\d{2})\]$", s)
+    if single:
+        return int(single.group(1)) * 60 + int(single.group(2))
+    dash = re.match(r"\[(\d+):(\d{2})\]\s*[–\-]\s*\[(\d+):(\d{2})\]", s)
+    if dash:
+        a = int(dash.group(1)) * 60 + int(dash.group(2))
+        b = int(dash.group(3)) * 60 + int(dash.group(4))
+        return (a + b) / 2.0
+    return None
+
+
+def _infer_body_focus_from_text(text):
+    """Best-effort body-part tag for a finding."""
+    s = (text or "").lower()
+    if "left arm" in s:
+        return "left_arm"
+    if "right arm" in s:
+        return "right_arm"
+    if "arm" in s or "elbow" in s or "wrist" in s or "shoulder" in s:
+        return "arms"
+    if "left leg" in s or "left knee" in s:
+        return "left_leg"
+    if "right leg" in s or "right knee" in s:
+        return "right_leg"
+    if "leg" in s or "knee" in s or "ankle" in s:
+        return "legs"
+    if "torso" in s or "core" in s:
+        return "torso_core"
+    if "timing" in s or "slow" in s or "fast" in s:
+        return "timing"
+    return "full_body_pose"
+
+
+def build_deviation_findings(comparison):
+    """
+    Build frontend-ready deviation findings:
+    one finding per worst-deviation screenshot/moment with issue + recommendation.
+    """
+    findings = []
+    deviations = comparison.get("worst_deviations") or []
+    feedback_ranges = comparison.get("feedback_analysis") or []
+    screenshot_paths = comparison.get("deviation_comparison_images") or []
+    fallback_tips = comparison.get("practice_tips") or []
+
+    for i, moment in enumerate(deviations):
+        user_time = moment.get("user_time")
+        user_sec = _parse_timestamp(user_time)
+        best_entry = None
+        best_delta = None
+        for entry in feedback_ranges:
+            tr = entry.get("user_time_range", "")
+            mid = _range_mid_seconds(tr)
+            if mid is None:
+                continue
+            delta = abs(float(mid) - float(user_sec))
+            if best_delta is None or delta < best_delta:
+                best_delta = delta
+                best_entry = entry
+
+        issue = None
+        recommendation = None
+        if best_entry and (best_delta is None or best_delta <= 3.0):
+            fb_line = str(best_entry.get("feedback", "")).strip()
+            issue = fb_line if fb_line else None
+            stem = re.sub(r"\s+for\s+\[\d+:\d+\](?:[–\-]\[\d+:\d+\])?\.?\s*$", "", fb_line).strip().rstrip(".")
+            if stem:
+                recommendation, _ = _feedback_stem_to_tip(stem, best_entry.get("user_time_range", ""))
+
+        if not issue:
+            issue = "Your pose differs from the reference at this moment."
+        if not recommendation:
+            recommendation = fallback_tips[i] if i < len(fallback_tips) else "Match the reference joint angles and timing for this frame."
+
+        findings.append({
+            "rank": i + 1,
+            "user_time": user_time,
+            "reference_frame": moment.get("ref_frame"),
+            "user_frame": moment.get("user_frame"),
+            "distance": moment.get("distance"),
+            "screenshot_path": screenshot_paths[i] if i < len(screenshot_paths) else None,
+            "issue": issue,
+            "recommendation": recommendation,
+            "body_focus": _infer_body_focus_from_text(issue),
+        })
+
+    return findings
+
+
 def write_tips_file(comparison, tips_path=None):
     """
     Write a tips file to disk and return its path. Uses the same clean sentences
@@ -1650,6 +1746,19 @@ def write_result_log(video1_path, video2_path, output1, output2, comparison, vid
         lines.append("")
         lines.append("Positive feedback (where your pose was most identical to the reference):")
         lines.extend(wrap_paragraph(comparison["positive_feedback_summary"]))
+    findings = comparison.get("deviation_findings") or []
+    if findings:
+        lines.append("")
+        lines.append("Top deviation findings (issue + recommendation):")
+        for f in findings:
+            lines.append(
+                f"  #{f.get('rank', '?')} at {f.get('user_time', '?')} (ref_frame={f.get('reference_frame', '?')}, "
+                f"user_frame={f.get('user_frame', '?')}, distance={f.get('distance', '?')}):"
+            )
+            lines.extend(wrap_paragraph(f"Issue: {f.get('issue', 'N/A')}", indent="    "))
+            lines.extend(wrap_paragraph(f"Recommendation: {f.get('recommendation', 'N/A')}", indent="    "))
+            if f.get("screenshot_path"):
+                lines.append(f"    Screenshot: {f.get('screenshot_path')}")
     dev_imgs = comparison.get("deviation_comparison_images") or []
     if dev_imgs:
         lines.append("")
@@ -1791,6 +1900,9 @@ def _run_analysis(video1_path, video2_path, run_ts):
         except Exception:
             pass
     comparison["pose_match_comparison_image"] = (comparison["pose_match_comparison_images"] or [None])[0]
+
+    # Structured findings per worst deviation moment for frontend cards.
+    comparison["deviation_findings"] = build_deviation_findings(comparison)
 
     apply_acceptable_threshold(comparison)
 
