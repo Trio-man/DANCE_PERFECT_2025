@@ -49,10 +49,31 @@ type Visuals = {
 type AnalysisResult = {
   score?: number;
   feedback?: Feedback;
+
   comparison?: {
     similarity_score?: number;
+
     feedback?: Feedback;
+
+    deviation_findings?: {
+      issue?: string;
+      recommendation?: string;
+      user_time?: string;
+      user_time_clip_start?: number;
+      user_time_clip_end?: number;
+      user_time_clip_label?: string;
+      gif_path?: string | null;
+      screenshot_path?: string | null;
+    }[];
+
+    practice_tips?: string[];
+
+    summaries?: {
+      where_to_improve?: string;
+      what_went_well?: string;
+    };
   };
+
   visuals?: Visuals;
   outputs?: {
     visuals?: Visuals;
@@ -82,9 +103,7 @@ function normalizeTimeline(t?: TimelineItem[]) {
 function resolveMediaUrl(path?: string | null) {
   if (!path) return '';
 
-  if (path.startsWith('http')) {
-    return path;
-  }
+  if (path.startsWith('http')) return path;
 
   const BACKEND_URL =
     process.env.NEXT_PUBLIC_BACKEND_URL ||
@@ -119,14 +138,10 @@ function ResultsContent() {
     }
 
     try {
-      const parsed: AnalysisResponse =
-        JSON.parse(stored);
+      const parsed: AnalysisResponse = JSON.parse(stored);
 
       setResult(parsed);
-
-      setAnalysisUI(
-        parsed.deviation_moments_ui ?? null
-      );
+      setAnalysisUI(parsed.deviation_moments_ui ?? null);
     } catch {
       setResult(null);
     }
@@ -257,33 +272,24 @@ function ResultsContent() {
               <h3 className="font-semibold text-green-700">
                 What Went Well
               </h3>
-
-              <p>
-                {analysisUI.summaries?.what_went_well}
-              </p>
+              <p>{analysisUI.summaries?.what_went_well}</p>
             </div>
 
             <div>
               <h3 className="font-semibold text-orange-700">
                 Where To Improve
               </h3>
-
-              <p>
-                {analysisUI.summaries?.where_to_improve}
-              </p>
+              <p>{analysisUI.summaries?.where_to_improve}</p>
             </div>
 
             <div>
               <h3 className="font-semibold text-purple-700">
                 Practice Tips
               </h3>
-
               <ul className="list-disc pl-5 space-y-1">
-                {analysisUI.practice_tips?.map(
-                  (tip, i) => (
-                    <li key={i}>{tip}</li>
-                  )
-                )}
+                {analysisUI.practice_tips?.map((tip, i) => (
+                  <li key={i}>{tip}</li>
+                ))}
               </ul>
             </div>
           </div>
@@ -331,129 +337,6 @@ function ResultsContent() {
           )}
         </div>
 
-        {/* DEVIATION MOMENTS */}
-        {analysisUI?.deviation_moments?.length ? (
-          <div className="bg-white/60 border border-white/70 p-6 rounded-2xl">
-            <h2 className="font-bold mb-6 text-purple-700 text-xl">
-              Key Deviations
-            </h2>
-
-            <div className="space-y-6">
-              {analysisUI.deviation_moments.map(
-                (moment, idx) => (
-                  <div
-                    key={idx}
-                    className="border rounded-2xl p-5 bg-white/70 space-y-4"
-                  >
-                    <div>
-                      <h3 className="font-bold text-lg">
-                        Deviation #{idx + 1}
-                      </h3>
-
-                      <p className="text-sm text-gray-600">
-                        Peak Time: {moment.user_time}
-                      </p>
-
-                      <p className="text-sm text-gray-600">
-                        Clip Range:{' '}
-                        {moment.user_time_clip_label}
-                      </p>
-                    </div>
-
-                    {moment.gif_path && (
-                      <img
-                        src={resolveMediaUrl(moment.gif_path)}
-                        alt={`Deviation ${idx + 1}`}
-                        className="rounded-xl w-full"
-                      />
-                    )}
-
-                    {moment.screenshot_path && (
-                      <img
-                        src={resolveMediaUrl(
-                          moment.screenshot_path
-                        )}
-                        alt={`Deviation still ${idx + 1}`}
-                        className="rounded-xl w-full"
-                      />
-                    )}
-
-                    <div>
-                      <h4 className="font-semibold">
-                        Issue
-                      </h4>
-
-                      <p className="text-gray-700">
-                        {moment.issue}
-                      </p>
-                    </div>
-
-                    <div>
-                      <h4 className="font-semibold">
-                        Recommendation
-                      </h4>
-
-                      <p className="text-gray-700">
-                        {moment.recommendation}
-                      </p>
-                    </div>
-
-                    {moment.user_time_clip_start !==
-                      undefined && (
-                      <button
-                        onClick={() => {
-                          if (videoRef.current) {
-                            videoRef.current.currentTime =
-                              moment.user_time_clip_start || 0;
-
-                            videoRef.current.play();
-                          }
-                        }}
-                        className="bg-purple-700 text-white px-4 py-2 rounded-xl"
-                      >
-                        Jump To Clip
-                      </button>
-                    )}
-                  </div>
-                )
-              )}
-            </div>
-          </div>
-        ) : null}
-
-        {/* TIMELINE */}
-        <div className="bg-white/60 border border-white/70 p-6 rounded-2xl">
-          <h2 className="font-bold mb-3 text-purple-700">
-            Frame Insights
-          </h2>
-
-          {timeline.length ? (
-            <div className="space-y-3">
-              {timeline.map((t, i) => (
-                <div
-                  key={i}
-                  className="border rounded-xl p-4 bg-white/70"
-                >
-                  <p className="font-semibold">
-                    {t.start} - {t.end} •{' '}
-                    {t.body_part}
-                  </p>
-
-                  <p className="text-gray-700">
-                    {t.message}
-                  </p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-gray-500">
-              Frame breakdown not available
-              (backend did not return timeline
-              data).
-            </p>
-          )}
-        </div>
-
         {/* ACTION */}
         <button
           onClick={() => router.push('/upload')}
@@ -469,13 +352,7 @@ function ResultsContent() {
 // -----------------------------
 export default function ResultsPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="p-10 text-center">
-          Loading...
-        </div>
-      }
-    >
+    <Suspense fallback={<div className="p-10 text-center">Loading...</div>}>
       <ResultsContent />
     </Suspense>
   );
