@@ -118,7 +118,7 @@ export default function UploadPage() {
       if (fErr) {
         setCmsError((prev) => prev || fErr.message);
       } else {
-        // ✅ FIX: removed unsafe cast that breaks build
+        // ✅ FIXED: removed unsafe cast that breaks build
         setFaqs((faqRows ?? []) as FaqRow[]);
       }
     };
@@ -163,6 +163,7 @@ export default function UploadPage() {
       setStatus('Please log in to view files.');
       return;
     }
+
     try {
       const { data, error } = await supabase.storage
         .from('videos')
@@ -172,7 +173,8 @@ export default function UploadPage() {
 
       const files = data.map((file) => file.name);
       setStatus(files.length > 0 ? 'Files retrieved.' : 'No files found.');
-    } catch {
+    } catch (err) {
+      console.error(err);
       setStatus('Failed to list files.');
     }
   };
@@ -180,7 +182,9 @@ export default function UploadPage() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     Object.keys(localStorage).forEach((key) => {
-      if (key.startsWith('sb-')) localStorage.removeItem(key);
+      if (key.startsWith('sb-')) {
+        localStorage.removeItem(key);
+      }
     });
     router.replace('/login');
   };
@@ -216,15 +220,16 @@ export default function UploadPage() {
       const accessToken = data.session?.access_token;
 
       if (!accessToken) {
-        setStatus('Session missing. Please log in again.');
+        setStatus('❌ Session missing. Please log in again.');
         setLoading(false);
         return;
       }
 
       sessionStorage.setItem('dp_token', accessToken);
       router.push('/loading');
-    } catch {
-      setStatus('Failed to prepare videos.');
+    } catch (err) {
+      console.error(err);
+      setStatus('❌ Failed to prepare videos.');
       setLoading(false);
     }
   };
@@ -232,9 +237,6 @@ export default function UploadPage() {
   const systemName = appSettings?.system_name || 'DancePerfect';
   const primaryColor = appSettings?.primary_color || '#7C3AED';
 
-  // -------------------------
-  // UI (UNCHANGED)
-  // -------------------------
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -251,10 +253,8 @@ export default function UploadPage() {
         )}
 
         {guidelinesPage && (
-          <motion.div
-            className="bg-white/60 border border-white/70 rounded-xl p-6"
-          >
-            <h2 style={{ color: primaryColor }} className="text-lg font-semibold mb-2">
+          <motion.div className="bg-white/60 border border-white/70 rounded-xl p-6">
+            <h2 className="text-lg font-semibold mb-2" style={{ color: primaryColor }}>
               {guidelinesPage.title}
             </h2>
             <p className="text-slate-700 whitespace-pre-line">
@@ -264,46 +264,56 @@ export default function UploadPage() {
         )}
 
         <motion.div className="bg-white/70 backdrop-blur-lg border border-white/60 shadow-lg rounded-2xl p-8 relative">
-
-          <button onClick={() => router.back()} className="absolute top-4 left-4 text-gray-600">
+          <button onClick={() => router.back()} className="absolute top-4 left-4 text-gray-600 hover:text-gray-800">
             <FiArrowLeft size={24} />
           </button>
 
-          <button onClick={handleLogout} className="absolute top-4 right-4 text-red-600">
+          <button onClick={handleLogout} className="absolute top-4 right-4 text-red-600 hover:text-red-800">
             <FiLogOut size={24} />
           </button>
 
-          <h1 className="text-3xl font-bold text-center" style={{ color: primaryColor }}>
-            {systemName}
-          </h1>
+          <div className="flex items-center justify-center gap-3 mb-2">
+            <h1 className="text-3xl font-bold text-center mb-0" style={{ color: primaryColor }}>
+              {systemName}
+            </h1>
+          </div>
 
-          <p className="text-center text-slate-600 mt-2">
+          <p className="text-slate-600 text-center mb-4">
             Welcome {user?.email?.split('@')[0]}
           </p>
 
-          <div className="flex flex-col md:flex-row gap-8 mt-6">
+          <div className="flex flex-col md:flex-row gap-8">
             <VideoUpload label="Dancer Video" preview={previewDancer} setFile={setDancerVideo} loading={loading} />
             <VideoUpload label="Choreographer Video" preview={previewChoreo} setFile={setChoreoVideo} loading={loading} />
           </div>
 
-          {status && <p className="text-center mt-3">{status}</p>}
+          {status && <p className="text-center text-gray-600 mt-3">{status}</p>}
 
-          <button
-            onClick={handleAnalyze}
-            disabled={!user || loading}
-            className="w-full mt-6 text-white py-3 rounded-lg"
-            style={{ backgroundColor: primaryColor }}
-          >
-            Analyze 🎯
-          </button>
+          <div className="flex flex-col md:flex-row gap-4 justify-center mt-6">
+            <button
+              onClick={handleListFiles}
+              disabled={!user || loading}
+              className="text-white py-3 px-6 rounded-lg font-semibold"
+              style={{ backgroundColor: primaryColor }}
+            >
+              <FiList className="inline mr-2" /> List Files
+            </button>
+
+            <button
+              onClick={handleAnalyze}
+              disabled={loading || !user}
+              className="text-white py-3 px-6 rounded-lg font-semibold"
+              style={{ backgroundColor: primaryColor }}
+            >
+              Analyze 🎯
+            </button>
+          </div>
         </motion.div>
-
       </div>
     </motion.div>
   );
 }
 
-// -------------------------
 function VideoUpload({
   label,
   preview,
@@ -316,18 +326,23 @@ function VideoUpload({
   loading: boolean;
 }) {
   return preview ? (
-    <video src={preview} controls className="w-full h-64 object-contain" />
+    <motion.div className="flex-1 border rounded-xl p-6 bg-gray-50">
+      <h2 className="text-lg font-semibold mb-3 text-center">{label}</h2>
+      <div className="w-full h-36 md:h-80 rounded-lg overflow-hidden border border-slate-300 bg-black">
+        <video src={preview} controls className="w-full h-full object-contain" />
+      </div>
+    </motion.div>
   ) : (
-    <label className="border p-6 cursor-pointer">
-      <FiUploadCloud />
-      <span>{label}</span>
+    <motion.label className="flex-1 flex flex-col items-center justify-center w-full h-36 md:h-80 border border-slate-300 rounded-lg cursor-pointer hover:border-gray-400">
+      <FiUploadCloud size={48} className="text-gray-400" />
+      <span className="mt-2 text-gray-600">Upload {label}</span>
       <input
         type="file"
         accept="video/*"
         hidden
         disabled={loading}
-        onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+        onChange={(e) => setFile(e.target.files ? e.target.files[0] : null)}
       />
-    </label>
+    </motion.label>
   );
 }
