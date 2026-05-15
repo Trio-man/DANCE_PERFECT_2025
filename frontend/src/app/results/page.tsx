@@ -45,41 +45,32 @@ function ResultsContent() {
   const router = useRouter();
   const [data, setData] = useState<BackendResult | null>(null);
 
-  // This points to our Next.js API proxy, which handles the HTTPS-to-HTTP tunnel
-  const STORAGE_URL = "/api/assets/deviation_gifs";
+  // Points to our secure Next.js API proxy tunnel
+  const PROXY_URL = "/api/assets/deviation_gifs";
 
   useEffect(() => {
     const stored = sessionStorage.getItem('dp_result');
-    if (!stored) {
-      setData(null);
-      return;
-    }
-    try {
-      const parsed: BackendResult = JSON.parse(stored);
-      setData(parsed);
-    } catch (err) {
-      console.error('Failed to parse result:', err);
-      setData(null);
+    if (stored) {
+      try {
+        const parsed: BackendResult = JSON.parse(stored);
+        setData(parsed);
+      } catch (err) {
+        console.error('Failed to parse result:', err);
+      }
     }
   }, []);
 
   if (!data) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#d6c1ff] via-[#cde7ff] to-white">
-        <div className="text-center space-y-4">
-          <p className="text-lg font-semibold text-gray-700">No analysis found.</p>
-          <button 
-            onClick={() => router.push('/upload')} 
-            className="bg-purple-700 text-white px-6 py-3 rounded-xl font-semibold shadow-lg hover:bg-purple-800 transition-colors"
-          >
-            Go to Upload
-          </button>
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <button onClick={() => router.push('/upload')} className="bg-purple-700 text-white px-6 py-2 rounded-lg">
+          No data found. Return to Upload
+        </button>
       </div>
     );
   }
 
-  // Fallback chain for the score to ensure we don't just see 0.0
+  // FIXED SCORE LOGIC: Fallback through all possible backend field names
   const displayScore = data.score ?? 
                        data.comparison?.dtw_similarity_score ?? 
                        data.comparison?.similarity_score ?? 
@@ -88,124 +79,89 @@ function ResultsContent() {
   const ui = data.deviation_moments_ui;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#d6c1ff] via-[#cde7ff] to-white px-4 py-10 flex justify-center text-gray-900">
-      <div className="w-full max-w-6xl space-y-8">
+    <div className="min-h-screen bg-gradient-to-br from-[#f3e8ff] to-[#f0f9ff] px-4 py-10 flex justify-center text-slate-900">
+      <div className="w-full max-w-5xl space-y-8">
 
         {/* 1. SCORE CARD */}
-        <motion.div 
-          initial={{ opacity: 0, y: -20 }} 
-          animate={{ opacity: 1, y: 0 }} 
-          className="bg-white/60 backdrop-blur p-8 rounded-3xl text-center shadow-xl border border-white/50"
-        >
-          <h1 className="text-2xl font-bold text-purple-700">Analysis Results</h1>
-          <p className="text-8xl font-black mt-4 tracking-tighter bg-gradient-to-r from-purple-800 to-indigo-700 bg-clip-text text-transparent">
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-white/80 backdrop-blur shadow-xl rounded-3xl p-10 text-center border border-white">
+          <h1 className="text-xl font-bold text-purple-800 uppercase tracking-widest">Similarity Score</h1>
+          <p className="text-9xl font-black text-slate-900 mt-2">
             {Number(displayScore).toFixed(1)}
           </p>
-          <p className="text-gray-500 uppercase tracking-widest text-sm font-bold">Similarity Score</p>
         </motion.div>
 
         {/* 2. SUMMARIES */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <motion.div 
-            initial={{ opacity: 0, x: -20 }} 
-            animate={{ opacity: 1, x: 0 }}
-            className="bg-green-50/80 p-6 rounded-2xl border border-green-200 shadow-sm"
-          >
-            <h3 className="font-bold text-green-800 flex items-center gap-2 text-lg">✨ What Went Well</h3>
-            <p className="mt-2 text-gray-700 leading-relaxed italic">
-              {ui?.summaries?.what_went_well || "The system captured your overall rhythm successfully."}
-            </p>
-          </motion.div>
-
-          <motion.div 
-            initial={{ opacity: 0, x: 20 }} 
-            animate={{ opacity: 1, x: 0 }}
-            className="bg-orange-50/80 p-6 rounded-2xl border border-orange-200 shadow-sm"
-          >
-            <h3 className="font-bold text-orange-800 flex items-center gap-2 text-lg">🚀 Where to Improve</h3>
-            <p className="mt-2 text-gray-700 leading-relaxed italic">
-              {ui?.summaries?.where_to_improve || "Focus on the specific moments highlighted below."}
-            </p>
-          </motion.div>
+          <div className="bg-green-50 p-6 rounded-2xl border border-green-100">
+            <h3 className="font-bold text-green-800">✨ What Went Well</h3>
+            <p className="text-sm text-slate-600 mt-2">{ui?.summaries?.what_went_well || "Good effort on this session!"}</p>
+          </div>
+          <div className="bg-amber-50 p-6 rounded-2xl border border-amber-100">
+            <h3 className="font-bold text-amber-800">🚀 Where to Improve</h3>
+            <p className="text-sm text-slate-600 mt-2">{ui?.summaries?.where_to_improve || "Keep practicing the key moves."}</p>
+          </div>
         </div>
 
-        {/* 3. GIF TIMELINE */}
+        {/* 3. MOMENTS TIMELINE */}
         <div className="space-y-6">
-          <h2 className="text-2xl font-bold ml-2 text-gray-800">Key Moments to Review</h2>
-          {ui?.deviation_moments && ui.deviation_moments.length > 0 ? (
-            ui.deviation_moments.map((moment, i) => {
-              // Clean the filename in case it includes the folder prefix already
-              const gifName = moment.gif_path?.split('/').pop();
+          <h2 className="text-2xl font-bold px-2">Analysis Breakdown</h2>
+          {ui?.deviation_moments?.map((moment, i) => {
+            // Extract filename safely to avoid double-pathing (e.g., deviation_gifs/deviation_gifs/...)
+            const filename = moment.gif_path?.includes('/') 
+              ? moment.gif_path.split('/').pop() 
+              : moment.gif_path;
 
-              return (
-                <motion.div 
-                  key={i} 
-                  initial={{ y: 30, opacity: 0 }} 
-                  animate={{ y: 0, opacity: 1 }} 
-                  transition={{ delay: i * 0.1 }} 
-                  className="bg-white rounded-3xl shadow-xl overflow-hidden grid grid-cols-1 lg:grid-cols-2 border border-gray-100"
-                >
-                  {/* Visual Container */}
-                  <div className="relative bg-black aspect-video flex items-center justify-center group">
-                    {gifName ? (
-                      <img 
-                        src={`${STORAGE_URL}/${gifName}`} 
-                        className="w-full h-full object-contain transition-transform group-hover:scale-105"
-                        alt={`Moment ${i + 1}`}
-                        onError={(e) => {
-                          e.currentTarget.src = "https://via.placeholder.com/600x400?text=GIF+Loading...";
-                        }}
-                      />
-                    ) : (
-                      <div className="text-gray-400 text-sm italic">Video clip unavailable</div>
-                    )}
-                    <div className="absolute top-4 left-4 bg-purple-700/90 backdrop-blur-sm text-white px-4 py-1 rounded-full text-xs font-bold shadow-lg">
-                      {moment.user_time_clip_label || `Time: ${moment.user_time}`}
-                    </div>
-                  </div>
+            const finalImageUrl = `${PROXY_URL}/${filename}`;
 
-                  {/* Text Feedback */}
-                  <div className="p-10 flex flex-col justify-center bg-white">
-                    <span className="text-orange-600 font-black text-xs uppercase tracking-[0.2em] mb-2">Moment {i + 1}</span>
-                    <h3 className="text-2xl font-bold text-gray-900 leading-tight">{moment.issue}</h3>
-                    <div className="mt-8 p-5 bg-purple-50/50 rounded-2xl border border-purple-100">
-                      <span className="text-purple-700 font-bold text-sm flex items-center gap-2">
-                        💡 Action Tip:
-                      </span>
-                      <p className="text-gray-700 mt-2 italic leading-relaxed">
-                        {moment.recommendation}
-                      </p>
-                    </div>
+            return (
+              <motion.div key={i} initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-100 flex flex-col lg:flex-row">
+                <div className="lg:w-1/2 bg-black aspect-video relative flex items-center justify-center">
+                  {filename ? (
+                    <img 
+                      src={finalImageUrl} 
+                      className="w-full h-full object-contain"
+                      alt={`Moment ${i + 1}`}
+                      loading="lazy"
+                      onError={(e) => {
+                        // Prevent infinite loop by only trying fallback once
+                        if (!e.currentTarget.src.includes('placeholder')) {
+                          e.currentTarget.src = `https://placehold.co/600x400/000000/FFFFFF/png?text=Preview+Moment+${i+1}`;
+                        }
+                      }}
+                    />
+                  ) : (
+                    <div className="text-slate-500 text-xs">Visual unavailable</div>
+                  )}
+                  <div className="absolute top-4 left-4 bg-purple-600 text-white px-3 py-1 rounded-full text-xs font-bold">
+                    {moment.user_time_clip_label || moment.user_time}
                   </div>
-                </motion.div>
-              );
-            })
-          ) : (
-            <div className="text-center py-20 bg-white/40 rounded-3xl border border-dashed border-gray-300">
-              <p className="text-gray-500 italic">No specific deviation clips found for this session.</p>
-            </div>
-          )}
+                </div>
+
+                <div className="lg:w-1/2 p-8 flex flex-col justify-center">
+                  <span className="text-amber-600 font-bold text-xs uppercase tracking-widest">Issue Found</span>
+                  <h3 className="text-xl font-bold mt-1 text-slate-900">{moment.issue}</h3>
+                  <div className="mt-6 p-4 bg-purple-50 rounded-xl border border-purple-100">
+                    <p className="text-purple-900 text-sm italic font-medium leading-relaxed">
+                      " {moment.recommendation} "
+                    </p>
+                  </div>
+                </div>
+              </motion.div>
+            );
+          })}
         </div>
 
-        {/* 4. RE-TRY ACTION */}
-        <button 
-          onClick={() => router.push('/upload')} 
-          className="w-full bg-purple-700 hover:bg-purple-800 text-white py-5 rounded-2xl font-bold text-xl shadow-2xl transition-all active:scale-[0.98] mb-10"
-        >
-          Analyze New Session
+        <button onClick={() => router.push('/upload')} className="w-full py-5 bg-slate-900 text-white font-bold rounded-2xl shadow-xl hover:bg-black transition-all">
+          Start New Analysis
         </button>
-
       </div>
     </div>
   );
 }
 
-// ─────────────────────────────────────────────
-// PAGE EXPORT
-// ─────────────────────────────────────────────
 export default function ResultsPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading Your Feedback...</div>}>
+    <Suspense fallback={<div className="p-20 text-center font-bold">Loading Analysis...</div>}>
       <ResultsContent />
     </Suspense>
   );
