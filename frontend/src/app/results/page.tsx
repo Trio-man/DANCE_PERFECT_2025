@@ -2,7 +2,7 @@
 
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion } from 'motion/react'; // Updated to the latest motion import
+import { motion } from 'framer-motion';
 import { FiArrowLeft, FiActivity, FiAward, FiCheckCircle } from 'react-icons/fi';
 
 // Environment variable only - no hardcoded fallback for security and flexibility
