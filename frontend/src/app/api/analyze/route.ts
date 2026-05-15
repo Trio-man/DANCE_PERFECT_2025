@@ -1,22 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
-import https from "https";
 
 const BACKEND_URL = process.env.BACKEND_URL;
-
-// Allow self-signed cert (dev only)
-const agent = new https.Agent({ rejectUnauthorized: false });
 
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
+
     const backendRes = await fetch(`${BACKEND_URL}/analyze`, {
       method: "POST",
       body: formData,
-      // @ts-expect-error -- fetch does not have agent in type definitions
-      agent,
     });
-    const data = await backendRes.json();
-    return NextResponse.json(data);
+
+    const text = await backendRes.text();
+
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      return NextResponse.json(
+        { error: "Backend returned non-JSON response", raw: text },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json(data, {
+      status: backendRes.status,
+    });
   } catch (err) {
     return NextResponse.json(
       { error: "Proxy failed", details: String(err) },
