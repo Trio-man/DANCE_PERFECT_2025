@@ -4,7 +4,6 @@ const BACKEND_URL = process.env.BACKEND_URL;
 
 export async function POST(req: NextRequest) {
   try {
-    // Get uploaded form data from frontend
     const formData = await req.formData();
 
     // Forward to Flask backend
@@ -13,22 +12,24 @@ export async function POST(req: NextRequest) {
       body: formData,
     });
 
-    // Read raw response (IMPORTANT for debugging)
-    const text = await backendRes.text();
+    if (!backendRes.ok) {
+      const errorText = await backendRes.text();
+      return NextResponse.json({ error: "Backend error", details: errorText }, { status: backendRes.status });
+    }
 
-    // DEBUG RESPONSE (temporary)
+    // PARSE the JSON from Flask
+    const data = await backendRes.json();
+
+    // Return the ACTUAL data to the frontend
+    // We ensure 'score' is at the top level for the UI to see
     return NextResponse.json({
-      debug: true,
-      status: backendRes.status,
-      contentType: backendRes.headers.get("content-type"),
-      raw: text,
+      ...data,
+      score: data.score ?? data.comparison?.dtw_similarity_score ?? 0,
     });
+
   } catch (err) {
     return NextResponse.json(
-      {
-        error: "Proxy failed",
-        details: String(err),
-      },
+      { error: "Proxy failed", details: String(err) },
       { status: 500 }
     );
   }
