@@ -5,10 +5,9 @@ const nextConfig = {
   async rewrites() {
     return [
       {
-        // When the frontend calls /api/backend/..., 
-        // Vercel will fetch from your Hetzner IP behind the scenes.
         source: '/api/backend/:path*',
-        destination: 'http://49.13.74.29:5000/:path*',
+        // No fallback needed if your Vercel env variable is set
+        destination: `${process.env.NEXT_PUBLIC_API_URL}/:path*`,
       },
     ];
   },
