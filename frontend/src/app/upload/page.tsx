@@ -146,8 +146,6 @@ export default function UploadPage() {
   useEffect(() => {
     const loadCms = async () => {
       setCmsError(null);
-
-      // App settings
       const { data: settingsRow, error: sErr } = await supabase
         .from('app_settings')
         .select('id,system_name,logo_url,primary_color')
@@ -159,7 +157,6 @@ export default function UploadPage() {
         setAppSettings(settingsRow as AppSettingsRow);
       }
 
-      // Content pages
       const { data: pages, error: pErr } = await supabase
         .from('content_pages')
         .select('id,slug,title,body,is_active')
@@ -174,7 +171,6 @@ export default function UploadPage() {
         setGuidelinesPage(list.find((x) => x.slug === 'guidelines' && x.is_active) ?? null);
       }
 
-      // FAQs
       const { data: faqRows, error: fErr } = await supabase
         .from('faqs')
         .select('id,question,answer,is_active')
@@ -230,7 +226,6 @@ export default function UploadPage() {
         .list(user.id, { limit: 100 });
 
       if (error) throw error;
-
       const files = data.map((file) => file.name);
       setStatus(files.length > 0 ? 'Files retrieved.' : 'No files found.');
     } catch (err) {
@@ -254,37 +249,56 @@ export default function UploadPage() {
     }
 
     setLoading(true);
-    setStatus('Preparing videos...');
-
-    const toDataUrl = (file: File): Promise<string> =>
-      new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
+    setStatus('Analyzing your performance... 💃');
 
     try {
-      const dancerDataUrl = await toDataUrl(dancerVideo);
-      const choreoDataUrl = await toDataUrl(choreoVideo);
+      // 1. Prepare FormData to send to your route.ts proxy
+      const formData = new FormData();
+      formData.append('video', dancerVideo); // This matches your Next.js route req.formData()
+      formData.append('choreography', choreoVideo);
 
-      sessionStorage.setItem('dp_dancer', dancerDataUrl);
-      sessionStorage.setItem('dp_choreo', choreoDataUrl);
+      // 2. Fetch the analysis from your Proxy route
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        body: formData,
+      });
 
-      const { data } = await supabase.auth.getSession();
-      const accessToken = data.session?.access_token;
+      const result = await response.json();
 
-      if (!accessToken) {
-        setStatus('❌ Session token missing. Please log in again.');
+      if (response.ok) {
+        // 3. Save the result to localStorage for the /results page
+        localStorage.setItem('analysis_results', JSON.stringify(result));
+
+        // Optional: Save tokens/previews to sessionStorage as before
+        const toDataUrl = (file: File): Promise<string> =>
+          new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          });
+
+        const dancerDataUrl = await toDataUrl(dancerVideo);
+        const choreoDataUrl = await toDataUrl(choreoVideo);
+        sessionStorage.setItem('dp_dancer', dancerDataUrl);
+        sessionStorage.setItem('dp_choreo', choreoDataUrl);
+
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (sessionData.session?.access_token) {
+          sessionStorage.setItem('dp_token', sessionData.session.access_token);
+        }
+
+        // 4. Navigate to results
+        setStatus('Analysis complete!');
+        router.push('/results');
+      } else {
+        console.error("Backend Error:", result);
+        setStatus(`❌ Error: ${result.details || 'Analysis failed.'}`);
         setLoading(false);
-        return;
       }
-
-      sessionStorage.setItem('dp_token', accessToken);
-      router.push('/loading');
     } catch (err) {
-      console.error(err);
-      setStatus('❌ Failed to prepare videos.');
+      console.error("Analysis Request Failed:", err);
+      setStatus('❌ Network error. Check your connection.');
       setLoading(false);
     }
   };
@@ -307,14 +321,12 @@ export default function UploadPage() {
     >
       <div className="w-full max-w-6xl flex flex-col gap-6 py-10">
 
-        {/* CMS Error Banner */}
         {cmsError && (
           <p className="text-center text-sm text-red-600">
             CMS load warning: {cmsError}
           </p>
         )}
 
-        {/* 1. Recording Guidelines */}
         {guidelinesPage && (
           <motion.div
             initial={{ scale: 0.95, opacity: 0, y: 20 }}
@@ -329,90 +341,53 @@ export default function UploadPage() {
           </motion.div>
         )}
 
-        {/* 2. Video Upload */}
         <motion.div
           initial={{ scale: 0.95, opacity: 0, y: 20 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.2 }}
           className="bg-white/70 backdrop-blur-lg border border-white/60 shadow-lg rounded-2xl p-8 relative"
         >
-          {/* Loading Overlay */}
           <AnimatePresence>
             {loading && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                transition={{ duration: 0.3 }}
                 className="absolute inset-0 bg-white/70 backdrop-blur-sm flex items-center justify-center rounded-2xl z-50"
               >
                 <div className="text-center">
                   <div className="animate-spin h-10 w-10 rounded-full border-4 border-gray-300 border-t-gray-700 mx-auto mb-3" />
-                  <p className="text-gray-700 font-semibold">Processing...</p>
-                  <p className="text-gray-500 text-sm mt-1">
-                    Please wait while we analyze the videos.
-                  </p>
+                  <p className="text-gray-700 font-semibold">Processing Your Dance...</p>
+                  <p className="text-gray-500 text-sm mt-1">This may take a minute while we analyze your form.</p>
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
 
-          {/* Nav Buttons */}
-          <button
-            onClick={() => router.back()}
-            className="absolute top-4 left-4 text-gray-600 hover:text-gray-800"
-          >
+          <button onClick={() => router.back()} className="absolute top-4 left-4 text-gray-600 hover:text-gray-800">
             <FiArrowLeft size={24} />
           </button>
 
-          <button
-            onClick={handleLogout}
-            className="absolute top-4 right-4 text-red-600 hover:text-red-800"
-          >
+          <button onClick={handleLogout} className="absolute top-4 right-4 text-red-600 hover:text-red-800">
             <FiLogOut size={24} />
           </button>
 
-          {/* Header */}
           <div className="flex items-center justify-center gap-3 mb-2">
             {appSettings?.logo_url && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={appSettings.logo_url}
-                alt="System Logo"
-                className="h-10 w-10 rounded-lg object-contain border border-white/60 bg-white/60"
-              />
+              <img src={appSettings.logo_url} alt="Logo" className="h-10 w-10 rounded-lg object-contain border border-white/60 bg-white/60" />
             )}
-            <h1 className="text-3xl font-bold text-center" style={{ color: primaryColor }}>
-              {systemName}
-            </h1>
+            <h1 className="text-3xl font-bold text-center" style={{ color: primaryColor }}>{systemName}</h1>
           </div>
 
-          <p className="text-slate-600 text-center mb-4">
-            Welcome {user?.email?.split('@')[0]}
-          </p>
+          <p className="text-slate-600 text-center mb-4">Welcome {user?.email?.split('@')[0]}</p>
 
-          {/* Video Uploads */}
           <div className="flex flex-col md:flex-row gap-8">
-            <VideoUpload
-              label="Dancer Video"
-              preview={previewDancer}
-              setFile={setDancerVideo}
-              loading={loading}
-            />
-            <VideoUpload
-              label="Choreographer Video"
-              preview={previewChoreo}
-              setFile={setChoreoVideo}
-              loading={loading}
-            />
+            <VideoUpload label="Your Dance" preview={previewDancer} setFile={setDancerVideo} loading={loading} />
+            <VideoUpload label="Master Choreography" preview={previewChoreo} setFile={setChoreoVideo} loading={loading} />
           </div>
 
-          {/* Status */}
-          {status && (
-            <p className="text-center text-gray-600 mt-3">{status}</p>
-          )}
+          {status && <p className="text-center text-gray-600 mt-3 font-medium">{status}</p>}
 
-          {/* Action Buttons */}
           <div className="flex flex-col md:flex-row gap-4 justify-center mt-6">
             <motion.button
               whileTap={{ scale: 0.97 }}
@@ -421,62 +396,42 @@ export default function UploadPage() {
               className="text-white py-3 px-6 rounded-lg font-semibold transition"
               style={{ backgroundColor: primaryColor }}
             >
-              <FiList className="inline mr-2" />
-              List Files
+              <FiList className="inline mr-2" /> List History
             </motion.button>
 
             <motion.button
               whileTap={{ scale: 0.97 }}
-              disabled={loading || !user}
+              disabled={loading || !user || !dancerVideo || !choreoVideo}
               onClick={handleAnalyze}
-              className="text-white py-3 px-6 rounded-lg font-semibold transition"
+              className="text-white py-3 px-6 rounded-lg font-semibold transition shadow-md hover:brightness-110 disabled:grayscale"
               style={{ backgroundColor: primaryColor }}
             >
-              Analyze 🎯
+              Analyze Score 🎯
             </motion.button>
           </div>
         </motion.div>
 
-        {/* 3. FAQs */}
+        {/* CMS Sections (FAQs, About) remain below */}
         {faqs.length > 0 && (
-          <motion.div
-            initial={{ scale: 0.95, opacity: 0, y: 20 }}
-            animate={{ scale: 1, opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.3 }}
-            className="bg-white/60 border border-white/70 rounded-xl p-6"
-          >
-            <h2 className="text-lg font-semibold mb-3" style={{ color: primaryColor }}>
-              FAQs
-            </h2>
+          <div className="bg-white/60 border border-white/70 rounded-xl p-6">
+            <h2 className="text-lg font-semibold mb-3" style={{ color: primaryColor }}>FAQs</h2>
             <div className="space-y-3">
               {faqs.map((f) => (
-                <div
-                  key={f.id}
-                  className="border border-white/70 rounded-lg p-3 bg-white/50"
-                >
+                <div key={f.id} className="border border-white/70 rounded-lg p-3 bg-white/50">
                   <p className="font-semibold text-slate-800">{f.question}</p>
                   <p className="text-slate-700 whitespace-pre-line mt-1">{f.answer}</p>
                 </div>
               ))}
             </div>
-          </motion.div>
+          </div>
         )}
 
-        {/* 4. About Us */}
         {aboutPage && (
-          <motion.div
-            initial={{ scale: 0.95, opacity: 0, y: 20 }}
-            animate={{ scale: 1, opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.4 }}
-            className="bg-white/60 border border-white/70 rounded-xl p-6"
-          >
-            <h2 className="text-lg font-semibold mb-2" style={{ color: primaryColor }}>
-              {aboutPage.title}
-            </h2>
+          <div className="bg-white/60 border border-white/70 rounded-xl p-6">
+            <h2 className="text-lg font-semibold mb-2" style={{ color: primaryColor }}>{aboutPage.title}</h2>
             <p className="text-slate-700 whitespace-pre-line">{aboutPage.body}</p>
-          </motion.div>
+          </div>
         )}
-
       </div>
     </motion.div>
   );
