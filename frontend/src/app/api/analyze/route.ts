@@ -12,20 +12,18 @@ export async function POST(req: NextRequest) {
       body: formData,
     });
 
+    // 1. Check if the backend actually responded successfully
     if (!backendRes.ok) {
       const errorText = await backendRes.text();
-      return NextResponse.json({ error: "Backend error", details: errorText }, { status: backendRes.status });
+      return NextResponse.json({ error: "Backend failed", details: errorText }, { status: backendRes.status });
     }
 
-    // PARSE the JSON from Flask
+    // 2. PARSE the JSON (This is the fix!)
+    // This turns the response into a real JavaScript object
     const data = await backendRes.json();
 
-    // Return the ACTUAL data to the frontend
-    // We ensure 'score' is at the top level for the UI to see
-    return NextResponse.json({
-      ...data,
-      score: data.score ?? data.comparison?.dtw_similarity_score ?? 0,
-    });
+    // 3. Return the clean object to your Frontend
+    return NextResponse.json(data);
 
   } catch (err) {
     return NextResponse.json(
