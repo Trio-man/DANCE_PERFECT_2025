@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 import { FiArrowLeft, FiActivity, FiAward, FiCheckCircle } from 'react-icons/fi';
 
 // Environment variable only - no hardcoded fallback for security and flexibility
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+const API_BASE_URL = '/api/backend';
 
 interface DeviationMoment {
   rank: number;
