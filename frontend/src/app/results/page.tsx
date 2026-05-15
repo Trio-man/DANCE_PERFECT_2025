@@ -1,8 +1,9 @@
-"use client";
+'use client';
 
-import React from "react";
+import { useEffect, useState, Suspense } from 'react';
+import { useRouter } from 'next/navigation';
 
-// Types based on your analyze response
+// --- Types ---
 interface DeviationMoment {
   rank: number;
   issue: string;
@@ -25,23 +26,35 @@ interface AnalysisData {
   };
 }
 
-export default function ResultsPage({ data }: { data: AnalysisData }) {
-  // 1. Fix: Correcting the score mapping from the JSON response
+// --- Sub-component for the actual content ---
+function ResultsContent() {
+  const [data, setData] = useState<AnalysisData | null>(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    // Retrieve data from localStorage (assuming you saved it there after the upload)
+    const savedData = localStorage.getItem('analysis_results');
+    if (savedData) {
+      setData(JSON.parse(savedData));
+    } else {
+      // If no data, send them back to upload
+      router.push('/');
+    }
+  }, [router]);
+
+  if (!data) return <div className="p-20 text-center font-mono">Loading Analysis...</div>;
+
   const score = data?.comparison?.similarity_score ?? 0;
-  
   const summaries = data?.comparison?.deviation_moments_ui?.summaries;
   const moments = data?.comparison?.deviation_moments_ui?.deviation_moments ?? [];
 
-  // 2. Fix: Helper to route image requests through your Next.js proxy
   const getProxyUrl = (path: string) => {
     if (!path) return "";
-    // Removes 'deviation_gifs/' or 'deviation_screenshots/' if the proxy adds it, 
-    // or keeps it if the proxy expects the full relative path.
     return `/api/assets/${path}`;
   };
 
   return (
-    <div className="p-8 max-w-4xl mx-auto space-y-8">
+    <div className="p-8 max-w-4xl mx-auto space-y-8 bg-slate-50 min-h-screen">
       {/* Similarity Score Card */}
       <div className="bg-white rounded-3xl shadow-sm p-12 text-center border border-gray-100">
         <h2 className="text-purple-600 font-bold text-xl mb-4">Analysis Results</h2>
@@ -59,13 +72,13 @@ export default function ResultsPage({ data }: { data: AnalysisData }) {
           <h3 className="text-emerald-700 font-bold mb-2 flex items-center gap-2">
             ✨ What Went Well
           </h3>
-          <p className="text-emerald-900 text-sm">{summaries?.what_went_well}</p>
+          <p className="text-emerald-900 text-sm leading-relaxed">{summaries?.what_went_well}</p>
         </div>
         <div className="bg-orange-50 p-6 rounded-2xl border border-orange-100">
           <h3 className="text-orange-700 font-bold mb-2 flex items-center gap-2">
             🚀 Where to Improve
           </h3>
-          <p className="text-orange-900 text-sm">{summaries?.where_to_improve}</p>
+          <p className="text-orange-900 text-sm leading-relaxed">{summaries?.where_to_improve}</p>
         </div>
       </div>
 
@@ -73,27 +86,30 @@ export default function ResultsPage({ data }: { data: AnalysisData }) {
       <div className="space-y-6">
         <h2 className="text-2xl font-bold text-slate-800">Key Moments to Review</h2>
         {moments.map((moment, index) => (
-          <div key={index} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col md:flex-row">
+          <div key={index} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col md:flex-row transition-all hover:shadow-md">
             {/* Asset Preview (GIF) */}
             <div className="w-full md:w-1/2 bg-black aspect-video flex items-center justify-center">
               <img 
                 src={getProxyUrl(moment.gif_path)} 
                 alt={`Deviation Moment ${moment.rank}`}
                 className="w-full h-full object-contain"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = 'https://placehold.co/600x400?text=GIF+Loading...';
+                }}
               />
             </div>
             
             {/* Feedback Content */}
             <div className="p-6 md:w-1/2 flex flex-col justify-center">
               <span className="text-xs font-bold text-orange-500 uppercase tracking-wider">
-                Moment {moment.rank}
+                Rank {moment.rank} Deviation
               </span>
               <h4 className="text-lg font-bold text-slate-900 mt-1 mb-4">
                 {moment.issue}
               </h4>
               <div className="bg-purple-50 p-4 rounded-xl">
                 <p className="text-purple-700 text-sm font-semibold flex items-center gap-2">
-                  💡 Action Tip:
+                  💡 Recommendation
                 </p>
                 <p className="text-purple-900 text-sm mt-1">{moment.recommendation}</p>
               </div>
@@ -106,201 +122,12 @@ export default function ResultsPage({ data }: { data: AnalysisData }) {
       </div>
     </div>
   );
-}'use client';
-
-import { useEffect, useState, Suspense } from 'react';
-import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
-
-// ─────────────────────────────────────────────
-// TYPES
-// ─────────────────────────────────────────────
-type DeviationMoment = {
-  issue: string;
-  recommendation: string;
-  user_time: string;
-  user_time_clip_label: string;
-  gif_path: string | null;
-  screenshot_path: string | null;
-};
-
-type DeviationMomentsUI = {
-  practice_tips: string[];
-  summaries: {
-    where_to_improve: string;
-    what_went_well: string;
-  };
-  deviation_moments: DeviationMoment[];
-};
-
-type Comparison = {
-  similarity_score?: number;
-  dtw_similarity_score?: number;
-  practice_tips?: string[];
-  recommendation?: string;
-};
-
-type BackendResult = {
-  comparison?: Comparison;
-  score?: number; 
-  deviation_moments_ui?: DeviationMomentsUI;
-};
-
-// ─────────────────────────────────────────────
-// RESULTS CONTENT
-// ─────────────────────────────────────────────
-function ResultsContent() {
-  const router = useRouter();
-  const [data, setData] = useState<BackendResult | null>(null);
-
-  // Points to our secure Next.js API proxy tunnel
-  const PROXY_URL = "/api/assets/deviation_gifs";
-
-  useEffect(() => {
-    const stored = sessionStorage.getItem('dp_result');
-    if (stored) {
-      try {
-        const parsed: BackendResult = JSON.parse(stored);
-        setData(parsed);
-      } catch (err) {
-        console.error('Failed to parse result:', err);
-      }
-    }
-  }, []);
-
-  if (!data) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <button 
-          onClick={() => router.push('/upload')} 
-          className="bg-purple-700 text-white px-6 py-2 rounded-lg hover:bg-purple-800 transition-colors shadow-md"
-        >
-          No data found. Return to Upload
-        </button>
-      </div>
-    );
-  }
-
-  // FIXED SCORE LOGIC: Fallback through all possible backend field names
-  const displayScore = data.score ?? 
-                       data.comparison?.dtw_similarity_score ?? 
-                       data.comparison?.similarity_score ?? 
-                       0;
-
-  const ui = data.deviation_moments_ui;
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-[#f3e8ff] to-[#f0f9ff] px-4 py-10 flex justify-center text-slate-900">
-      <div className="w-full max-w-5xl space-y-8">
-
-        {/* 1. SCORE CARD */}
-        <motion.div 
-          initial={{ opacity: 0, y: -20 }} 
-          animate={{ opacity: 1, y: 0 }} 
-          className="bg-white/80 backdrop-blur shadow-xl rounded-3xl p-10 text-center border border-white"
-        >
-          <h1 className="text-xl font-bold text-purple-800 uppercase tracking-widest">Similarity Score</h1>
-          <p className="text-9xl font-black text-slate-900 mt-2 tracking-tighter">
-            {Number(displayScore).toFixed(1)}
-          </p>
-        </motion.div>
-
-        {/* 2. SUMMARIES */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-green-50 p-6 rounded-2xl border border-green-100 shadow-sm">
-            <h3 className="font-bold text-green-800 flex items-center gap-2">✨ What Went Well</h3>
-            <p className="text-sm text-slate-600 mt-2 leading-relaxed">
-              {ui?.summaries?.what_went_well || "Good effort on this session!"}
-            </p>
-          </div>
-          <div className="bg-amber-50 p-6 rounded-2xl border border-amber-100 shadow-sm">
-            <h3 className="font-bold text-amber-800 flex items-center gap-2">🚀 Where to Improve</h3>
-            <p className="text-sm text-slate-600 mt-2 leading-relaxed">
-              {ui?.summaries?.where_to_improve || "Keep practicing the key moves."}
-            </p>
-          </div>
-        </div>
-
-        {/* 3. MOMENTS TIMELINE */}
-        <div className="space-y-6">
-          <h2 className="text-2xl font-bold px-2 text-slate-800">Analysis Breakdown</h2>
-          {ui?.deviation_moments && ui.deviation_moments.length > 0 ? (
-            ui.deviation_moments.map((moment, i) => {
-              // Extract filename safely to avoid double-pathing issues
-              const filename = moment.gif_path?.includes('/') 
-                ? moment.gif_path.split('/').pop() 
-                : moment.gif_path;
-
-              const finalImageUrl = `${PROXY_URL}/${filename}`;
-
-              return (
-                <motion.div 
-                  key={i} 
-                  initial={{ y: 20, opacity: 0 }} 
-                  animate={{ y: 0, opacity: 1 }} 
-                  transition={{ delay: i * 0.1 }}
-                  className="bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-100 flex flex-col lg:flex-row hover:shadow-2xl transition-shadow"
-                >
-                  {/* GIF Preview */}
-                  <div className="lg:w-1/2 bg-black aspect-video relative flex items-center justify-center">
-                    {filename ? (
-                      <img 
-                        src={finalImageUrl} 
-                        className="w-full h-full object-contain"
-                        alt={`Moment ${i + 1}`}
-                        loading="lazy"
-                        onError={(e) => {
-                          if (!e.currentTarget.src.includes('placehold.co')) {
-                            e.currentTarget.src = `https://placehold.co/600x400/000000/FFFFFF/png?text=Preview+Moment+${i+1}`;
-                          }
-                        }}
-                      />
-                    ) : (
-                      <div className="text-slate-500 text-xs italic">Visual unavailable</div>
-                    )}
-                    <div className="absolute top-4 left-4 bg-purple-600/90 backdrop-blur-sm text-white px-3 py-1 rounded-full text-xs font-bold shadow-md">
-                      {moment.user_time_clip_label || moment.user_time}
-                    </div>
-                  </div>
-
-                  {/* Feedback Details */}
-                  <div className="lg:w-1/2 p-8 flex flex-col justify-center">
-                    <span className="text-amber-600 font-bold text-xs uppercase tracking-widest">Issue Found</span>
-                    <h3 className="text-xl font-bold mt-1 text-slate-900 leading-tight">{moment.issue}</h3>
-                    <div className="mt-6 p-4 bg-purple-50 rounded-xl border border-purple-100">
-                      <p className="text-purple-900 text-sm italic font-medium leading-relaxed">
-                        &quot; {moment.recommendation} &quot;
-                      </p>
-                    </div>
-                  </div>
-                </motion.div>
-              );
-            })
-          ) : (
-            <div className="py-12 text-center bg-white rounded-3xl border border-dashed border-slate-300 text-slate-400 italic">
-              No specific moments found to highlight.
-            </div>
-          )}
-        </div>
-
-        {/* 4. ACTIONS */}
-        <button 
-          onClick={() => router.push('/upload')} 
-          className="w-full py-5 bg-slate-900 text-white font-bold rounded-2xl shadow-xl hover:bg-black transition-all active:scale-[0.98] mb-12"
-        >
-          Start New Analysis
-        </button>
-      </div>
-    </div>
-  );
 }
 
-// ─────────────────────────────────────────────
-// PAGE EXPORT
-// ─────────────────────────────────────────────
+// --- Main Page Export with Suspense ---
 export default function ResultsPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center font-medium">Loading Analysis Results...</div>}>
+    <Suspense fallback={<div className="p-20 text-center">Loading...</div>}>
       <ResultsContent />
     </Suspense>
   );
