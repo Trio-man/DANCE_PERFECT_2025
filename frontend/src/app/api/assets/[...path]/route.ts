@@ -1,31 +1,56 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// In Next 15, params is a Promise
+/**
+ * Next.js 15 Asset Proxy
+ * This route acts as a secure bridge between Vercel (HTTPS) 
+ * and your Hetzner Backend (HTTP).
+ */
 export async function GET(
   req: NextRequest, 
   { params }: { params: Promise<{ path: string[] }> } 
 ) {
-  const backendUrl = process.env.BACKEND_URL; 
-  // Await the params before using them
+  // 1. Await params (Required in Next.js 15)
   const { path } = await params;
+  
+  // 2. Get Backend URL from Vercel Environment Variables
+  const backendUrl = process.env.BACKEND_URL; 
+  
+  if (!backendUrl) {
+    console.error("PROXY ERROR: BACKEND_URL environment variable is missing.");
+    return NextResponse.json({ error: 'Proxy Configuration Error' }, { status: 500 });
+  }
+
+  // 3. Clean the URL and join the path segments
+  // This prevents double slashes if the environment variable ends with '/'
+  const cleanBaseUrl = backendUrl.replace(/\/$/, '');
   const filePath = path.join('/');
+  const targetUrl = `${cleanBaseUrl}/${filePath}`;
   
   try {
-    const response = await fetch(`${backendUrl}/${filePath}`);
+    // 4. Fetch the file from Hetzner
+    const response = await fetch(targetUrl);
     
-    if (!response.ok) return new NextResponse(null, { status: 404 });
+    // If Hetzner returns 404, the proxy returns 404
+    if (!response.ok) {
+      console.warn(`PROXY 404: File not found at ${targetUrl}`);
+      return new NextResponse(null, { status: 404 });
+    }
 
+    // 5. Convert to Blob and send back to the browser
     const blob = await response.blob();
     const headers = new Headers();
     
-    // Set the correct content type (gif or png/jpg)
-    headers.set('Content-Type', response.headers.get('Content-Type') || 'image/gif');
+    // Pass through the correct Content-Type (image/gif, image/png, etc.)
+    const contentType = response.headers.get('Content-Type') || 'image/gif';
+    headers.set('Content-Type', contentType);
+    
+    // Cache the image for performance
     headers.set('Cache-Control', 'public, max-age=31536000, immutable');
 
     return new NextResponse(blob, { headers });
+
   } catch (err) {
-    // Note: 'err' instead of 'error' to avoid the unused-vars warning
-    console.error("Asset Proxy Error:", err);
+    console.error("PROXY NETWORK ERROR:", err);
     return new NextResponse(null, { status: 500 });
   }
 }
