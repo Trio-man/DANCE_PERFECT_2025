@@ -49,7 +49,7 @@ function ResultsContent() {
   // We use your existing Vercel variable.
   // We remove '/api' if it exists so we can point to the root for GIF files.
   const RAW_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-  const STORAGE_URL = RAW_URL.replace(/\/api$/, ""); 
+  const STORAGE_URL = "/api/assets";
 
   useEffect(() => {
     const stored = sessionStorage.getItem('dp_result');
