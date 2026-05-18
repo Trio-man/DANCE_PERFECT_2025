@@ -8,7 +8,6 @@ import numpy as np
 import pandas as pd
 import mediapipe as mp
 import imageio
-# 🎯 FIX: Added explicit Flask imports to prevent Gunicorn boot crashes
 from flask import Flask, request, jsonify, send_from_directory
 from fastdtw import fastdtw
 from scipy.spatial.distance import euclidean
@@ -87,63 +86,73 @@ def _deviation_gif_clip_time_meta(path_segment, user_fps):
 
 def save_side_by_side_deviation_gif(ref_video_path, user_video_path, path_segment, body_part_text, rank_idx, run_id):
     """
-    HIGH SPEED TARGETED GENERATOR: 
-    - Maintains original aspect ratio scaled cleanly to 360p height.
+    HIGH SPEED TARGETED GENERATOR WITH LETTERBOX PADDING: 
+    - Fits the entire original frame cleanly inside a padded canvas.
+    - Eliminates foot/head cropping issues caused by direct resizing.
     - Highlights targeted error joints in bright red.
-    - Only reads the frames inside the path segment window.
     """
     mp_drawing = mp.solutions.drawing_utils
     
     cap_ref = cv2.VideoCapture(ref_video_path)
     cap_user = cv2.VideoCapture(user_video_path)
     
-    # Extract dimensions from user video to establish proportional aspect sizing
-    orig_w = int(cap_user.get(cv2.CAP_PROP_FRAME_WIDTH)) or 640
-    orig_h = int(cap_user.get(cv2.CAP_PROP_FRAME_HEIGHT)) or 480
-    
-    # Calculate uniform scaling size constrained to 360p height
-    canvas_h = 360
-    canvas_w = int((orig_w / orig_h) * canvas_h)
-    # Ensure width is divisible by 2 for video matrix requirements
-    if canvas_w % 2 != 0: canvas_w += 1
+    # Establish a reliable, standard baseline canvas frame height and width
+    canvas_h = 400
+    canvas_w = 400
+
+    def letterbox_frame(frame, target_w, target_h):
+        """Helper to downscale frame proportionally and pad with black margins"""
+        h, w = frame.shape[:2]
+        scale = min(target_w / w, target_h / h)
+        new_w, new_h = int(w * scale), int(h * scale)
+        
+        resized = cv2.resize(frame, (new_w, new_h))
+        
+        # Create a solid black canvas container
+        padded = np.zeros((target_h, target_w, 3), dtype=np.uint8)
+        
+        # Compute centering offsets
+        x_offset = (target_w - new_w) // 2
+        y_offset = (target_h - new_h) // 2
+        
+        padded[y_offset:y_offset+new_h, x_offset:x_offset+new_w] = resized
+        return padded
 
     # Map text strings out to MediaPipe's tracking node indexes
     target_joints = []
     bp_lower = body_part_text.lower()
     if "shoulder" in bp_lower:
-        target_joints = [11, 12]  # Left and Right shoulders
+        target_joints = [11, 12]  
     elif "elbow" in bp_lower or "arm" in bp_lower:
-        target_joints = [13, 14, 15, 16] # Elbows and Wrists
+        target_joints = [13, 14, 15, 16] 
     elif "knee" in bp_lower or "foot" in bp_lower or "placement" in bp_lower:
-        target_joints = [25, 26, 27, 28] # Knees and Ankles
+        target_joints = [25, 26, 27, 28, 29, 30, 31, 32] # Includes ankles, heels, and toes
 
     frames_combined = []
     
-    # Isolate exact frame windows to bypass full video timeline scanning overhead
     needed_ref = sorted(list(set(pt[0] for pt in path_segment)))
     needed_user = sorted(list(set(pt[1] for pt in path_segment)))
     
     ref_frames = {}
     user_frames = {}
     
-    # Fast-seek targeted frames sequentially
+    # Process frames and safely letterbox them immediately
     for f_idx in needed_ref:
         cap_ref.set(cv2.CAP_PROP_POS_FRAMES, f_idx)
         ret, frame = cap_ref.read()
-        if ret: ref_frames[f_idx] = cv2.resize(frame, (canvas_w, canvas_h))
+        if ret: ref_frames[f_idx] = letterbox_frame(frame, canvas_w, canvas_h)
         
     for f_idx in needed_user:
         cap_user.set(cv2.CAP_PROP_POS_FRAMES, f_idx)
         ret, frame = cap_user.read()
-        if ret: user_frames[f_idx] = cv2.resize(frame, (canvas_w, canvas_h))
+        if ret: user_frames[f_idx] = letterbox_frame(frame, canvas_w, canvas_h)
         
     cap_ref.release()
     cap_user.release()
 
-    # Custom styles to isolate lines cleanly
     pose_connection_spec = mp_drawing.DrawingSpec(color=(220, 220, 220), thickness=2, circle_radius=1)
     normal_joint_spec = mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=2, circle_radius=2)
-    error_joint_spec = mp_drawing.DrawingSpec(color=(0, 0, 255), thickness=4, circle_radius=5) # Red highlight spec
+    error_joint_spec = mp_drawing.DrawingSpec(color=(0, 0, 255), thickness=4, circle_radius=5) 
 
     with mp_pose.Pose(static_image_mode=False, min_detection_confidence=0.4) as pose:
         for ref_idx, user_idx in path_segment:
@@ -184,13 +193,14 @@ def save_side_by_side_deviation_gif(ref_video_path, user_video_path, path_segmen
                     else:
                         cv2.circle(frame_ref, (cx, cy), normal_joint_spec.circle_radius, normal_joint_spec.color, -1)
 
-            # Labels and Stitched Canvas Generation
+            # Apply top labels inside specific panels
             cv2.putText(frame_user, "YOUR CLIP", (15, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2, cv2.LINE_AA)
             cv2.putText(frame_ref, "REFERENCE", (15, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2, cv2.LINE_AA)
             
-            # 🎯 CONFIRMED: Your clip on the left, Reference guide on the right
+            # Stitch: User video frame on the left, reference video frame on the right
             stitched_canvas = np.hstack((frame_user, frame_ref))
             
+            # Bottom status banner text across unified layout width
             cv2.putText(stitched_canvas, f"DISCREPANCY DETECTED: {body_part_text.upper()}", (20, canvas_h - 15),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
             
