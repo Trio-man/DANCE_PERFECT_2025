@@ -20,7 +20,7 @@ import subprocess
 import uuid
 # OpenCV, used here to open/read video files and handle frames
 import cv2
-import backend.admin_routes
+#import backend.admin_routes
 
 os.makedirs("uploads", exist_ok=True)
 os.makedirs("motion_outputs", exist_ok=True)
@@ -870,6 +870,8 @@ def compare_motion_csvs_test():
 def serve_assets(filename):
     from flask import send_from_directory
     return send_from_directory('deviation_gifs', filename.replace('deviation_gifs/', ''))
+
+import backend.admin_routes
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
