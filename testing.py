@@ -20,6 +20,7 @@ import subprocess
 import uuid
 # OpenCV, used here to open/read video files and handle frames
 import cv2
+import backend.admin_routes
 
 os.makedirs("uploads", exist_ok=True)
 os.makedirs("motion_outputs", exist_ok=True)
