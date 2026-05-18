@@ -14,7 +14,7 @@ app = Flask(__name__)
 UPLOAD_FOLDER = "./uploads"
 OUTPUT_FOLDER = "./output"
 LOG_FOLDER = "./logs"
-DEVIATION_GIFS_FOLDER = "./deviation_gifs"
+DEVIATION_GIFS_FOLDER = "/var/www/danceperfect/deviation_gifs"
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
