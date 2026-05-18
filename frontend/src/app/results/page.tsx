@@ -35,7 +35,7 @@ function ResultsContent() {
 
   useEffect(() => {
     if (!API_BASE_URL) {
-      console.warn("Environment variable NEXT_PUBLIC_API_URL is not defined. Falling back to relative paths.");
+      console.warn("Environment variable NEXT_PUBLIC_API_URL is not defined.");
     }
 
     const savedData = localStorage.getItem('analysis_results');
@@ -114,8 +114,8 @@ function ResultsContent() {
         <div className="space-y-6">
           <h3 className="text-2xl font-bold text-slate-800 ml-2">Visual Breakdown</h3>
           {moments.map((moment, idx) => {
-            // Checks if the backend provided a full secure absolute URL.
-            // If true, uses it directly; otherwise, falls back to combining the file name with the environment variable base.
+            // 🌟 THE CRITICAL FIX: If the path from backend starts with 'http', use it completely intact!
+            // This bypasses the problematic raw IP base URL for the assets.
             const gifUrl = moment.gif_path.startsWith('http')
               ? moment.gif_path
               : `${API_BASE_URL}/assets/${moment.gif_path.split('/').pop()}`;
