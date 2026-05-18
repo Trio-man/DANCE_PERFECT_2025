@@ -161,9 +161,6 @@ def process_videos_test():
         if os.path.exists(raw_ref_path): os.remove(raw_ref_path)
         if os.path.exists(raw_user_path): os.remove(raw_user_path)
 
-        # Note: In your full production setup, you would now pass `compressed_user_path` 
-        # into MediaPipe to extract coordinates to CSV. For this test endpoint, 
-        # we generate simulated paths to keep verification swift.
         out_ref_csv = os.path.join(UPLOAD_FOLDER, f"{run_id}_ref.csv")
         out_user_csv = os.path.join(UPLOAD_FOLDER, f"{run_id}_user.csv")
         pd.DataFrame().to_csv(out_ref_csv) # Placeholder tracking targets
@@ -175,9 +172,6 @@ def process_videos_test():
         raw_deviations = analysis_results.get("detected_deviations", [])
         deviation_moments_ui = []
         
-        # ─────────────────────────────────────────────────────────────────
-        # 🎯 THE FIX: SCAN REAL FILE NAMES FROM DISK TO BRIDGE SYSTEM PATHS
-        # ─────────────────────────────────────────────────────────────────
         # Scrape all files matching the background processor's prefix schema
         all_gifs = glob.glob(os.path.join(DEVIATION_GIFS_FOLDER, "deviation_rank*.gif"))
         
@@ -219,7 +213,8 @@ def process_videos_test():
                 fallback_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
                 matched_filename = f"deviation_rank{idx+1}_{fallback_time}.gif"
 
-            gif_path = f"https://danceperfect.duckdns.org/deviation_gifs/{matched_filename}"
+            # 🎯 FIXED: Stripped the hardcoded duckdns domain. Returns just the raw filename string.
+            gif_path = matched_filename
             
             deviation_moments_ui.append({
                 "rank": idx + 1,
@@ -268,10 +263,10 @@ def process_videos_test():
 @app.route('/deviation_gifs/<path:filename>')
 def serve_deviation_gifs(filename):
     """
-    🎯 FIXED: Added explicit mimetype declaration to bypass browser ORB blocks.
+    🎯 FIXED: Points directly to your secure production asset storage location
+    instead of the old local execution context folder.
     """
-    gifs_directory = os.path.join(os.getcwd(), 'deviation_gifs')
-    return send_from_directory(gifs_directory, filename, mimetype='image/gif')
+    return send_from_directory(DEVIATION_GIFS_FOLDER, filename, mimetype='image/gif')
 
 
 if __name__ == '__main__':
