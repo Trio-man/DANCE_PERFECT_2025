@@ -37,20 +37,27 @@ logging.basicConfig(
 mp_pose = mp.solutions.pose
 
 # =========================================================================
-# STORAGE SAVING FFMPEG COMPRESSION UTILITY
+# PERFORMANCE-OPTIMIZED FFMPEG COMPRESSION UTILITY
 # =========================================================================
 
 def compress_video_storage_optimized(input_path, output_path, target_fps=30):
-    logging.info(f"Compressing video: {input_path} -> {output_path}")
+    """
+    🎯 SPEED & PRECISION BALANCED COMPRESSION
+    Compresses raw files down to 720p HD with low CRF distortion. 
+    This retains sharp joint boundaries for flawless MediaPipe tracking 
+    while cutting processing times significantly.
+    """
+    logging.info(f"Optimizing video for analysis speed: {input_path} -> {output_path}")
     command = [
         'ffmpeg', '-y',
         '-i', input_path,
-        '-vf', f'fps={target_fps},scale=-2:480',
+        # Force stable fps configuration and scale cleanly to 720p resolution rules
+        '-vf', f'fps={target_fps},scale=-2:720',
         '-vcodec', 'libx264',
-        '-crf', '28',         
-        '-preset', 'fast',     
-        '-pix_fmt', 'yuv420p', 
-        '-an',                 
+        '-crf', '22',          # 22 preserves clear joint clarity and prevents block artifacts
+        '-preset', 'ultrafast', # Maximize encoding speed to keep API response times minimal
+        '-pix_fmt', 'yuv420p',  # Standard matrix layout for robust OpenCV decoding
+        '-an',                  # Drop audio tracks to strip away useless file weight
         output_path
     ]
     
@@ -218,33 +225,57 @@ def compare_motion_csvs_dtw(ref_video_path, user_video_path, ref_fps, user_fps):
     return analysis_results, dtw_path
 
 # =========================================================================
-# PHYSICAL DEVIATION VIDEO CHOPPER & GIF SLICER
+# PHYSICAL DEVIATION VIDEO CHOPPER & GIF SLICER WITH AI SKELETON RENDER
 # =========================================================================
 
 def save_deviation_clip_as_gif(video_path, start_frame, end_frame, rank_idx, run_id):
     """
-    Cuts the exact faulty timeline frames and creates a physical GIF file bound to the run_id
+    🎯 AI VISUAL OVERLAY GENERATOR
+    Cuts problem windows, tracks poses, draws full diagnostic skeletons,
+    and exports a clear dashboard-ready looping web animation.
     """
+    mp_drawing = mp.solutions.drawing_utils
+    mp_drawing_styles = mp.solutions.drawing_styles
+    
     cap = cv2.VideoCapture(video_path)
     frames = []
     current_frame = 0
     
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
+    with mp_pose.Pose(static_image_mode=False, min_detection_confidence=0.5) as pose:
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
+                
+            # Capture frames that sit inside our deviation window
+            if start_frame <= current_frame <= end_frame:
+                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                results = pose.process(rgb_frame)
+                
+                # Draw the tracking skeleton connections directly onto our frame canvas
+                if results.pose_landmarks:
+                    mp_drawing.draw_landmarks(
+                        frame,
+                        results.pose_landmarks,
+                        mp_pose.POSE_CONNECTIONS,
+                        landmark_drawing_spec=mp_drawing_styles.get_default_pose_landmarks_style()
+                    )
+                
+                # Imprint clear tracking markings onto the active matrix corner
+                cv2.putText(
+                    frame, f"DEV MOMENT #{rank_idx}", (20, 40),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2, cv2.LINE_AA
+                )
+                
+                # Resize to safe layout resolution sizes to clear rendering speed bottlenecks
+                gif_canvas = cv2.resize(frame, (640, 480))
+                rgb_gif_frame = cv2.cvtColor(gif_canvas, cv2.COLOR_BGR2RGB)
+                frames.append(rgb_gif_frame)
+                
+            if current_frame > end_frame:
+                break
+            current_frame += 1
             
-        # Capture frames that sit inside our deviation window
-        if start_frame <= current_frame <= end_frame:
-            # Resize clip frames to 240p height to keep file sizes incredibly tiny
-            small_frame = cv2.resize(frame, (320, 240))
-            rgb_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
-            frames.append(rgb_frame)
-            
-        if current_frame > end_frame:
-            break
-        current_frame += 1
-        
     cap.release()
     
     if frames:
@@ -286,7 +317,7 @@ def process_videos_test():
         ref_file.save(raw_ref_path)
         user_file.save(raw_user_path)
 
-        # Storage Compression Node
+        # Storage Compression Node (Optimized for analysis speed and clarity accuracy)
         compress_video_storage_optimized(raw_ref_path, compressed_ref_path, target_fps=int(ref_fps))
         compress_video_storage_optimized(raw_user_path, compressed_user_path, target_fps=int(user_fps))
         
@@ -326,7 +357,7 @@ def process_videos_test():
                 path_sample_end = user_start + len(path_segment)
 
             # ─────────────────────────────────────────────────────────────────
-            # 🎯 GENERATING INTERPOLATED DEVIATION VIDEO Slices WITH RUN_ID
+            # 🎯 GENERATING INTERPOLATED DEVIATION VIDEO Slices WITH OVERLAYS
             # ─────────────────────────────────────────────────────────────────
             generated_filename = save_deviation_clip_as_gif(
                 compressed_user_path, 
@@ -349,6 +380,14 @@ def process_videos_test():
                 "path_sample_start": path_sample_start,
                 "path_sample_end": path_sample_end
             })
+
+        # ─────────────────────────────────────────────────────────────────
+        # 🎯 AUTOMATED MAINTENANCE CLEANUP HIERARCHY
+        # ─────────────────────────────────────────────────────────────────
+        # Wipe intermediate compressed videos and local CSVs now that math data extraction is complete
+        for path in [compressed_ref_path, compressed_user_path, out_ref_csv, out_user_csv]:
+            if os.path.exists(path):
+                os.remove(path)
 
         response_payload = {
             "status": "success",
