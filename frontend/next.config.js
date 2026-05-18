@@ -6,8 +6,12 @@ const nextConfig = {
     return [
       {
         source: '/api/backend/:path*',
-        // No fallback needed if your Vercel env variable is set
         destination: `${process.env.NEXT_PUBLIC_API_URL}/:path*`,
+      },
+      // 🎯 ADD THIS RULE: Proxy asset traffic cleanly to your backend domain
+      {
+        source: '/deviation_gifs/:path*',
+        destination: `${process.env.NEXT_PUBLIC_API_URL}/deviation_gifs/:path*`,
       },
     ];
   },
