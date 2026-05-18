@@ -871,7 +871,11 @@ def serve_assets(filename):
     from flask import send_from_directory
     return send_from_directory('deviation_gifs', filename.replace('deviation_gifs/', ''))
 
-import backend.admin_routes
+# ... All your existing code, app configuration, and supabase setup above ...
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+# --- REGISTER BLUEPRINT ROUTERS AT THE BOTTOM ---
+from backend.admin_routes import admin_bp
+app.register_blueprint(admin_bp)
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
