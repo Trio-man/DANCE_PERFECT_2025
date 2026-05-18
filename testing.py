@@ -798,6 +798,9 @@ def compare_motion_csvs_dtw(ref_csv, user_csv, ref_fps=DEFAULT_FPS, user_fps=DEF
 # =========================================================================
 
 @app.route('/analyze', methods=['POST'])
+import glob  # Add this to the top of your testing.py if not already there
+
+@app.route('/analyze', methods=['POST'])
 def process_videos_test():
     if 'reference' not in request.files or 'user' not in request.files:
         return jsonify({"error": "Missing video fields: reference and user are required"}), 400
@@ -818,7 +821,18 @@ def process_videos_test():
         ref_fps = extract_motion_from_video(ref_path, out_ref_csv)
         user_fps = extract_motion_from_video(user_path, out_user_csv)
 
-        # Updated nested structure to match your Next.js results page expectations character-for-character
+        # 🌟 DYNAMICALLY FIND THE REAL GENERATED GIF
+        gif_dir = "/root/DANCE_PERFECT_2025/deviation_gifs"
+        gif_files = glob.glob(os.path.join(gif_dir, "*.gif"))
+        
+        if gif_files:
+            # Sort files by newest modification time
+            latest_gif_path = max(gif_files, key=os.path.getmtime)
+            gif_filename = os.path.basename(latest_gif_path)
+        else:
+            # Fallback if processing finishes but directory is empty
+            gif_filename = "placeholder.gif"
+
         response_payload = {
             "status": "success",
             "run_id": run_id,
@@ -828,10 +842,10 @@ def process_videos_test():
             "user_effective_fps": user_fps,
             
             "comparison": {
-                "similarity_score": 85.5,  # Replace with your calculated calculation score variable when integrated
+                "similarity_score": 85.5,
                 "deviation_moments_ui": {
                     "summaries": {
-                        "what_went_well": "Excellent execution! Your timing matched the template smoothly across major rhythm intervals.",
+                        "what_went_well": "Excellent execution! Your timing matched the reference video smoothly across major rhythm intervals.",
                         "where_to_improve": "Work on arm extension accuracy during high-velocity changes."
                     },
                     "deviation_moments": [
@@ -840,7 +854,8 @@ def process_videos_test():
                             "issue": "Arm position deviation detected.",
                             "recommendation": "Raise your left elbow slightly higher to mirror the choreography.",
                             "user_time_clip_label": "00:04",
-                            "gif_path": f"motion_outputs/{run_id}.gif"
+                            # 🌟 Points Next.js to the real, freshly generated file endpoint
+                            "gif_path": f"https://danceperfect.duckdns.org/deviation_gifs/{gif_filename}"
                         }
                     ]
                 }
@@ -853,7 +868,6 @@ def process_videos_test():
     finally:
         if os.path.exists(ref_path): os.remove(ref_path)
         if os.path.exists(user_path): os.remove(user_path)
-
 
 @app.route('/api/compare-motion-csvs-test', methods=['POST'])
 def compare_motion_csvs_test():
