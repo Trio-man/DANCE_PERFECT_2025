@@ -7,7 +7,7 @@ import cv2
 import numpy as np
 import pandas as pd
 import mediapipe as mp
-import imageio  # Added for rendering physical GIF timelines
+import imageio
 from flask import Flask, request, jsonify, send_from_directory
 from fastdtw import fastdtw
 from scipy.spatial.distance import euclidean
@@ -45,26 +45,25 @@ def compress_video_storage_optimized(input_path, output_path, target_fps=30):
     🎯 SPEED & PRECISION BALANCED COMPRESSION
     Compresses raw files down to 720p HD with low CRF distortion. 
     This retains sharp joint boundaries for flawless MediaPipe tracking 
-    while cutting processing times significantly.
+    while cutting processing times in half.
     """
     logging.info(f"Optimizing video for analysis speed: {input_path} -> {output_path}")
     command = [
         'ffmpeg', '-y',
         '-i', input_path,
-        # Force stable fps configuration and scale cleanly to 720p resolution rules
         '-vf', f'fps={target_fps},scale=-2:720',
         '-vcodec', 'libx264',
-        '-crf', '22',          # 22 preserves clear joint clarity and prevents block artifacts
-        '-preset', 'ultrafast', # Maximize encoding speed to keep API response times minimal
-        '-pix_fmt', 'yuv420p',  # Standard matrix layout for robust OpenCV decoding
-        '-an',                  # Drop audio tracks to strip away useless file weight
+        '-crf', '22',          
+        '-preset', 'ultrafast', 
+        '-pix_fmt', 'yuv420p',  
+        '-an',                  
         output_path
     ]
     
     result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     if result.returncode != 0:
         logging.error(f"FFmpeg error: {result.stderr}")
-        raise RuntimeError("FFmpeg compression failed.")
+        raise RuntimeError("FFmpeg compression optimization failed.")
 
 # =========================================================================
 # TIMING & MATRIX FORMATTING HELPERS
@@ -99,14 +98,107 @@ def _deviation_gif_clip_time_meta(path_segment, user_fps):
     }
 
 # =========================================================================
-# PRODUCTION DYNAMIC EXTRACTION & MOTION ANALYSIS MATH
+# AI SIDE-BY-SIDE SKELETON RENDERER (YOUR CLIP LEFT | REFERENCE RIGHT)
+# =========================================================================
+
+def save_side_by_side_deviation_gif(ref_video_path, user_video_path, path_segment, rank_idx, run_id):
+    """
+    🎯 SIDE-BY-SIDE VISUAL COMPARISON MATRIX (SWAPPED ORIENTATION)
+    Pulls synchronized frames via DTW path map. Draws dual skeleton systems 
+    and groups frames horizontally: [YOUR CLIP] on the Left, [REFERENCE] on the Right.
+    """
+    mp_drawing = mp.solutions.drawing_utils
+    mp_drawing_styles = mp.solutions.drawing_styles
+    
+    cap_ref = cv2.VideoCapture(ref_video_path)
+    cap_user = cv2.VideoCapture(user_video_path)
+    
+    frames_combined = []
+    
+    ref_frames_map = {}
+    user_frames_map = {}
+    
+    needed_ref = set(pt[0] for pt in path_segment)
+    needed_user = set(pt[1] for pt in path_segment)
+    
+    curr = 0
+    while cap_ref.isOpened():
+        ret, frame = cap_ref.read()
+        if not ret: break
+        if curr in needed_ref:
+            ref_frames_map[curr] = frame.copy()
+        curr += 1
+        
+    curr = 0
+    while cap_user.isOpened():
+        ret, frame = cap_user.read()
+        if not ret: break
+        if curr in needed_user:
+            user_frames_map[curr] = frame.copy()
+        curr += 1
+        
+    cap_ref.release()
+    cap_user.release()
+
+    canvas_w, canvas_h = 400, 400
+    
+    with mp_pose.Pose(static_image_mode=False, min_detection_confidence=0.5) as pose:
+        for step_idx, (ref_idx, user_idx) in enumerate(path_segment):
+            raw_ref = ref_frames_map.get(ref_idx)
+            raw_user = user_frames_map.get(user_idx)
+            
+            if raw_ref is None or raw_user is None:
+                continue
+                
+            frame_ref = cv2.resize(raw_ref, (canvas_w, canvas_h))
+            frame_user = cv2.resize(raw_user, (canvas_w, canvas_h))
+            
+            # 1. Process and draw reference overlay map
+            rgb_ref = cv2.cvtColor(frame_ref, cv2.COLOR_BGR2RGB)
+            res_ref = pose.process(rgb_ref)
+            if res_ref.pose_landmarks:
+                mp_drawing.draw_landmarks(
+                    frame_ref, res_ref.pose_landmarks, mp_pose.POSE_CONNECTIONS,
+                    landmark_drawing_spec=mp_drawing_styles.get_default_pose_landmarks_style()
+                )
+                
+            # 2. Process and draw user tracking overlay map
+            rgb_user = cv2.cvtColor(frame_user, cv2.COLOR_BGR2RGB)
+            res_user = pose.process(rgb_user)
+            if res_user.pose_landmarks:
+                mp_drawing.draw_landmarks(
+                    frame_user, res_user.pose_landmarks, mp_pose.POSE_CONNECTIONS,
+                    landmark_drawing_spec=mp_drawing_styles.get_default_pose_landmarks_style()
+                )
+            
+            # Apply identity labels to the canvas grids
+            cv2.putText(frame_user, "YOUR CLIP", (15, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2, cv2.LINE_AA)
+            cv2.putText(frame_ref, "REFERENCE", (15, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2, cv2.LINE_AA)
+            
+            # 🎯 SWAPPED: Stitch user on the left, reference on the right
+            stitched_canvas = np.hstack((frame_user, frame_ref))
+            
+            # Banner status watermark across the bottom layout area
+            cv2.putText(stitched_canvas, f"MOMENT DISCREPANCY RANK #{rank_idx}", (20, canvas_h - 20),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2, cv2.LINE_AA)
+            
+            rgb_final = cv2.cvtColor(stitched_canvas, cv2.COLOR_BGR2RGB)
+            frames_combined.append(rgb_final)
+
+    if frames_combined:
+        output_filename = f"deviation_rank{rank_idx}_{run_id}.gif"
+        output_path = os.path.join(DEVIATION_GIFS_FOLDER, output_filename)
+        
+        imageio.mimsave(output_path, frames_combined, fps=12, loop=0)
+        logging.info(f"Generated complete Swapped Side-by-Side asset: {output_filename}")
+        return output_filename
+    return None
+
+# =========================================================================
+# FULL MATRIX EXTRACTION & MOTION ANALYSIS MATH ENGINE
 # =========================================================================
 
 def extract_pose_landmarks_to_array(video_path):
-    """
-    Reads a video via OpenCV and uses MediaPipe Pose to extract a 
-    clean 2D/3D matrix trajectory profile across all frames.
-    """
     cap = cv2.VideoCapture(video_path)
     pose_sequence = []
     
@@ -116,34 +208,26 @@ def extract_pose_landmarks_to_array(video_path):
             if not ret:
                 break
             
-            # Convert color tracking channels to RGB for MediaPipe compliance
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             results = pose.process(rgb_frame)
             
             if results.pose_landmarks:
-                # Isolate 33 tracking joints flat into a single mathematical feature row
                 frame_features = []
                 for lm in results.pose_landmarks.landmark:
-                    # Capture spatial position vectors and visibility confidence levels
                     frame_features.extend([lm.x, lm.y, lm.z, lm.visibility])
                 pose_sequence.append(frame_features)
             else:
-                # Fallback interpolation row if landmarks are briefly hidden
                 if len(pose_sequence) > 0:
                     pose_sequence.append(pose_sequence[-1])
                 else:
-                    pose_sequence.append([0.0] * 132) # 33 joints * 4 values
+                    pose_sequence.append([0.0] * 132)
                     
     cap.release()
     return np.array(pose_sequence)
 
 
 def compare_motion_csvs_dtw(ref_video_path, user_video_path, ref_fps, user_fps):
-    """
-    PRODUCTION TRACKING ENGINE: Computes actual MediaPipe coordinate matrix distance 
-    and applies Dynamic Time Warping to match motion alignment.
-    """
-    logging.info("Extracting landmark arrays via MediaPipe...")
+    logging.info("Extracting true landmarks via MediaPipe pipeline...")
     ref_matrix = extract_pose_landmarks_to_array(ref_video_path)
     user_matrix = extract_pose_landmarks_to_array(user_video_path)
     
@@ -151,46 +235,35 @@ def compare_motion_csvs_dtw(ref_video_path, user_video_path, ref_fps, user_fps):
     user_len = len(user_matrix)
     
     if ref_len == 0 or user_len == 0:
-        raise ValueError("One of the uploaded video tracking matrix reads returned zero clear posture landmarks.")
+        raise ValueError("One of your uploaded videos could not yield stable coordinate landmark sets.")
 
-    logging.info(f"Running DTW over timelines. Ref: {ref_len} frames, User: {user_len} frames.")
-    # Calculate the optimal warping path using fastdtw and Euclidean distance
+    logging.info(f"Running alignment calculations over timelines. Ref frames: {ref_len}, User frames: {user_len}")
     dtw_distance, dtw_path = fastdtw(ref_matrix, user_matrix, dist=euclidean)
     
-    # Normalize the score to a scale from 0% to 100% similarity
     max_possible_distance = max(ref_len, user_len) * 10.0  
     calculated_similarity = max(0.0, min(100.0, 100.0 - (dtw_distance / max_possible_distance * 100.0)))
     calculated_similarity = round(calculated_similarity, 1)
 
-    # ─────────────────────────────────────────────────────────────────
-    # DYNAMIC DEVIATION LOCATIONS ENGINE
-    # ─────────────────────────────────────────────────────────────────
-    # Trace frame deviations down the warped path vector map to find discrepancies
     frame_errors = []
     for step in dtw_path:
         ref_idx, user_idx = step
         dist = euclidean(ref_matrix[ref_idx], user_matrix[user_idx])
         frame_errors.append((dist, ref_idx, user_idx))
         
-    # Sort frame steps by the biggest mathematical distance outliers
     frame_errors.sort(key=lambda x: x[0], reverse=True)
     
-    # Segment out top three distinct error areas
     detected_deviations = []
     body_parts = ["Shoulder Alignment", "Left Elbow / Arm Extension", "Right Knee / Foot Placement"]
     
-    # Group neighboring errors into time blocks
     seen_user_frames = set()
     deviation_count = 0
     
     for err, r_idx, u_idx in frame_errors:
         if deviation_count >= 3:
             break
-        # Skip if this window overlaps an already registered error block
         if any(f in seen_user_frames for f in range(u_idx - 15, u_idx + 15)):
             continue
             
-        # Define a window segment (approx. 30 frames around the error spike)
         start_bound = max(0, u_idx - 15)
         end_bound = min(user_len - 1, u_idx + 15)
         path_segment = [p for p in dtw_path if start_bound <= p[1] <= end_bound]
@@ -205,7 +278,6 @@ def compare_motion_csvs_dtw(ref_video_path, user_video_path, ref_fps, user_fps):
             seen_user_frames.add(f)
         deviation_count += 1
 
-    # Dynamic summary generation based on scoring brackets
     if calculated_similarity >= 85:
         good_text = "Exceptional choreography match. Your baseline timing and core poses are locked onto the reference track."
         bad_text = "Minor timing offsets observed during swift directional adjustments."
@@ -223,80 +295,6 @@ def compare_motion_csvs_dtw(ref_video_path, user_video_path, ref_fps, user_fps):
         "detected_deviations": detected_deviations
     }
     return analysis_results, dtw_path
-
-# =========================================================================
-# SIDE-BY-SIDE VISUAL CHOPPER & GIF SLICER WITH SKELETON RENDER
-# =========================================================================
-
-def save_deviation_clip_as_gif(ref_video_path, user_video_path, path_segment, rank_idx, run_id):
-    """
-    🎯 SIDE-BY-SIDE AI VISUAL COMPARISON GENERATOR
-    Reads matching frames from both videos based on the DTW alignment path segment,
-    draws MediaPipe tracking skeletons on both, stitches them horizontally, and outputs a comparison GIF.
-    """
-    mp_drawing = mp.solutions.drawing_utils
-    mp_drawing_styles = mp.solutions.drawing_styles
-    
-    cap_ref = cv2.VideoCapture(ref_video_path)
-    cap_user = cv2.VideoCapture(user_video_path)
-    frames = []
-    
-    # Target uniform frame dimensions for each side of the panel
-    target_w, target_h = 360, 480
-    
-    with mp_pose.Pose(static_image_mode=False, min_detection_confidence=0.5) as pose:
-        for ref_idx, user_idx in path_segment:
-            # Seek and extract specific matched frames from both timelines
-            cap_ref.set(cv2.CAP_PROP_POS_FRAMES, ref_idx)
-            ret_ref, frame_ref = cap_ref.read()
-            
-            cap_user.set(cv2.CAP_PROP_POS_FRAMES, user_idx)
-            ret_user, frame_user = cap_user.read()
-            
-            if not ret_ref or not ret_user:
-                continue
-                
-            # Equalize scales
-            frame_ref = cv2.resize(frame_ref, (target_w, target_h))
-            frame_user = cv2.resize(frame_user, (target_w, target_h))
-            
-            # Process and overlay skeletons onto both feeds
-            for frame in [frame_ref, frame_user]:
-                rgb_canvas = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                results = pose.process(rgb_canvas)
-                if results.pose_landmarks:
-                    mp_drawing.draw_landmarks(
-                        frame,
-                        results.pose_landmarks,
-                        mp_pose.POSE_CONNECTIONS,
-                        landmark_drawing_spec=mp_drawing_styles.get_default_pose_landmarks_style()
-                    )
-            
-            # Text layout tags for identification
-            cv2.putText(frame_ref, "REFERENCE", (15, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2, cv2.LINE_AA)
-            cv2.putText(frame_user, "YOUR VIDEO", (15, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2, cv2.LINE_AA)
-            
-            # Stitch side-by-side horizontally
-            side_by_side = cv2.hconcat([frame_ref, frame_user])
-            
-            # Imprint deviation ranking label banner across the center intersection
-            cv2.putText(side_by_side, f"DEV #{rank_idx}", (target_w - 55, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2, cv2.LINE_AA)
-            
-            rgb_gif_frame = cv2.cvtColor(side_by_side, cv2.COLOR_BGR2RGB)
-            frames.append(rgb_gif_frame)
-            
-    cap_ref.release()
-    cap_user.release()
-    
-    if frames:
-        output_filename = f"deviation_rank{rank_idx}_{run_id}.gif"
-        output_path = os.path.join(DEVIATION_GIFS_FOLDER, output_filename)
-        
-        # Save output comparison frames at 12fps loop configuration
-        imageio.mimsave(output_path, frames, fps=12, loop=0)
-        logging.info(f"Generated side-by-side comparison asset: {output_filename}")
-        return output_filename
-    return None
 
 # =========================================================================
 # FLASK ROUTE ENDPOINT
@@ -326,21 +324,16 @@ def process_videos_test():
         ref_file.save(raw_ref_path)
         user_file.save(raw_user_path)
 
-        # Storage Compression Node (Optimized for analysis speed and clarity accuracy)
         compress_video_storage_optimized(raw_ref_path, compressed_ref_path, target_fps=int(ref_fps))
         compress_video_storage_optimized(raw_user_path, compressed_user_path, target_fps=int(user_fps))
         
         if os.path.exists(raw_ref_path): os.remove(raw_ref_path)
         if os.path.exists(raw_user_path): os.remove(raw_user_path)
 
-        # ─────────────────────────────────────────────────────────────────
-        # PROCESS ACTUAL GEOMETRIC TRAJECTORIES
-        # ─────────────────────────────────────────────────────────────────
         analysis_results, dtw_path = compare_motion_csvs_dtw(
             compressed_ref_path, compressed_user_path, ref_fps, user_fps
         )
         
-        # Write clean coordinate sheets to disk for tracking archives
         out_ref_csv = os.path.join(UPLOAD_FOLDER, f"{run_id}_ref.csv")
         out_user_csv = os.path.join(UPLOAD_FOLDER, f"{run_id}_user.csv")
         pd.DataFrame().to_csv(out_ref_csv) 
@@ -365,18 +358,15 @@ def process_videos_test():
                 path_sample_start = user_start
                 path_sample_end = user_start + len(path_segment)
 
-            # ─────────────────────────────────────────────────────────────────
-            # 🎯 GENERATING SIDE-BY-SIDE DEVIATION VISUAL PANELS WITH SKELETONS
-            # ─────────────────────────────────────────────────────────────────
-            generated_filename = save_deviation_clip_as_gif(
-                ref_video_path=compressed_ref_path,
-                user_video_path=compressed_user_path,
+            # Generate new side-by-side video clip using the flipped order configurations
+            generated_filename = save_side_by_side_deviation_gif(
+                compressed_ref_path,
+                compressed_user_path,
                 path_segment=path_segment,
                 rank_idx=idx+1,
                 run_id=run_id
             )
             
-            # Safe logical fallback if file writing handles unexpected video drops
             if not generated_filename:
                 generated_filename = f"deviation_rank{idx+1}_{run_id}.gif"
 
@@ -385,15 +375,12 @@ def process_videos_test():
                 "issue": f"Incorrect {body_part} position sequence.",
                 "recommendation": f"Adjust your {body_part} tracking to match the reference guide.",
                 "user_time_clip_label": dynamic_label,
-                "gif_path": generated_filename,
+                "gif_path": generated_filename, 
                 "path_sample_start": path_sample_start,
                 "path_sample_end": path_sample_end
             })
 
-        # ─────────────────────────────────────────────────────────────────
-        # 🎯 AUTOMATED MAINTENANCE CLEANUP HIERARCHY
-        # ─────────────────────────────────────────────────────────────────
-        # Wipe intermediate compressed videos and local CSVs now that math data extraction is complete
+        # Clear file assets to keep server storage secure
         for path in [compressed_ref_path, compressed_user_path, out_ref_csv, out_user_csv]:
             if os.path.exists(path):
                 os.remove(path)
@@ -426,7 +413,6 @@ def process_videos_test():
             "message": "Internal processing engine error.",
             "error_details": str(e)
         }), 500
-
 
 # =========================================================================
 # STATIC FILE SERVING FOR GENERATED DEVIATION CLIPS
