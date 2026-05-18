@@ -41,7 +41,7 @@ mp_pose = mp.solutions.pose
 
 def compress_video_storage_optimized(input_path, output_path, target_fps=30):
     """
-    Downscales incoming assets to a uniform max resolution for optimization.
+    Downscales incoming assets uniformly for processing performance optimizations.
     """
     logging.info(f"Optimizing video for analysis speed: {input_path} -> {output_path}")
     command = [
@@ -81,42 +81,35 @@ def _deviation_gif_clip_time_meta(path_segment, user_fps):
     }
 
 # =========================================================================
-# REFINED THIN-LINED VISUALIZATION ENGINE (ANTI-CROPPING & FINE DOTS)
+# PERFECTLY SCALED VISUALIZATION ENGINE (NO BARS, NO LABELS, NO CROPPING)
 # =========================================================================
 
 def save_side_by_side_deviation_gif(ref_video_path, user_video_path, path_segment, body_part_text, rank_idx, run_id):
     """
-    REFINED CORE TRACKER ENGINE:
-    - Normalizes incoming feeds into standard 16:9 viewport boxes.
-    - Omitted previous fluid scaling architecture to guarantee headroom/footroom safety (Tiny padding strips added only if aspect mismatch).
-    - Drastically slashes skeletal connection thickness (to 1) and tracking dot size (to 2) for fine-lined aesthetics.
-    - Downsamples frames for high-throughput backend performance.
+    PERFECT SCALE ENGINE:
+    - Automatically extracts native aspect properties from source feeds.
+    - Locks frame height to 360px and dynamically scales individual slot width to match aspect natively.
+    - Completely removes all artificial black bounding layouts, text strings, overlays, and labels.
+    - Preserves ultra-fine bones (thickness=1) and pinpoint tracking markers (radius=2).
     """
     mp_drawing = mp.solutions.drawing_utils
     
     cap_ref = cv2.VideoCapture(ref_video_path)
     cap_user = cv2.VideoCapture(user_video_path)
     
-    # Enforce clear 16:9 container boxes per track to eliminate unpredictable phone video cropping
-    slot_w, slot_h = 640, 360
+    # Read core dimension scales dynamically directly from active stream sources
+    orig_w = int(cap_ref.get(cv2.CAP_PROP_FRAME_WIDTH))
+    orig_h = int(cap_ref.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    
+    if orig_w == 0 or orig_h == 0:
+        orig_w, orig_h = 1080, 1920 # Safe portrait default fallback values
 
-    def fit_into_safe_viewport(frame, target_w, target_h):
-        """Resizes proportionally and adds localized black bars if needed to fit standard aspect slots safely"""
-        h, w = frame.shape[:2]
-        scale = min(target_w / w, target_h / h)
-        new_w, new_h = int(w * scale), int(h * scale)
-        resized = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
-        
-        # Create standardized contrast background slot
-        padded = np.zeros((target_h, target_w, 3), dtype=np.uint8)
-        
-        # Symmetrical padding offsets to center portrait feeds vertically
-        x_offset = max(0, (target_w - new_w) // 2)
-        y_offset = max(0, (target_h - new_h) // 2)
-        padded[y_offset:y_offset+new_h, x_offset:x_offset+new_w] = resized
-        return padded
+    # Enforce locked processing height; derive uncropped exact aspect slot width
+    target_h = 360
+    aspect_ratio = orig_w / orig_h
+    target_w = int(target_h * aspect_ratio)
 
-    # Identify variance anomaly targets
+    # Isolate key variance marker sets
     target_joints = []
     bp_lower = body_part_text.lower()
     if "shoulder" in bp_lower:
@@ -126,31 +119,33 @@ def save_side_by_side_deviation_gif(ref_video_path, user_video_path, path_segmen
     elif "knee" in bp_lower or "foot" in bp_lower or "placement" in bp_lower:
         target_joints = [25, 26, 27, 28, 29, 30, 31, 32]
 
-    # Speed Boost Slicing (Skip redundancy looks)
+    # Optimize track execution pipelines
     optimized_path = path_segment[::2]
     needed_ref = sorted(list(set(pt[0] for pt in optimized_path)))
     needed_user = sorted(list(set(pt[1] for pt in optimized_path)))
     
     ref_frames, user_frames = {}, {}
     
-    # Load and immediately letterbox standard contrast slots sequentially
+    # Resize assets precisely to uncropped fluid width slot matrix
     for f_idx in needed_ref:
         cap_ref.set(cv2.CAP_PROP_POS_FRAMES, f_idx)
         ret, frame = cap_ref.read()
-        if ret: ref_frames[f_idx] = fit_into_safe_viewport(frame, slot_w, slot_h)
+        if ret and frame is not None: 
+            ref_frames[f_idx] = cv2.resize(frame, (target_w, target_h), interpolation=cv2.INTER_AREA)
         
     for f_idx in needed_user:
         cap_user.set(cv2.CAP_PROP_POS_FRAMES, f_idx)
         ret, frame = cap_user.read()
-        if ret: user_frames[f_idx] = fit_into_safe_viewport(frame, slot_w, slot_h)
+        if ret and frame is not None: 
+            user_frames[f_idx] = cv2.resize(frame, (target_w, target_h), interpolation=cv2.INTER_AREA)
         
     cap_ref.release()
     cap_user.release()
 
-    # Define specialized THIN, FINE visual specs matching legacy clearest tracker model
-    pose_connection_spec = mp_drawing.DrawingSpec(color=(240, 240, 240), thickness=1) # Restores clean bone connections, thinned to 1
-    normal_joint_spec = mp_drawing.DrawingSpec(color=(50, 220, 50), thickness=-1, circle_radius=2) # Slashing dot size to 2 for fine look
-    error_joint_spec = mp_drawing.DrawingSpec(color=(0, 0, 255), thickness=-1, circle_radius=4) # Scaled-down variance dots
+    # Fine-lined skeletal specifications
+    pose_connection_spec = mp_drawing.DrawingSpec(color=(240, 240, 240), thickness=1) 
+    normal_joint_spec = mp_drawing.DrawingSpec(color=(50, 220, 50), thickness=-1, circle_radius=2) 
+    error_joint_spec = mp_drawing.DrawingSpec(color=(0, 0, 255), thickness=-1, circle_radius=4) 
 
     frames_combined = []
 
@@ -165,42 +160,28 @@ def save_side_by_side_deviation_gif(ref_video_path, user_video_path, path_segmen
             frame_ref = frame_ref.copy()
             frame_user = frame_user.copy()
 
-            # Process tracked vectors sequentially inside standard spatial slots
-            for current_frame, is_user in [(frame_user, True), (frame_ref, False)]:
+            for current_frame in [frame_user, frame_ref]:
                 res = pose.process(cv2.cvtColor(current_frame, cv2.COLOR_BGR2RGB))
                 if res.pose_landmarks:
-                    # 1. Base Skeleton Rendering (Thin green connections)
+                    # 1. Base Wireframe Overlay (Thickness 1)
                     mp_drawing.draw_landmarks(
                         current_frame, res.pose_landmarks, mp_pose.POSE_CONNECTIONS,
                         landmark_drawing_spec=normal_joint_spec, connection_drawing_spec=pose_connection_spec
                     )
                     
-                    # 2. Layered High-Visibility Highlights (Oversized red indicators for variance points)
+                    # 2. Key Deviation Spotting Nodes
                     for idx, lm in enumerate(res.pose_landmarks.landmark):
                         if idx in target_joints and lm.visibility > 0.5:
-                            cx, cy = int(lm.x * slot_w), int(lm.y * slot_h)
+                            cx, cy = int(lm.x * target_w), int(lm.y * target_h)
                             cv2.circle(current_frame, (cx, cy), error_joint_spec.circle_radius, error_joint_spec.color, -1)
 
-                # Draw local category headers safely inside contrast boxes
-                label_text = "YOUR CLIP" if is_user else "REFERENCE"
-                label_color = (80, 80, 255) if is_user else (80, 255, 80)
-                cv2.rectangle(current_frame, (15, 15), (145, 48), (12, 12, 12), -1)
-                cv2.putText(current_frame, label_text, (28, 38), cv2.FONT_HERSHEY_SIMPLEX, 0.5, label_color, 2, cv2.LINE_AA)
-
-            # Standardized Grid Stitching (No centerDEAD space between scaled slots)
+            # Join elements horizontally with absolutely zero borders, black bars, or side gaps
             stitched_canvas = np.hstack((frame_user, frame_ref))
-            
-            # Apply lower information banner strip baseline
-            cv2.rectangle(stitched_canvas, (0, slot_h - 45), (slot_w * 2, slot_h), (15, 15, 15), -1)
-            cv2.putText(stitched_canvas, f"DISCREPANCY TRACKER BASELINE: {body_part_text.upper()}", (35, slot_h - 17),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, (220, 220, 220), 1, cv2.LINE_AA)
-            
             frames_combined.append(cv2.cvtColor(stitched_canvas, cv2.COLOR_BGR2RGB))
 
     if frames_combined:
         output_filename = f"deviation_rank{rank_idx}_{run_id}.gif"
         output_path = os.path.join(DEVIATION_GIFS_FOLDER, output_filename)
-        # Final output targeted to standardized 10 FPS
         imageio.mimsave(output_path, frames_combined, fps=10, loop=0)
         return output_filename
     return None
