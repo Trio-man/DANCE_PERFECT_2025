@@ -112,7 +112,7 @@ export default function UploadPage() {
   const [faqs, setFaqs] = useState<FaqRow[]>([]);
   const [cmsError, setCmsError] = useState<string | null>(null);
 
-  // Auth Hook check omitted for readability but preserved completely in your working build
+  // Auth Hook check
   useEffect(() => {
     const checkUser = async () => {
       const { data } = await supabase.auth.getUser();
@@ -189,7 +189,7 @@ export default function UploadPage() {
   };
 
   // ─────────────────────────────────────────────
-  // FIX: UPDATED ANALYZE HANDLER
+  // HANDLERS
   // ─────────────────────────────────────────────
   const handleAnalyze = async () => {
     if (!dancerVideo || !choreoVideo) {
@@ -203,17 +203,15 @@ export default function UploadPage() {
     try {
       const formData = new FormData();
       
-      // 🌟 FIXED PROPERTY STRINGS: Matches backend expected schema keys exactly
       formData.append('user_video', dancerVideo);
       formData.append('ref_video', choreoVideo);
       
-      // Pass FPS targets explicitly to support the backend math configs
       formData.append('ref_fps', '30');
       formData.append('user_fps', '30');
       formData.append('user_motion_fps', '30');
 
-      // 🌟 FIXED TARGET URL: Pushes directly to your server endpoint
-      const response = await fetch('https://danceperfect.duckdns.org/analyze', {
+      // 🌟 FIXED TARGET URL: Changed from DuckDNS straight to your Next.js internal api endpoint
+      const response = await fetch('/api/analyze', {
         method: 'POST',
         body: formData,
       });
