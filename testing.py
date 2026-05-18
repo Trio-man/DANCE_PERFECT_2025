@@ -41,7 +41,7 @@ mp_pose = mp.solutions.pose
 
 def compress_video_storage_optimized(input_path, output_path, target_fps=30):
     """
-    Downscales incoming assets uniformly for processing performance optimizations.
+    Downscales incoming assets uniformly to a stable 540p baseline for analysis.
     """
     logging.info(f"Optimizing video for analysis speed: {input_path} -> {output_path}")
     command = [
@@ -81,35 +81,30 @@ def _deviation_gif_clip_time_meta(path_segment, user_fps):
     }
 
 # =========================================================================
-# PERFECTLY SCALED VISUALIZATION ENGINE (NO BARS, NO LABELS, NO CROPPING)
+# PREMIUM 540P ANTI-ALIASED VISUALIZATION ENGINE (NO BARS, PERFECT SCALING)
 # =========================================================================
 
 def save_side_by_side_deviation_gif(ref_video_path, user_video_path, path_segment, body_part_text, rank_idx, run_id):
     """
-    PERFECT SCALE ENGINE:
-    - Automatically extracts native aspect properties from source feeds.
-    - Locks frame height to 360px and dynamically scales individual slot width to match aspect natively.
-    - Completely removes all artificial black bounding layouts, text strings, overlays, and labels.
-    - Preserves ultra-fine bones (thickness=1) and pinpoint tracking markers (radius=2).
+    PREMIUM 540P FLUID ENGINE:
+    - Sets canvas height to 540px for high-definition feedback layouts.
+    - Dynamically computes widths based on native media aspect ratios (No bars, no crops).
+    - Removes all overlays, bounding containers, and text labels.
+    - Employs cv2.LINE_AA to draw silky smooth, anti-aliased blueprint wireframes.
     """
-    mp_drawing = mp.solutions.drawing_utils
-    
     cap_ref = cv2.VideoCapture(ref_video_path)
     cap_user = cv2.VideoCapture(user_video_path)
     
-    # Read core dimension scales dynamically directly from active stream sources
     orig_w = int(cap_ref.get(cv2.CAP_PROP_FRAME_WIDTH))
     orig_h = int(cap_ref.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    
     if orig_w == 0 or orig_h == 0:
-        orig_w, orig_h = 1080, 1920 # Safe portrait default fallback values
+        orig_w, orig_h = 1080, 1920
 
-    # Enforce locked processing height; derive uncropped exact aspect slot width
-    target_h = 360
+    # Locked 540p height optimization framework
+    target_h = 540
     aspect_ratio = orig_w / orig_h
     target_w = int(target_h * aspect_ratio)
 
-    # Isolate key variance marker sets
     target_joints = []
     bp_lower = body_part_text.lower()
     if "shoulder" in bp_lower:
@@ -119,33 +114,29 @@ def save_side_by_side_deviation_gif(ref_video_path, user_video_path, path_segmen
     elif "knee" in bp_lower or "foot" in bp_lower or "placement" in bp_lower:
         target_joints = [25, 26, 27, 28, 29, 30, 31, 32]
 
-    # Optimize track execution pipelines
+    SKELETON_CONNECTIONS = mp_pose.POSE_CONNECTIONS
+
+    # Fast-slice paths to optimize compute load
     optimized_path = path_segment[::2]
     needed_ref = sorted(list(set(pt[0] for pt in optimized_path)))
     needed_user = sorted(list(set(pt[1] for pt in optimized_path)))
     
     ref_frames, user_frames = {}, {}
     
-    # Resize assets precisely to uncropped fluid width slot matrix
     for f_idx in needed_ref:
         cap_ref.set(cv2.CAP_PROP_POS_FRAMES, f_idx)
         ret, frame = cap_ref.read()
         if ret and frame is not None: 
-            ref_frames[f_idx] = cv2.resize(frame, (target_w, target_h), interpolation=cv2.INTER_AREA)
+            ref_frames[f_idx] = cv2.resize(frame, (target_w, target_h), interpolation=cv2.INTER_CUBIC)
         
     for f_idx in needed_user:
         cap_user.set(cv2.CAP_PROP_POS_FRAMES, f_idx)
         ret, frame = cap_user.read()
         if ret and frame is not None: 
-            user_frames[f_idx] = cv2.resize(frame, (target_w, target_h), interpolation=cv2.INTER_AREA)
+            user_frames[f_idx] = cv2.resize(frame, (target_w, target_h), interpolation=cv2.INTER_CUBIC)
         
     cap_ref.release()
     cap_user.release()
-
-    # Fine-lined skeletal specifications
-    pose_connection_spec = mp_drawing.DrawingSpec(color=(240, 240, 240), thickness=1) 
-    normal_joint_spec = mp_drawing.DrawingSpec(color=(50, 220, 50), thickness=-1, circle_radius=2) 
-    error_joint_spec = mp_drawing.DrawingSpec(color=(0, 0, 255), thickness=-1, circle_radius=4) 
 
     frames_combined = []
 
@@ -163,19 +154,29 @@ def save_side_by_side_deviation_gif(ref_video_path, user_video_path, path_segmen
             for current_frame in [frame_user, frame_ref]:
                 res = pose.process(cv2.cvtColor(current_frame, cv2.COLOR_BGR2RGB))
                 if res.pose_landmarks:
-                    # 1. Base Wireframe Overlay (Thickness 1)
-                    mp_drawing.draw_landmarks(
-                        current_frame, res.pose_landmarks, mp_pose.POSE_CONNECTIONS,
-                        landmark_drawing_spec=normal_joint_spec, connection_drawing_spec=pose_connection_spec
-                    )
+                    landmarks = res.pose_landmarks.landmark
+                    coords = {}
                     
-                    # 2. Key Deviation Spotting Nodes
-                    for idx, lm in enumerate(res.pose_landmarks.landmark):
-                        if idx in target_joints and lm.visibility > 0.5:
-                            cx, cy = int(lm.x * target_w), int(lm.y * target_h)
-                            cv2.circle(current_frame, (cx, cy), error_joint_spec.circle_radius, error_joint_spec.color, -1)
+                    for idx, lm in enumerate(landmarks):
+                        if lm.visibility > 0.5:
+                            coords[idx] = (int(lm.x * target_w), int(lm.y * target_h))
 
-            # Join elements horizontally with absolutely zero borders, black bars, or side gaps
+                    # 1. High-Quality Smooth Skeletal Struts (Thickness 1, Anti-Aliased)
+                    for start_j, end_j in SKELETON_CONNECTIONS:
+                        if start_j in coords and end_j in coords:
+                            cv2.line(current_frame, coords[start_j], coords[end_j], 
+                                     (240, 240, 240), 1, lineType=cv2.LINE_AA)
+
+                    # 2. Ultra-Sharp Tracking Joint Pinpoints
+                    for idx, pt in coords.items():
+                        if idx in target_joints:
+                            # Vibrant red variance indicator marker
+                            cv2.circle(current_frame, pt, 5, (0, 0, 255), -1, lineType=cv2.LINE_AA)
+                        else:
+                            # Sleek, thinned tracking nodes
+                            cv2.circle(current_frame, pt, 2, (50, 220, 50), -1, lineType=cv2.LINE_AA)
+
+            # Join files side-by-side perfectly flush
             stitched_canvas = np.hstack((frame_user, frame_ref))
             frames_combined.append(cv2.cvtColor(stitched_canvas, cv2.COLOR_BGR2RGB))
 
