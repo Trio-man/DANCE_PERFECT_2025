@@ -7,6 +7,7 @@ import cv2
 import numpy as np
 import pandas as pd
 import mediapipe as mp
+import imageio  # Added for rendering physical GIF timelines
 from flask import Flask, request, jsonify, send_from_directory
 from fastdtw import fastdtw
 from scipy.spatial.distance import euclidean
@@ -217,6 +218,47 @@ def compare_motion_csvs_dtw(ref_video_path, user_video_path, ref_fps, user_fps):
     return analysis_results, dtw_path
 
 # =========================================================================
+# PHYSICAL DEVIATION VIDEO CHOPPER & GIF SLICER
+# =========================================================================
+
+def save_deviation_clip_as_gif(video_path, start_frame, end_frame, rank_idx, run_id):
+    """
+    Cuts the exact faulty timeline frames and creates a physical GIF file bound to the run_id
+    """
+    cap = cv2.VideoCapture(video_path)
+    frames = []
+    current_frame = 0
+    
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+            
+        # Capture frames that sit inside our deviation window
+        if start_frame <= current_frame <= end_frame:
+            # Resize clip frames to 240p height to keep file sizes incredibly tiny
+            small_frame = cv2.resize(frame, (320, 240))
+            rgb_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
+            frames.append(rgb_frame)
+            
+        if current_frame > end_frame:
+            break
+        current_frame += 1
+        
+    cap.release()
+    
+    if frames:
+        # Securely locks filename directly against the tracking execution instance id
+        output_filename = f"deviation_rank{rank_idx}_{run_id}.gif"
+        output_path = os.path.join(DEVIATION_GIFS_FOLDER, output_filename)
+        
+        # Save compressed frames frame array into an active animation file
+        imageio.mimsave(output_path, frames, fps=15, loop=0)
+        logging.info(f"Generated dynamic asset file: {output_filename}")
+        return output_filename
+    return None
+
+# =========================================================================
 # FLASK ROUTE ENDPOINT
 # =========================================================================
 
@@ -267,11 +309,6 @@ def process_videos_test():
         raw_deviations = analysis_results.get("detected_deviations", [])
         deviation_moments_ui = []
         
-        # Pull only the files belonging to this unique run ID
-        all_gifs = glob.glob(os.path.join(DEVIATION_GIFS_FOLDER, f"deviation_rank*_{run_id}.gif"))
-        all_gifs.sort(key=os.path.getmtime, reverse=True)
-        latest_gifs = all_gifs[:3]
-        
         for idx, dev in enumerate(raw_deviations[:3]):
             path_segment = dev.get("path_segment", [])
             user_start = dev.get("user_start_frame", 0)
@@ -288,24 +325,27 @@ def process_videos_test():
                 path_sample_start = user_start
                 path_sample_end = user_start + len(path_segment)
 
-            target_rank_prefix = f"deviation_rank{idx+1}_"
-            matched_filename = None
+            # ─────────────────────────────────────────────────────────────────
+            # 🎯 GENERATING INTERPOLATED DEVIATION VIDEO Slices WITH RUN_ID
+            # ─────────────────────────────────────────────────────────────────
+            generated_filename = save_deviation_clip_as_gif(
+                compressed_user_path, 
+                start_frame=path_sample_start, 
+                end_frame=path_sample_end, 
+                rank_idx=idx+1, 
+                run_id=run_id
+            )
             
-            for file_path in latest_gifs:
-                base_name = os.path.basename(file_path)
-                if base_name.startswith(target_rank_prefix):
-                    matched_filename = base_name
-                    break
-            
-            if not matched_filename:
-                matched_filename = f"deviation_rank{idx+1}_{run_id}.gif"
+            # Safe logical fallback if file writing handles unexpected video drops
+            if not generated_filename:
+                generated_filename = f"deviation_rank{idx+1}_{run_id}.gif"
 
             deviation_moments_ui.append({
                 "rank": idx + 1,
                 "issue": f"Incorrect {body_part} position sequence.",
                 "recommendation": f"Adjust your {body_part} tracking to match the reference guide.",
                 "user_time_clip_label": dynamic_label,
-                "gif_path": matched_filename,
+                "gif_path": generated_filename,
                 "path_sample_start": path_sample_start,
                 "path_sample_end": path_sample_end
             })
