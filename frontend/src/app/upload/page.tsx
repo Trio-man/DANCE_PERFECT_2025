@@ -256,8 +256,8 @@ export default function UploadPage() {
     try {
       const formData = new FormData();
       // FIX: Matches your backend expectation exactly
-      formData.append('dancer_video', dancerVideo);
-      formData.append('choreo_video', choreoVideo);
+      formData.append('user', dancerVideo);
+      formData.append('reference', choreoVideo);
 
       const response = await fetch('/api/analyze', {
         method: 'POST',
