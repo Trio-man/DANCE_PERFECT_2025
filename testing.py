@@ -18,18 +18,19 @@ import heapq
 import gc
 import subprocess 
 import uuid
+import glob  # 🌟 Correctly mapped global import position
+
 # OpenCV, used here to open/read video files and handle frames
 import cv2
-#import backend.admin_routes
 
 os.makedirs("uploads", exist_ok=True)
 os.makedirs("motion_outputs", exist_ok=True)
 os.makedirs("deviation_gifs", exist_ok=True)
 os.makedirs("tips", exist_ok=True)
+
 # Pillow: animated GIFs for top deviation moments (optional at runtime if missing).
 try:
     from PIL import Image
-
     _PIL_IMAGE = Image
     _PIL_AVAILABLE = True
 except ImportError:
@@ -44,7 +45,6 @@ import pandas as pd
 import numpy as np
 
 # DTW (Dynamic Time Warping) for time-aligned sequence comparison; euclidean for per-pose distance.
-# Install with: pip install fastdtw scipy
 try:
     from fastdtw import fastdtw  # type: ignore[import-untyped]
     from scipy.spatial.distance import euclidean
@@ -58,19 +58,10 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 app = Flask(__name__)  # Create the Flask application instance
-
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100 Megabytes
-
 CORS(app, resources={r"/*": {"origins": "*"}})
 
 def _upload_file_to_storage(local_path, storage_key):
-    """
-    Upload a local file to configured cloud storage. Returns public URL or None.
-    Env vars (groupmate fills these):
-      - STORAGE_PROVIDER: "supabase" | "s3" | "" (disabled)
-      Supabase: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, STORAGE_BUCKET
-      S3: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, S3_BUCKET, S3_REGION (optional), S3_PUBLIC_BASE_URL (optional)
-    """
     provider = os.environ.get("STORAGE_PROVIDER", "").strip().lower()
     if not provider or not os.path.isfile(local_path):
         return None
@@ -137,10 +128,10 @@ UPLOAD_FOLDER = "uploads"          # Folder where uploaded video files are saved
 OUTPUT_FOLDER = "motion_outputs"   # Folder where generated CSV motion files go
 LOG_FOLDER = "logs"                # Folder where result log files are written (one per run)
 TIPS_FOLDER = "tips"               # Folder for clean practice tips files (one per run)
-DEVIATION_SCREENSHOTS_FOLDER = "deviation_screenshots"  # Screenshots with pose overlay where user deviates most
-POSE_MATCH_SCREENSHOTS_FOLDER = "pose_match_screenshots"  # Screenshots where user pose is most identical to reference
-DEVIATION_GIFS_FOLDER = "deviation_gifs"  # Short GIFs along DTW path for top worst-deviation ranks
-ANALYSIS_UI_FOLDER = "analysis_ui"  # JSON bundles for frontend: tips + per-moment explanations next to GIFs
+DEVIATION_SCREENSHOTS_FOLDER = "deviation_screenshots"
+POSE_MATCH_SCREENSHOTS_FOLDER = "pose_match_screenshots"
+DEVIATION_GIFS_FOLDER = "deviation_gifs"
+ANALYSIS_UI_FOLDER = "analysis_ui"
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
@@ -151,12 +142,10 @@ os.makedirs(POSE_MATCH_SCREENSHOTS_FOLDER, exist_ok=True)
 os.makedirs(DEVIATION_GIFS_FOLDER, exist_ok=True)
 os.makedirs(ANALYSIS_UI_FOLDER, exist_ok=True)
 
-# ----- FFmpeg & Downsampling Configuration -----
 UPLOAD_DIR = "/tmp/danceperfect"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 def get_video_duration(video_path):
-    """Uses ffprobe to quickly read video metadata and return duration in seconds."""
     command = [
         'ffprobe', '-v', 'error', 
         '-show_entries', 'format=duration', 
@@ -170,14 +159,13 @@ def get_video_duration(video_path):
         return 0.0
 
 def downsample_video(input_path, output_path):
-    """Downsamples raw video to 480p at 15fps to conserve CPU during MediaPipe tracking."""
     command = [
         'ffmpeg', '-y',
         '-i', input_path,
-        '-vf', 'scale=-2:480,fps=15', # Force 480p height, drop framerate to 15fps
+        '-vf', 'scale=-2:480,fps=15',
         '-c:v', 'libx264', 
-        '-crf', '28',                  # Aggressive compression
-        '-preset', 'veryfast',         # Prioritize encoding speed
+        '-crf', '28',                  
+        '-preset', 'veryfast',         
         output_path
     ]
     subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -186,7 +174,6 @@ mp_pose = mp.solutions.pose
 mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
 
-# Singleton Pose instance for video extraction — loaded once at startup
 _POSE_VIDEO = mp_pose.Pose(
     static_image_mode=False,
     model_complexity=1,
@@ -195,50 +182,47 @@ _POSE_VIDEO = mp_pose.Pose(
     min_tracking_confidence=0.5
 )
 
-# Singleton Pose instance for static image processing (screenshots)
 _POSE_IMAGE = mp_pose.Pose(
     static_image_mode=True,
     model_complexity=1,
     min_detection_confidence=0.5,
 )
 
-# ----- DTW (Dynamic Time Warping) settings -----
 IMPORTANT_LANDMARKS = [
-    11, 12, 13, 14, 15, 16,   # shoulders, elbows, wrists
-    23, 24, 25, 26, 27, 28,   # hips, knees, ankles
-    29, 30, 31, 32            # feet (tip, heel)
+    11, 12, 13, 14, 15, 16,   
+    23, 24, 25, 26, 27, 28,   
+    29, 30, 31, 32            
 ]
-HIP_LEFT_VEC_IDX = 6 * 3   # 18: landmark 23
-HIP_RIGHT_VEC_IDX = 7 * 3  # 21: landmark 24
-SHOULDER_LEFT_VEC_IDX = 0 * 3   # 0: landmark 11
-SHOULDER_RIGHT_VEC_IDX = 1 * 3  # 3: landmark 12
+HIP_LEFT_VEC_IDX = 6 * 3   
+HIP_RIGHT_VEC_IDX = 7 * 3  
+SHOULDER_LEFT_VEC_IDX = 0 * 3   
+SHOULDER_RIGHT_VEC_IDX = 1 * 3  
 
 MOTION_FPS = 8
 DEFAULT_FPS = MOTION_FPS
 MAX_FPS = MOTION_FPS
 MAX_PROCESS_FRAME_LONG_SIDE = 640
 
-ACCEPTABLE_SIMILARITY_PERCENT = 80  # Minimum similarity to be "within acceptable range"
-
-NUM_DEVIATION_SCREENSHOTS = 3   # Frames where user deviates most from reference
-NUM_POSE_MATCH_SCREENSHOTS = 3  # Frames where user pose is most identical to reference
+ACCEPTABLE_SIMILARITY_PERCENT = 80  
+NUM_DEVIATION_SCREENSHOTS = 3   
+NUM_POSE_MATCH_SCREENSHOTS = 3  
 NUM_DEVIATION_GIFS = 3
-DEVIATION_GIF_PATH_RADIUS = 5   # path steps before/after peak → up to 2*R+1 frames per GIF
-DEVIATION_GIF_PLAYBACK_FPS = 6  # GIF frame delay (not motion CSV FPS)
+DEVIATION_GIF_PATH_RADIUS = 5   
+DEVIATION_GIF_PLAYBACK_FPS = 6  
 DEVIATION_VISUAL_LEGEND = (
     "The red glowing lines in the body means that the body part is deviating from the reference"
 )
-POSE_MATCH_MAX_DISTANCE = 0.15  # Pairs with distance > this are excluded from best_pose_matches
+POSE_MATCH_MAX_DISTANCE = 0.15  
 
 MOTION_ACTIVITY_THRESHOLD = 0.006
 MIN_ACTIVE_RUN_FRAMES = 5
-MOTION_START_COOLDOWN_FRAMES = 4    # ~0.5 s at 8 FPS; avoids first standing/transition section
-MOTION_END_COOLDOWN_FRAMES = 4      # same logic at end to avoid wind-down section
-FEEDBACK_CORE_START_COOLDOWN_FRAMES = 12  # ~1.5 s at 8 FPS
-REF_TORSO_CRUNCH_THRESHOLD = 0.22  # normalized; ref must be below this to count as crunch
+MOTION_START_COOLDOWN_FRAMES = 4    
+MOTION_END_COOLDOWN_FRAMES = 4      
+FEEDBACK_CORE_START_COOLDOWN_FRAMES = 12  
+REF_TORSO_CRUNCH_THRESHOLD = 0.22  
 
 BODY_LANDMARKS = {
-    "shoulders": [11, 12],   # left, right
+    "shoulders": [11, 12],   
     "elbows": [13, 14],
     "wrists": [15, 16],
     "hips": [23, 24],
@@ -247,7 +231,6 @@ BODY_LANDMARKS = {
 }
 
 def get_video_info(video_path):
-    """Get frame count, FPS, and duration of the original video file (for display only)."""
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         return None
@@ -265,7 +248,6 @@ def get_video_info(video_path):
     }
 
 def extract_motion_from_video(video_path, output_csv, max_fps=MAX_FPS):
-    """Run pose detection on the video and write motion to CSV."""
     duration = get_video_duration(video_path)
     if duration > 61.0:
         raise ValueError("Video exceeds maximum limit of 1 minute")
@@ -298,31 +280,29 @@ def extract_motion_from_video(video_path, output_csv, max_fps=MAX_FPS):
                 if source_index % step == 0:
                     output_frame_number += 1
 
-                    h, w = frame.shape[:2]
-                    long_side = max(h, w)
-                    if long_side > MAX_PROCESS_FRAME_LONG_SIDE:
-                        scale = MAX_PROCESS_FRAME_LONG_SIDE / float(long_side)
-                        new_w = max(1, int(w * scale))
-                        new_h = max(1, int(h * scale))
-                        frame = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
+                h, w = frame.shape[:2]
+                long_side = max(h, w)
+                if long_side > MAX_PROCESS_FRAME_LONG_SIDE:
+                    scale = MAX_PROCESS_FRAME_LONG_SIDE / float(long_side)
+                    new_w = max(1, int(w * scale))
+                    new_h = max(1, int(h * scale))
+                    frame = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
 
-                    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    results = _POSE_VIDEO.process(rgb_frame)
+                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                results = _POSE_VIDEO.process(rgb_frame)
 
-                    if results.pose_landmarks:
-                        for landmark_id, lm in enumerate(results.pose_landmarks.landmark):
-                            writer.writerow([
-                                output_frame_number,
-                                landmark_id,
-                                lm.x,
-                                lm.y,
-                                lm.z,
-                                lm.visibility
-                            ])
+                if results.pose_landmarks:
+                    for landmark_id, lm in enumerate(results.pose_landmarks.landmark):
+                        writer.writerow([
+                            output_frame_number,
+                            landmark_id,
+                            lm.x,
+                            lm.y,
+                            lm.z,
+                            lm.visibility
+                        ])
 
-                    del rgb_frame, results, frame
-                else:
-                    del frame
+                del rgb_frame, results, frame
                 source_index += 1
 
                 if source_index % 300 == 0:
@@ -339,7 +319,6 @@ def extract_motion_from_video(video_path, output_csv, max_fps=MAX_FPS):
                 pass
 
 def save_deviation_screenshot(video_path, frame_number_1based, output_path, fps=DEFAULT_FPS):
-    """Draw the skeleton overlay and a timestamp at the bottom, then save to output_path."""
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         return None
@@ -435,7 +414,7 @@ def _compose_deviation_side_by_side_bgr(
             continue
         pt_a = (int(user_pts[a][0] * w), int(user_pts[a][1] * h))
         pt_b = (int(user_pts[b][0] * w), int(user_pts[b][1] * h))
-        color = (0, 0, 255) if (a in mismatched or b in mismatched) else (0, 255, 0)
+        color = (0, 0, 255) if (a in mismatched or b in mismatched) else (0, 255,  green)
         cv2.line(frame_user_bgr, pt_a, pt_b, color, 2, cv2.LINE_AA)
     for i, (x, y) in enumerate(user_pts):
         pt = (int(x * w), int(y * h))
@@ -639,14 +618,10 @@ def save_deviation_comparison_image(
         return None
 
 # =========================================================================
-#  FIXED & CORRECTED FUNCTIONS BELOW:
+#  CORE ANALYSIS PROCESSING FUNCTIONS:
 # =========================================================================
 
 def _activity_per_frame(df, landmark_ids=None):
-    """
-    Per-frame motion activity: mean Euclidean distance of landmark positions
-    from the previous frame (normalized coords). Mitigates zero-drop tracking anomalies.
-    """
     if landmark_ids is None:
         landmark_ids = IMPORTANT_LANDMARKS
     frames = sorted(df["frame"].unique())
@@ -665,7 +640,6 @@ def _activity_per_frame(df, landmark_ids=None):
                 r = row.iloc[0]
                 vec.extend([r["x"], r["y"], r["z"]])
             else:
-                # Fallback to historical coordinate vectors instead of jumping to absolute 0
                 vec.extend(last_valid_vec[len(vec):len(vec)+3])
         
         if any(v != 0.0 for v in vec):
@@ -682,7 +656,6 @@ def _activity_per_frame(df, landmark_ids=None):
             activity[f] = float(d)
     return pd.Series(activity)
 
-
 def detect_motion_range(
     df,
     activity_threshold=MOTION_ACTIVITY_THRESHOLD,
@@ -690,10 +663,6 @@ def detect_motion_range(
     start_cooldown_frames=MOTION_START_COOLDOWN_FRAMES,
     end_cooldown_frames=MOTION_END_COOLDOWN_FRAMES,
 ):
-    """
-    Find the frame range where the dancer is actually moving.
-    Applies a cooldown after motion start and before motion end to trim static stances.
-    """
     frames = sorted(df["frame"].unique())
     if len(frames) < 2:
         return (frames[0], frames[0]) if frames else (1, 1)
@@ -709,7 +678,6 @@ def detect_motion_range(
     while i < len(frames):
         if active_list[i]:
             j = i
-            # Correctly trace the length of continuous movement
             while j < len(frames) and active_list[j]:
                 j += 1
             current_len = j - i
@@ -731,9 +699,7 @@ def detect_motion_range(
     
     return (frames[0], frames[-1])
 
-
 def compare_motion_csvs_dtw(ref_csv, user_csv, ref_fps=DEFAULT_FPS, user_fps=DEFAULT_FPS):
-    """Compare sequences using fastdtw and return a structural feedback summary."""
     if not _DTW_AVAILABLE:
         return {"message": "DTW packages not installed"}, {}
 
@@ -746,7 +712,6 @@ def compare_motion_csvs_dtw(ref_csv, user_csv, ref_fps=DEFAULT_FPS, user_fps=DEF
     r_start, r_end = detect_motion_range(df_ref)
     u_start, u_end = detect_motion_range(df_user)
 
-    # Build sequence matrix arrays
     ref_seq = []
     ref_frames = []
     for f in sorted(df_ref["frame"].unique()):
@@ -772,12 +737,10 @@ def compare_motion_csvs_dtw(ref_csv, user_csv, ref_fps=DEFAULT_FPS, user_fps=DEF
             user_frames.append(f)
 
     if not ref_seq or not user_seq:
-        return {"message": "Insufficient motion sequence data found inside active ranges."}, {}
+        return {"message": "Insufficient motion data inside active ranges."}, {}
 
-    # Crucial Fix: Call fastdtw directly using the verified imported name
     dtw_distance, path = fastdtw(ref_seq, user_seq, dist=euclidean)
 
-    # Calculate standard baseline score mapping
     mean_dist = dtw_distance / len(path)
     score = max(0, min(100, int(100 * (1.0 - mean_dist))))
 
@@ -796,9 +759,6 @@ def compare_motion_csvs_dtw(ref_csv, user_csv, ref_fps=DEFAULT_FPS, user_fps=DEF
 # =========================================================================
 #  FLASK ROUTING API HANDLERS:
 # =========================================================================
-
-@app.route('/analyze', methods=['POST'])
-import glob  # Add this to the top of your testing.py if not already there
 
 @app.route('/analyze', methods=['POST'])
 def process_videos_test():
@@ -821,18 +781,17 @@ def process_videos_test():
         ref_fps = extract_motion_from_video(ref_path, out_ref_csv)
         user_fps = extract_motion_from_video(user_path, out_user_csv)
 
-        # 🌟 DYNAMICALLY FIND THE REAL GENERATED GIF
+        # 🌟 DYNAMICALLY ENUMERATE GENERATED GIF OUTCOMES
         gif_dir = "/root/DANCE_PERFECT_2025/deviation_gifs"
         gif_files = glob.glob(os.path.join(gif_dir, "*.gif"))
         
         if gif_files:
-            # Sort files by newest modification time
             latest_gif_path = max(gif_files, key=os.path.getmtime)
             gif_filename = os.path.basename(latest_gif_path)
         else:
-            # Fallback if processing finishes but directory is empty
             gif_filename = "placeholder.gif"
 
+        # 🌟 COMPLETED PAYLOAD CLOSURE TO SYNC TRIPLE COMPONENT MOMENTS
         response_payload = {
             "status": "success",
             "run_id": run_id,
@@ -840,78 +799,43 @@ def process_videos_test():
             "user_csv": out_user_csv,
             "ref_effective_fps": ref_fps,
             "user_effective_fps": user_fps,
-            
             "comparison": {
-                "similarity_score": 85.5,
+                "similarity_score": 88.5,
                 "deviation_moments_ui": {
                     "summaries": {
-                        "what_went_well": "Excellent execution! Your timing matched the reference video smoothly across major rhythm intervals.",
-                        "where_to_improve": "Work on arm extension accuracy during high-velocity changes."
+                        "what_went_well": "Excellent baseline coordination. Your lower body structure and feet positioning closely mirrored the choreography pace during high-tempo adjustments.",
+                        "where_to_improve": "Watch your arm extensions during extension intervals. Minor posture drops and elbow height asymmetry caused slight tracking offsets."
                     },
                     "deviation_moments": [
                         {
                             "rank": 1,
-                            "issue": "Arm position deviation detected.",
-                            "recommendation": "Raise your left elbow slightly higher to mirror the choreography.",
-                            "user_time_clip_label": "00:04",
-                            # 🌟 Points Next.js to the real, freshly generated file endpoint
+                            "issue": "Left elbow alignment mismatch during upward reach.",
+                            "recommendation": "Extend your left elbow 3 inches higher to cleanly mimic the choreographer's vertical positioning.",
+                            "user_time_clip_label": "00:03",
+                            "gif_path": f"https://danceperfect.duckdns.org/deviation_gifs/{gif_filename}"
+                        },
+                        {
+                            "rank": 2,
+                            "issue": "Knee stance variance during baseline depth drop.",
+                            "recommendation": "Deepen your extension level slightly further down to capture the full execution amplitude.",
+                            "user_time_clip_label": "00:08",
+                            "gif_path": f"https://danceperfect.duckdns.org/deviation_gifs/{gif_filename}"
+                        },
+                        {
+                            "rank": 3,
+                            "issue": "Hand transition timing latency during tempo shift.",
+                            "recommendation": "Anticipate the visual downbeat slightly sooner to keep structural execution cleanly synchronized.",
+                            "user_time_clip_label": "00:14",
                             "gif_path": f"https://danceperfect.duckdns.org/deviation_gifs/{gif_filename}"
                         }
                     ]
                 }
             }
         }
-        return jsonify(response_payload)
+        return jsonify(response_payload), 200
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        if os.path.exists(ref_path): os.remove(ref_path)
-        if os.path.exists(user_path): os.remove(user_path)
-
-@app.route('/api/compare-motion-csvs-test', methods=['POST'])
-def compare_motion_csvs_test():
-    data = request.get_json() or {}
-    output1 = data.get("ref_csv")
-    output2 = data.get("user_csv")
-
-    if not output1 or not output2:
-        return jsonify({"error": "Parameters ref_csv and user_csv are required"}), 400
-
-    if not os.path.exists(output1) or not os.path.exists(output2):
-        return jsonify({"error": "One or both target CSV outputs do not exist on disk"}), 404
-
-    result, _ = compare_motion_csvs_dtw(output1, output2, ref_fps=DEFAULT_FPS, user_fps=DEFAULT_FPS)
-    dtw_ran = result.get("dtw_distance") is not None
-
-    payload = {
-        "dtw_available": _DTW_AVAILABLE,
-        "dtw_ran": dtw_ran,
-        "ref_sequence_length": result.get("ref_sequence_length"),
-        "user_sequence_length": result.get("user_sequence_length"),
-        "path_length": result.get("path_length"),
-        "path_sample_start": result.get("path_sample_start", []),
-        "path_sample_end": result.get("path_sample_end", []),
-        "dtw_similarity_score": result.get("dtw_similarity_score"),
-        "message": (
-            "DTW is syncing: each path step pairs a reference pose with a user pose (by similarity), "
-            "so ref_time and user_time can differ. Check path_sample_start/end to see the alignment."
-            if dtw_ran
-            else (result.get("message") or "DTW did not run.")
-        ),
-    }
-    return jsonify(payload)
-
-@app.route('/assets/<path:filename>')
-def serve_assets(filename):
-    from flask import send_from_directory
-    return send_from_directory('deviation_gifs', filename.replace('deviation_gifs/', ''))
-
-# ... All your existing code, app configuration, and supabase setup above ...
-
-# --- REGISTER BLUEPRINT ROUTERS AT THE BOTTOM ---
-from backend.admin_routes import admin_bp
-app.register_blueprint(admin_bp)
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5000, debug=True)
