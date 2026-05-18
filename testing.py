@@ -81,58 +81,64 @@ def _deviation_gif_clip_time_meta(path_segment, user_fps):
     }
 
 # =========================================================================
-# UNIVERSAL SIDE-BY-SIDE GENERATOR (PORTRAIT & LANDSCAPE HYBRID ENGINE)
+# STANDARDIZED CANVAS SIDE-BY-SIDE GENERATOR WITH ISOLATED TEXT BANNER
 # =========================================================================
 
 def save_side_by_side_deviation_gif(ref_video_path, user_video_path, path_segment, body_part_text, rank_idx, run_id):
     """
-    UNIVERSAL HYBRID ENGINE:
-    - Auto-detects if video is Portrait or Landscape.
-    - Locks dimensions to eliminate empty black boxes in both orientations.
-    - Scales font dynamically relative to video orientation bounds.
+    STANDARDIZED GRID ENGINE:
+    - Normalizes video feeds into safe, identical 360x480 container slots.
+    - Eliminates vertical/horizontal clipping across unpredictable phone aspect ratios.
+    - Appends a dedicated bottom banner row for text overlays to guarantee zero label cropping.
     """
     mp_drawing = mp.solutions.drawing_utils
     
     cap_ref = cv2.VideoCapture(ref_video_path)
     cap_user = cv2.VideoCapture(user_video_path)
     
-    orig_w = int(cap_user.get(cv2.CAP_PROP_FRAME_WIDTH)) or 640
-    orig_h = int(cap_user.get(cv2.CAP_PROP_FRAME_HEIGHT)) or 480
-    
-    # 🎯 FIX: Intelligent Canvas Dimensions calculation based on true aspect orientation
-    max_bound = 400
-    if orig_w >= orig_h:
-        # Landscape Mode configuration rules
-        canvas_w = max_bound
-        canvas_h = int((orig_h / orig_w) * canvas_w)
-    else:
-        # Portrait Mode configuration rules
-        canvas_h = max_bound
-        canvas_w = int((orig_w / orig_h) * canvas_h)
-        
-    # Ensure dimensions are divisible by 2 for standard video frame constraints
-    if canvas_w % 2 != 0: canvas_w += 1
-    if canvas_h % 2 != 0: canvas_h += 1
+    # Define a rock-solid standardized container slot for portrait mode video feeds
+    slot_w = 360
+    slot_h = 480
 
-    def letterbox_frame_universal(frame, target_w, target_h):
-        """Resizes frame perfectly to match orientation bounds safely"""
+    def fit_in_standard_slot(frame, target_w, target_h):
+        """Resizes proportionally and pads with black bars to fill the exact slot size"""
         h, w = frame.shape[:2]
         scale = min(target_w / w, target_h / h)
         new_w, new_h = int(w * scale), int(h * scale)
         
         resized = cv2.resize(frame, (new_w, new_h))
         
-        if new_w == target_w and new_h == target_h:
-            return resized
-            
         padded = np.zeros((target_h, target_w, 3), dtype=np.uint8)
-        x_offset = max(0, (target_w - new_w) // 2)
-        y_offset = max(0, (target_h - new_h) // 2)
+        x_offset = (target_w - new_w) // 2
+        y_offset = (target_h - new_h) // 2
+        padded[y_offset:y_offset+new_h, x_offset:x_offset+new_w] = resized
+        return padded, scale, x_offset, y_offset
+
+    # Capture and instantly normalize frame blocks
+    needed_ref = sorted(list(set(pt[0] for pt in path_segment)))
+    needed_user = sorted(list(set(pt[1] for pt in path_segment)))
+    
+    ref_frames, user_frames = {}, {}
+    ref_meta, user_meta = {}, {}
+    
+    for f_idx in needed_ref:
+        cap_ref.set(cv2.CAP_PROP_POS_FRAMES, f_idx)
+        ret, frame = cap_ref.read()
+        if ret:
+            padded, scale, x_off, y_off = fit_in_standard_slot(frame, slot_w, slot_h)
+            ref_frames[f_idx] = padded
+            ref_meta[f_idx] = (scale, x_off, y_off)
         
-        use_w = min(target_w, new_w)
-        use_h = min(target_h, new_h)
-        padded[y_offset:y_offset+use_h, x_offset:x_offset+use_w] = resized[:use_h, :use_w]
-        return padded
+    for f_idx in needed_user:
+        cap_user.set(cv2.CAP_PROP_POS_FRAMES, f_idx)
+        ret, frame = cap_user.read()
+        if ret:
+            padded, scale, x_off, y_off = fit_in_standard_slot(frame, slot_w, slot_h)
+            user_frames[f_idx] = padded
+            user_meta[f_idx] = (scale, x_off, y_off)
+        
+    cap_ref.release()
+    cap_user.release()
 
     # Map joint node indices
     target_joints = []
@@ -145,26 +151,6 @@ def save_side_by_side_deviation_gif(ref_video_path, user_video_path, path_segmen
         target_joints = [25, 26, 27, 28, 29, 30, 31, 32]
 
     frames_combined = []
-    
-    needed_ref = sorted(list(set(pt[0] for pt in path_segment)))
-    needed_user = sorted(list(set(pt[1] for pt in path_segment)))
-    
-    ref_frames = {}
-    user_frames = {}
-    
-    for f_idx in needed_ref:
-        cap_ref.set(cv2.CAP_PROP_POS_FRAMES, f_idx)
-        ret, frame = cap_ref.read()
-        if ret: ref_frames[f_idx] = letterbox_frame_universal(frame, canvas_w, canvas_h)
-        
-    for f_idx in needed_user:
-        cap_user.set(cv2.CAP_PROP_POS_FRAMES, f_idx)
-        ret, frame = cap_user.read()
-        if ret: user_frames[f_idx] = letterbox_frame_universal(frame, canvas_w, canvas_h)
-        
-    cap_ref.release()
-    cap_user.release()
-
     pose_connection_spec = mp_drawing.DrawingSpec(color=(220, 220, 220), thickness=2, circle_radius=1)
     normal_joint_spec = mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=2, circle_radius=2)
     error_joint_spec = mp_drawing.DrawingSpec(color=(0, 0, 255), thickness=4, circle_radius=5) 
@@ -180,7 +166,7 @@ def save_side_by_side_deviation_gif(ref_video_path, user_video_path, path_segmen
             frame_ref = frame_ref.copy()
             frame_user = frame_user.copy()
             
-            # Process User side
+            # --- RENDER USER TRACKING WITH ACCURATE SCALED COORDINATES ---
             res_user = pose.process(cv2.cvtColor(frame_user, cv2.COLOR_BGR2RGB))
             if res_user.pose_landmarks:
                 mp_drawing.draw_landmarks(
@@ -188,13 +174,13 @@ def save_side_by_side_deviation_gif(ref_video_path, user_video_path, path_segmen
                     landmark_drawing_spec=None, connection_drawing_spec=pose_connection_spec
                 )
                 for idx, lm in enumerate(res_user.pose_landmarks.landmark):
-                    cx, cy = int(lm.x * canvas_w), int(lm.y * canvas_h)
+                    cx, cy = int(lm.x * slot_w), int(lm.y * slot_h)
                     if idx in target_joints:
                         cv2.circle(frame_user, (cx, cy), error_joint_spec.circle_radius, error_joint_spec.color, -1)
                     else:
                         cv2.circle(frame_user, (cx, cy), normal_joint_spec.circle_radius, normal_joint_spec.color, -1)
 
-            # Process Reference side
+            # --- RENDER REFERENCE TRACKING WITH ACCURATE SCALED COORDINATES ---
             res_ref = pose.process(cv2.cvtColor(frame_ref, cv2.COLOR_BGR2RGB))
             if res_ref.pose_landmarks:
                 mp_drawing.draw_landmarks(
@@ -202,25 +188,29 @@ def save_side_by_side_deviation_gif(ref_video_path, user_video_path, path_segmen
                     landmark_drawing_spec=None, connection_drawing_spec=pose_connection_spec
                 )
                 for idx, lm in enumerate(res_ref.pose_landmarks.landmark):
-                    cx, cy = int(lm.x * canvas_w), int(lm.y * canvas_h)
+                    cx, cy = int(lm.x * slot_w), int(lm.y * slot_h)
                     if idx in target_joints:
                         cv2.circle(frame_ref, (cx, cy), error_joint_spec.circle_radius, error_joint_spec.color, -1)
                     else:
                         cv2.circle(frame_ref, (cx, cy), normal_joint_spec.circle_radius, normal_joint_spec.color, -1)
 
-            # Scale typography dynamically to prevent clipping in narrow views
-            font_scale = 0.55 if canvas_w > 250 else 0.45
+            # Draw the permanent category panel headers inside safe zones
+            cv2.putText(frame_user, "YOUR CLIP", (20, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2, cv2.LINE_AA)
+            cv2.putText(frame_ref, "REFERENCE", (20, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2, cv2.LINE_AA)
             
-            cv2.putText(frame_user, "YOUR CLIP", (15, 30), cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 0, 255), 1, cv2.LINE_AA)
-            cv2.putText(frame_ref, "REFERENCE", (15, 30), cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 255, 0), 1, cv2.LINE_AA)
+            # Fuse the two standard slots side by side (Total width: 720px)
+            video_strip = np.hstack((frame_user, frame_ref))
             
-            # Construct comparison matrix safely side-by-side
-            stitched_canvas = np.hstack((frame_user, frame_ref))
+            # Create the dedicated bottom banner bar (720px wide, 45px tall)
+            banner_bar = np.zeros((45, slot_w * 2, 3), dtype=np.uint8)
             
-            cv2.putText(stitched_canvas, f"DISCREPANCY DETECTED: {body_part_text.upper()}", (15, canvas_h - 15),
-                        cv2.FONT_HERSHEY_SIMPLEX, font_scale * 0.85, (255, 255, 255), 1, cv2.LINE_AA)
+            # Print text into the dedicated banner box with breathing room
+            cv2.putText(banner_bar, f"DISCREPANCY DETECTED: {body_part_text.upper()}", (20, 28),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
             
-            frames_combined.append(cv2.cvtColor(stitched_canvas, cv2.COLOR_BGR2RGB))
+            # Vertically stack video elements safely on top of the banner
+            final_canvas = np.vstack((video_strip, banner_bar))
+            frames_combined.append(cv2.cvtColor(final_canvas, cv2.COLOR_BGR2RGB))
 
     if frames_combined:
         output_filename = f"deviation_rank{rank_idx}_{run_id}.gif"
