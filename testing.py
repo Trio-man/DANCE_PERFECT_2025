@@ -20,6 +20,10 @@ import gc
 # OpenCV, used here to open/read video files and handle frames
 import cv2
 
+os.makedirs("uploads", exist_ok=True)
+os.makedirs("motion_outputs", exist_ok=True)
+os.makedirs("deviation_gifs", exist_ok=True)
+os.makedirs("tips", exist_ok=True)
 # Pillow: animated GIFs for top deviation moments (optional at runtime if missing).
 try:
     from PIL import Image
