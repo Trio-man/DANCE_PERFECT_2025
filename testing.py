@@ -797,7 +797,7 @@ def compare_motion_csvs_dtw(ref_csv, user_csv, ref_fps=DEFAULT_FPS, user_fps=DEF
 #  FLASK ROUTING API HANDLERS:
 # =========================================================================
 
-@app.route('/api/analyze', methods=['POST'])
+@app.route('/', methods=['POST'])
 def process_videos_test():
     if 'reference' not in request.files or 'user' not in request.files:
         return jsonify({"error": "Missing video fields: reference and user are required"}), 400
