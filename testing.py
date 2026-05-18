@@ -81,35 +81,33 @@ def _deviation_gif_clip_time_meta(path_segment, user_fps):
     }
 
 # =========================================================================
-# FIXED CONTAINER VISUALIZATION STITCHER (NO CLIPPING, NO INLINE LABELS)
+# FLUID ASPECT SCALING VISUALIZATION ENGINE (NO BARS, NO LABELS, NO CROPPING)
 # =========================================================================
 
 def save_side_by_side_deviation_gif(ref_video_path, user_video_path, path_segment, body_part_text, rank_idx, run_id):
     """
-    PROPER VIDEO SCALING ENGINE:
-    - Omitted inline "YOUR CLIP" / "REFERENCE" text blocks to prevent overlapping layout constraints.
-    - Uniform 640x360 side-by-side letterboxing guarantees high-portrait feeds scale cleanly without cropping.
-    - Manually forces limb connections via an absolute blueprint route map.
+    SEAMLESS ASPECT-LOCKED RENDERING ENGINE:
+    - Omitted inline "YOUR CLIP" / "REFERENCE" text elements entirely to maximize tracking clarity.
+    - Omitted artificial black container padding or cropping offsets.
+    - Scales frames fluidly based on raw media dimension ratios.
     """
     cap_ref = cv2.VideoCapture(ref_video_path)
     cap_user = cv2.VideoCapture(user_video_path)
     
-    # Enforce clear 16:9 boxes per slot (Stitches to a clean 1280x360 layout frame)
-    slot_w, slot_h = 640, 360
+    # Read core aspect dimensions from the active reference file
+    orig_w = int(cap_ref.get(cv2.CAP_PROP_FRAME_WIDTH))
+    orig_h = int(cap_ref.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    
+    if orig_w == 0 or orig_h == 0:
+        # Safe fallback block if meta-read flags register empty
+        orig_w, orig_h = 1080, 1920
 
-    def letterbox_to_fixed_slot(frame, target_w, target_h):
-        h, w = frame.shape[:2]
-        scale = min(target_w / w, target_h / h)
-        new_w, new_h = int(w * scale), int(h * scale)
-        resized = cv2.resize(frame, (new_w, new_h))
-        
-        padded = np.zeros((target_h, target_w, 3), dtype=np.uint8)
-        x_offset = (target_w - new_w) // 2
-        y_offset = (target_h - new_h) // 2
-        padded[y_offset:y_offset+new_h, x_offset:x_offset+new_w] = resized
-        return padded
+    # Lock processing canvas height; compute un-padded proportional target width
+    target_h = 360
+    aspect_ratio = orig_w / orig_h
+    target_w = int(target_h * aspect_ratio)
 
-    # Isolate error targets
+    # Isolate key skeleton index markers
     target_joints = []
     bp_lower = body_part_text.lower()
     if "shoulder" in bp_lower:
@@ -119,15 +117,15 @@ def save_side_by_side_deviation_gif(ref_video_path, user_video_path, path_segmen
     elif "knee" in bp_lower or "foot" in bp_lower or "placement" in bp_lower:
         target_joints = [25, 26, 27, 28, 29, 30, 31, 32]
 
-    # Explicit skeletal wireframe connections mapping joints together
+    # Explicit skeletal wireframe configuration routes
     SKELETON_CONNECTIONS = [
-        (11, 12), (11, 13), (13, 15), (12, 14), (14, 16), # Shoulders and arm segments
-        (11, 23), (12, 24), (23, 24),                     # Upper body frame structure bounds
-        (23, 25), (24, 26), (25, 27), (26, 28),           # Hip and leg alignment linkages
-        (27, 29), (28, 30), (29, 31), (30, 32)            # Ankles, heels, and toes layout markers
+        (11, 12), (11, 13), (13, 15), (12, 14), (14, 16), 
+        (11, 23), (12, 24), (23, 24),                     
+        (23, 25), (24, 26), (25, 27), (26, 28),           
+        (27, 29), (28, 30), (29, 31), (30, 32)            
     ]
 
-    # Performance slicing downsample
+    # Optimization path sample downslice
     optimized_path = path_segment[::2]
     needed_ref = sorted(list(set(pt[0] for pt in optimized_path)))
     needed_user = sorted(list(set(pt[1] for pt in optimized_path)))
@@ -136,12 +134,14 @@ def save_side_by_side_deviation_gif(ref_video_path, user_video_path, path_segmen
     for f_idx in needed_ref:
         cap_ref.set(cv2.CAP_PROP_POS_FRAMES, f_idx)
         ret, frame = cap_ref.read()
-        if ret: ref_frames[f_idx] = letterbox_to_fixed_slot(frame, slot_w, slot_h)
+        if ret and frame is not None: 
+            ref_frames[f_idx] = cv2.resize(frame, (target_w, target_h), interpolation=cv2.INTER_AREA)
         
     for f_idx in needed_user:
         cap_user.set(cv2.CAP_PROP_POS_FRAMES, f_idx)
         ret, frame = cap_user.read()
-        if ret: user_frames[f_idx] = letterbox_to_fixed_slot(frame, slot_w, slot_h)
+        if ret and frame is not None: 
+            user_frames[f_idx] = cv2.resize(frame, (target_w, target_h), interpolation=cv2.INTER_AREA)
         
     cap_ref.release()
     cap_user.release()
@@ -159,40 +159,34 @@ def save_side_by_side_deviation_gif(ref_video_path, user_video_path, path_segmen
             frame_ref = frame_ref.copy()
             frame_user = frame_user.copy()
 
-            for current_frame, is_user in [(frame_user, True), (frame_ref, False)]:
+            for current_frame in [frame_user, frame_ref]:
                 res = pose.process(cv2.cvtColor(current_frame, cv2.COLOR_BGR2RGB))
                 if res.pose_landmarks:
                     coords = {}
                     for idx, lm in enumerate(res.pose_landmarks.landmark):
                         if lm.visibility > 0.4:
-                            coords[idx] = (int(lm.x * slot_w), int(lm.y * slot_h))
+                            coords[idx] = (int(lm.x * target_w), int(lm.y * target_h))
                     
-                    # 1. Continuous Manual Wireframing Engine
+                    # 1. Continuous Kinematic Linkage Overlays
                     for start_j, end_j in SKELETON_CONNECTIONS:
                         if start_j in coords and end_j in coords:
                             if start_j in target_joints or end_j in target_joints:
-                                line_color = (80, 80, 255)  # Error limb links turn bright red/orange
+                                line_color = (80, 80, 255)  # Tracking variant indicator (Red)
                                 line_thickness = 3
                             else:
-                                line_color = (240, 240, 240)  # Standard track links draw white
+                                line_color = (240, 240, 240)  # Standard joint bridge tracking line (White)
                                 line_thickness = 2
                             cv2.line(current_frame, coords[start_j], coords[end_j], line_color, line_thickness, cv2.LINE_AA)
 
-                    # 2. Joint Mapping Coordinates
+                    # 2. Joint Tracking Nodes
                     for idx, pt in coords.items():
                         if idx in target_joints:
-                            cv2.circle(current_frame, pt, 6, (0, 0, 255), -1, cv2.LINE_AA)  # Red key target marker
+                            cv2.circle(current_frame, pt, 5, (0, 0, 255), -1, cv2.LINE_AA)
                         else:
-                            cv2.circle(current_frame, pt, 3, (60, 220, 60), -1, cv2.LINE_AA) # Green reference track node
+                            cv2.circle(current_frame, pt, 3, (60, 220, 60), -1, cv2.LINE_AA)
 
-            # Combine left and right slots horizontally into a fixed landscape output grid
+            # Join frames horizontally with zero gaps or artificial margins
             stitched_canvas = np.hstack((frame_user, frame_ref))
-            
-            # Bottom info banner strip (Isolated away from individual side frames)
-            cv2.rectangle(stitched_canvas, (0, slot_h - 45), (slot_w * 2, slot_h), (12, 12, 12), -1)
-            cv2.putText(stitched_canvas, f"DISCREPANCY POSITION TRACKER: {body_part_text.upper()}", (35, slot_h - 17),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, (225, 225, 225), 1, cv2.LINE_AA)
-            
             frames_combined.append(cv2.cvtColor(stitched_canvas, cv2.COLOR_BGR2RGB))
 
     if frames_combined:
