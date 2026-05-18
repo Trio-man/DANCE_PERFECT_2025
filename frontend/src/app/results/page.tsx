@@ -119,12 +119,10 @@ function ResultsContent() {
         <div className="space-y-6">
           <h3 className="text-2xl font-bold text-slate-800 ml-2">Visual Breakdown</h3>
           {moments.map((moment, idx) => {
-            const backendDomain = "https://danceperfect.duckdns.org";
-
-            // Normalizes paths cleanly regardless of string generation source format
-            const gifUrl = moment.gif_path.startsWith('http')
-              ? moment.gif_path
-              : `${backendDomain}/deviation_gifs/${moment.gif_path.split('/').pop()}`;
+            // 🎯 THE REWRITE PROXIED FIX: Isolate the filename and map it to a native relative string path.
+            // This leverages your next.config.js rewrite rule to stream assets without CORS drops.
+            const filename = moment.gif_path.split('/').pop();
+            const gifUrl = `/deviation_gifs/${filename}`;
 
             return (
               <motion.div 
@@ -141,10 +139,8 @@ function ResultsContent() {
                     src={gifUrl} 
                     alt={`Moment Rank ${moment.rank}`}
                     className="w-full h-full object-cover"
-                    crossOrigin="anonymous" // 🎯 FIXED: Tells browser to securely accept CORS cross-domain image payload streams
-                    loading="eager"         // 🎯 FIXED: Forces fast image asset decoding rendering
+                    loading="eager"
                     onError={(e) => {
-                      // Fallback protection if network drops out mid-session
                       e.currentTarget.src = 'https://placehold.co/600x400/7c3aed/ffffff?text=AI+Visual+Unavailable';
                     }}
                   />
