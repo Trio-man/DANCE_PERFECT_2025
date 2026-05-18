@@ -833,7 +833,7 @@ def process_videos_test():
         if os.path.exists(user_path): os.remove(user_path)
 
 
-@app.route('/api/analyze', methods=['POST'])
+@app.route('/api/compare-motion-csvs-test', methods=['POST'])
 def compare_motion_csvs_test():
     data = request.get_json() or {}
     output1 = data.get("ref_csv")
