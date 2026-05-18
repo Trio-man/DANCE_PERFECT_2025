@@ -4,3 +4,18 @@ __pycache__/
 .env
 
 node_modules/
+
+# Ignore generated testing assets and logs
+analysis_ui/
+deviation_clips/
+deviation_gifs/
+deviation_screenshots/
+logs/
+
+# Ignore media and generated CSV tracks
+uploads/*.mp4
+motion_outputs/*.csv
+
+# Ignore local testing backups and text tips
+testing_backup.py
+tips/

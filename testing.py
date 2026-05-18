@@ -54,6 +54,8 @@ import backend.admin_routes
 
 app = Flask(__name__)  # Create the Flask application instance
 
+app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100 Megabytes
+
 CORS(app, resources={r"/*": {"origins": "*"}})
 # ----- Optional: cloud storage for generated files (log, tips, screenshots) -----
 # Set STORAGE_PROVIDER to "supabase" or "s3" and the corresponding env vars (see below).
@@ -2308,6 +2310,10 @@ def check_dtw():
     }
     return jsonify(payload)
 
+@app.route('/assets/<path:filename>')
+def serve_assets(filename):
+    from flask import send_from_directory
+    return send_from_directory('deviation_gifs', filename.replace('deviation_gifs/', ''))
 
 if __name__ == "__main__":
     # When this file is run directly (python testing.py), start the Flask dev server.
