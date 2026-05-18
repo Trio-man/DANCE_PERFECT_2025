@@ -16,7 +16,8 @@ import json
 import csv
 import heapq
 import gc
-
+import subprocess 
+import uuid
 # OpenCV, used here to open/read video files and handle frames
 import cv2
 
@@ -152,6 +153,37 @@ os.makedirs(POSE_MATCH_SCREENSHOTS_FOLDER, exist_ok=True)
 os.makedirs(DEVIATION_GIFS_FOLDER, exist_ok=True)
 os.makedirs(ANALYSIS_UI_FOLDER, exist_ok=True)
 
+# ----- FFmpeg & Downsampling Configuration -----
+UPLOAD_DIR = "/tmp/danceperfect"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+def get_video_duration(video_path):
+    """Uses ffprobe to quickly read video metadata and return duration in seconds."""
+    command = [
+        'ffprobe', '-v', 'error', 
+        '-show_entries', 'format=duration', 
+        '-of', 'default=noprint_wrappers=1:nokey=1', 
+        video_path
+    ]
+    try:
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=True)
+        return float(result.stdout.strip())
+    except Exception:
+        return 0.0
+
+def downsample_video(input_path, output_path):
+    """Downsamples raw video to 480p at 15fps to conserve CPU during MediaPipe tracking."""
+    command = [
+        'ffmpeg', '-y',
+        '-i', input_path,
+        '-vf', 'scale=-2:480,fps=15', # Force 480p height, drop framerate to 15fps
+        '-c:v', 'libx264', 
+        '-crf', '28',                 # Aggressive compression
+        '-preset', 'veryfast',        # Prioritize encoding speed
+        output_path
+    ]
+    subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
 mp_pose = mp.solutions.pose
 mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
@@ -264,69 +296,91 @@ def get_video_info(video_path):
 
 def extract_motion_from_video(video_path, output_csv, max_fps=MAX_FPS):
     """
-    Run pose detection on the video and write motion to CSV. Motion is limited to
-    max_fps (default 8): higher-FPS videos are sampled so output has at most 8 FPS;
-    lower-FPS videos keep every frame. Returns the effective FPS of the output CSV
-    so timestamps (frame_index / effective_fps) match real time for any upload.
+    Run pose detection on the video and write motion to CSV. Automatically 
+    intercepts heavy uploads, applies a 1-minute duration shield, and downsamples 
+    the file to 480p/15fps via FFmpeg to optimize server resources.
     """
-    cap = cv2.VideoCapture(video_path)
-    fps_src = cap.get(cv2.CAP_PROP_FPS)
-    if fps_src <= 0:
-        fps_src = float(DEFAULT_FPS)
-    fps_src = float(fps_src)
-    step = max(1, round(fps_src / max_fps))
-    effective_fps = fps_src / step  # FPS of the output CSV (at most max_fps)
+    # 1. Enforce safety limit (1 minute maximum video length)
+    duration = get_video_duration(video_path)
+    if duration > 61.0:
+        raise ValueError("Video exceeds maximum limit of 1 minute")
 
-    source_index = 0   # 0-based index of current source frame
-    output_frame_number = 0   # 1-based frame number written to CSV (at max_fps rate)
-    with open(output_csv, "w", newline="", encoding="utf-8") as out_f:
-        writer = csv.writer(out_f)
-        writer.writerow(["frame", "landmark_id", "x", "y", "z", "visibility"])
+    # 2. Setup a temporary path for the compressed processing version
+    unique_id = str(uuid.uuid4())
+    processing_path = os.path.join(UPLOAD_DIR, f"proc_{unique_id}.mp4")
 
-        while cap.isOpened():
-            success, frame = cap.read()
-            if not success:
-                break
+    try:
+        # 3. Crush the video down before passing it to OpenCV / MediaPipe
+        downsample_video(video_path, processing_path)
+        
+        # 4. Point OpenCV to read our light, optimized temporary video stream
+        cap = cv2.VideoCapture(processing_path)
+        fps_src = cap.get(cv2.CAP_PROP_FPS)
+        if fps_src <= 0:
+            fps_src = float(DEFAULT_FPS)
+        fps_src = float(fps_src)
+        step = max(1, round(fps_src / max_fps))
+        effective_fps = fps_src / step  # FPS of the output CSV (at most max_fps)
 
-            # Only process this frame if it falls on our max_fps grid.
-            if source_index % step == 0:
-                output_frame_number += 1
+        source_index = 0   # 0-based index of current source frame
+        output_frame_number = 0   # 1-based frame number written to CSV (at max_fps rate)
+        
+        with open(output_csv, "w", newline="", encoding="utf-8") as out_f:
+            writer = csv.writer(out_f)
+            writer.writerow(["frame", "landmark_id", "x", "y", "z", "visibility"])
 
-                # Resize large frames before pose processing to reduce memory/CPU.
-                h, w = frame.shape[:2]
-                long_side = max(h, w)
-                if long_side > MAX_PROCESS_FRAME_LONG_SIDE:
-                    scale = MAX_PROCESS_FRAME_LONG_SIDE / float(long_side)
-                    new_w = max(1, int(w * scale))
-                    new_h = max(1, int(h * scale))
-                    frame = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
+            while cap.isOpened():
+                success, frame = cap.read()
+                if not success:
+                    break
 
-                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                results = _POSE_VIDEO.process(rgb_frame)
+                # Only process this frame if it falls on our max_fps grid.
+                if source_index % step == 0:
+                    output_frame_number += 1
 
-                if results.pose_landmarks:
-                    for landmark_id, lm in enumerate(results.pose_landmarks.landmark):
-                        writer.writerow([
-                            output_frame_number,
-                            landmark_id,
-                            lm.x,
-                            lm.y,
-                            lm.z,
-                            lm.visibility
-                        ])
+                    # Resize large frames before pose processing to reduce memory/CPU.
+                    h, w = frame.shape[:2]
+                    long_side = max(h, w)
+                    if long_side > MAX_PROCESS_FRAME_LONG_SIDE:
+                        scale = MAX_PROCESS_FRAME_LONG_SIDE / float(long_side)
+                        new_w = max(1, int(w * scale))
+                        new_h = max(1, int(h * scale))
+                        frame = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
 
-                # Release per-frame temporaries ASAP in low-memory environments.
-                del rgb_frame, results, frame
-            else:
-                del frame
-            source_index += 1
+                    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    results = _POSE_VIDEO.process(rgb_frame)
 
-            # Periodic GC helps long videos on constrained hosts.
-            if source_index % 300 == 0:
-                gc.collect()
+                    if results.pose_landmarks:
+                        for landmark_id, lm in enumerate(results.pose_landmarks.landmark):
+                            writer.writerow([
+                                output_frame_number,
+                                landmark_id,
+                                lm.x,
+                                lm.y,
+                                lm.z,
+                                lm.visibility
+                            ])
 
-    cap.release()
-    return round(effective_fps, 2)
+                    # Release per-frame temporaries ASAP in low-memory environments.
+                    del rgb_frame, results, frame
+                else:
+                    del frame
+                source_index += 1
+
+                # Periodic GC helps long videos on constrained hosts.
+                if source_index % 300 == 0:
+                    gc.collect()
+
+        cap.release()
+        return round(effective_fps, 2)
+
+    finally:
+        # 5. Clean up the temp downsampled file so disk space stays pristine
+        if os.path.exists(processing_path):
+            try:
+                os.remove(processing_path)
+            except Exception:
+                pass
 
 
 def save_deviation_screenshot(video_path, frame_number_1based, output_path, fps=DEFAULT_FPS):
