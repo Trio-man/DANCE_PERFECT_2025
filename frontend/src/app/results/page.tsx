@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { FiArrowLeft, FiActivity, FiAward, FiCheckCircle } from 'react-icons/fi';
 
-// Environment variable only - no hardcoded fallback for security and flexibility
-const API_BASE_URL = '/api/backend';
+// Reads your Vercel environment configuration dynamically
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 interface DeviationMoment {
   rank: number;
@@ -34,9 +34,8 @@ function ResultsContent() {
   const router = useRouter();
 
   useEffect(() => {
-    // Console warning if the env variable isn't found
     if (!API_BASE_URL) {
-      console.warn("Environment variable NEXT_PUBLIC_API_URL is not defined. GIFs may not load.");
+      console.warn("Environment variable NEXT_PUBLIC_API_URL is not defined. Falling back to relative paths.");
     }
 
     const savedData = localStorage.getItem('analysis_results');
@@ -115,9 +114,11 @@ function ResultsContent() {
         <div className="space-y-6">
           <h3 className="text-2xl font-bold text-slate-800 ml-2">Visual Breakdown</h3>
           {moments.map((moment, idx) => {
-            // Extracts only the filename to prevent folder-prefix errors
-            const fileName = moment.gif_path.split('/').pop();
-            const gifUrl = `${API_BASE_URL}/assets/${fileName}`;
+            // Checks if the backend provided a full secure absolute URL.
+            // If true, uses it directly; otherwise, falls back to combining the file name with the environment variable base.
+            const gifUrl = moment.gif_path.startsWith('http')
+              ? moment.gif_path
+              : `${API_BASE_URL}/assets/${moment.gif_path.split('/').pop()}`;
 
             return (
               <motion.div 
@@ -134,7 +135,6 @@ function ResultsContent() {
                     alt={`Moment Rank ${moment.rank}`}
                     className="w-full h-full object-contain"
                     onError={(e) => {
-                      // Fallback image if the GIF is missing or the backend is down
                       e.currentTarget.src = 'https://placehold.co/600x400/7c3aed/ffffff?text=AI+Visual+Unavailable';
                     }}
                   />
