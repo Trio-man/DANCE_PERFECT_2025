@@ -41,7 +41,7 @@ mp_pose = mp.solutions.pose
 
 def compress_video_storage_optimized(input_path, output_path, target_fps=30):
     """
-    Downscales to 540p for ultra-fast background processing array builds.
+    Downscales to 540p max dimension for ultra-fast processing throughput.
     """
     logging.info(f"Optimizing video for analysis speed: {input_path} -> {output_path}")
     command = [
@@ -49,7 +49,7 @@ def compress_video_storage_optimized(input_path, output_path, target_fps=30):
         '-i', input_path,
         '-vf', f'fps={target_fps},scale=-2:540',
         '-vcodec', 'libx264',
-        '-crf', '24',            # Slightly higher CRF for faster processing throughput
+        '-crf', '24',            
         '-preset', 'ultrafast', 
         '-pix_fmt', 'yuv420p',  
         '-an',                  
@@ -81,44 +81,60 @@ def _deviation_gif_clip_time_meta(path_segment, user_fps):
     }
 
 # =========================================================================
-# TARGETED SELECTION SIDE-BY-SIDE GENERATOR (YOUR CLIP LEFT | REFERENCE RIGHT)
+# UNIVERSAL SIDE-BY-SIDE GENERATOR (PORTRAIT & LANDSCAPE HYBRID ENGINE)
 # =========================================================================
 
 def save_side_by_side_deviation_gif(ref_video_path, user_video_path, path_segment, body_part_text, rank_idx, run_id):
     """
-    HIGH SPEED TARGETED GENERATOR WITH LETTERBOX PADDING: 
-    - Fits the entire original frame cleanly inside a padded canvas.
-    - Eliminates foot/head cropping issues caused by direct resizing.
-    - Highlights targeted error joints in bright red.
+    UNIVERSAL HYBRID ENGINE:
+    - Auto-detects if video is Portrait or Landscape.
+    - Locks dimensions to eliminate empty black boxes in both orientations.
+    - Scales font dynamically relative to video orientation bounds.
     """
     mp_drawing = mp.solutions.drawing_utils
     
     cap_ref = cv2.VideoCapture(ref_video_path)
     cap_user = cv2.VideoCapture(user_video_path)
     
-    # Establish a reliable, standard baseline canvas frame height and width
-    canvas_h = 400
-    canvas_w = 400
+    orig_w = int(cap_user.get(cv2.CAP_PROP_FRAME_WIDTH)) or 640
+    orig_h = int(cap_user.get(cv2.CAP_PROP_FRAME_HEIGHT)) or 480
+    
+    # 🎯 FIX: Intelligent Canvas Dimensions calculation based on true aspect orientation
+    max_bound = 400
+    if orig_w >= orig_h:
+        # Landscape Mode configuration rules
+        canvas_w = max_bound
+        canvas_h = int((orig_h / orig_w) * canvas_w)
+    else:
+        # Portrait Mode configuration rules
+        canvas_h = max_bound
+        canvas_w = int((orig_w / orig_h) * canvas_h)
+        
+    # Ensure dimensions are divisible by 2 for standard video frame constraints
+    if canvas_w % 2 != 0: canvas_w += 1
+    if canvas_h % 2 != 0: canvas_h += 1
 
-    def letterbox_frame(frame, target_w, target_h):
-        """Helper to downscale frame proportionally and pad with black margins"""
+    def letterbox_frame_universal(frame, target_w, target_h):
+        """Resizes frame perfectly to match orientation bounds safely"""
         h, w = frame.shape[:2]
         scale = min(target_w / w, target_h / h)
         new_w, new_h = int(w * scale), int(h * scale)
         
         resized = cv2.resize(frame, (new_w, new_h))
         
-        # Create a solid black canvas container
+        if new_w == target_w and new_h == target_h:
+            return resized
+            
         padded = np.zeros((target_h, target_w, 3), dtype=np.uint8)
+        x_offset = max(0, (target_w - new_w) // 2)
+        y_offset = max(0, (target_h - new_h) // 2)
         
-        # Compute centering offsets
-        x_offset = (target_w - new_w) // 2
-        y_offset = (target_h - new_h) // 2
-        
-        padded[y_offset:y_offset+new_h, x_offset:x_offset+new_w] = resized
+        use_w = min(target_w, new_w)
+        use_h = min(target_h, new_h)
+        padded[y_offset:y_offset+use_h, x_offset:x_offset+use_w] = resized[:use_h, :use_w]
         return padded
 
-    # Map text strings out to MediaPipe's tracking node indexes
+    # Map joint node indices
     target_joints = []
     bp_lower = body_part_text.lower()
     if "shoulder" in bp_lower:
@@ -126,7 +142,7 @@ def save_side_by_side_deviation_gif(ref_video_path, user_video_path, path_segmen
     elif "elbow" in bp_lower or "arm" in bp_lower:
         target_joints = [13, 14, 15, 16] 
     elif "knee" in bp_lower or "foot" in bp_lower or "placement" in bp_lower:
-        target_joints = [25, 26, 27, 28, 29, 30, 31, 32] # Includes ankles, heels, and toes
+        target_joints = [25, 26, 27, 28, 29, 30, 31, 32]
 
     frames_combined = []
     
@@ -136,16 +152,15 @@ def save_side_by_side_deviation_gif(ref_video_path, user_video_path, path_segmen
     ref_frames = {}
     user_frames = {}
     
-    # Process frames and safely letterbox them immediately
     for f_idx in needed_ref:
         cap_ref.set(cv2.CAP_PROP_POS_FRAMES, f_idx)
         ret, frame = cap_ref.read()
-        if ret: ref_frames[f_idx] = letterbox_frame(frame, canvas_w, canvas_h)
+        if ret: ref_frames[f_idx] = letterbox_frame_universal(frame, canvas_w, canvas_h)
         
     for f_idx in needed_user:
         cap_user.set(cv2.CAP_PROP_POS_FRAMES, f_idx)
         ret, frame = cap_user.read()
-        if ret: user_frames[f_idx] = letterbox_frame(frame, canvas_w, canvas_h)
+        if ret: user_frames[f_idx] = letterbox_frame_universal(frame, canvas_w, canvas_h)
         
     cap_ref.release()
     cap_user.release()
@@ -165,7 +180,7 @@ def save_side_by_side_deviation_gif(ref_video_path, user_video_path, path_segmen
             frame_ref = frame_ref.copy()
             frame_user = frame_user.copy()
             
-            # Process & Render User side
+            # Process User side
             res_user = pose.process(cv2.cvtColor(frame_user, cv2.COLOR_BGR2RGB))
             if res_user.pose_landmarks:
                 mp_drawing.draw_landmarks(
@@ -179,7 +194,7 @@ def save_side_by_side_deviation_gif(ref_video_path, user_video_path, path_segmen
                     else:
                         cv2.circle(frame_user, (cx, cy), normal_joint_spec.circle_radius, normal_joint_spec.color, -1)
 
-            # Process & Render Reference side
+            # Process Reference side
             res_ref = pose.process(cv2.cvtColor(frame_ref, cv2.COLOR_BGR2RGB))
             if res_ref.pose_landmarks:
                 mp_drawing.draw_landmarks(
@@ -193,23 +208,23 @@ def save_side_by_side_deviation_gif(ref_video_path, user_video_path, path_segmen
                     else:
                         cv2.circle(frame_ref, (cx, cy), normal_joint_spec.circle_radius, normal_joint_spec.color, -1)
 
-            # Apply top labels inside specific panels
-            cv2.putText(frame_user, "YOUR CLIP", (15, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2, cv2.LINE_AA)
-            cv2.putText(frame_ref, "REFERENCE", (15, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2, cv2.LINE_AA)
+            # Scale typography dynamically to prevent clipping in narrow views
+            font_scale = 0.55 if canvas_w > 250 else 0.45
             
-            # Stitch: User video frame on the left, reference video frame on the right
+            cv2.putText(frame_user, "YOUR CLIP", (15, 30), cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 0, 255), 1, cv2.LINE_AA)
+            cv2.putText(frame_ref, "REFERENCE", (15, 30), cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 255, 0), 1, cv2.LINE_AA)
+            
+            # Construct comparison matrix safely side-by-side
             stitched_canvas = np.hstack((frame_user, frame_ref))
             
-            # Bottom status banner text across unified layout width
-            cv2.putText(stitched_canvas, f"DISCREPANCY DETECTED: {body_part_text.upper()}", (20, canvas_h - 15),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
+            cv2.putText(stitched_canvas, f"DISCREPANCY DETECTED: {body_part_text.upper()}", (15, canvas_h - 15),
+                        cv2.FONT_HERSHEY_SIMPLEX, font_scale * 0.85, (255, 255, 255), 1, cv2.LINE_AA)
             
             frames_combined.append(cv2.cvtColor(stitched_canvas, cv2.COLOR_BGR2RGB))
 
     if frames_combined:
         output_filename = f"deviation_rank{rank_idx}_{run_id}.gif"
         output_path = os.path.join(DEVIATION_GIFS_FOLDER, output_filename)
-        # Drop the output frame count to every 2nd frame to maximize processing throughput
         imageio.mimsave(output_path, frames_combined[::2], fps=10, loop=0)
         return output_filename
     return None
@@ -336,7 +351,6 @@ def process_videos_test():
             path_sample_start = time_meta.get("path_sample_start", user_start) if time_meta else user_start
             path_sample_end = time_meta.get("path_sample_end", user_start + 20) if time_meta else user_start + 20
 
-            # Pass body part text down to isolate and shade specific error dots red
             generated_filename = save_side_by_side_deviation_gif(
                 compressed_ref_path, compressed_user_path,
                 path_segment=path_segment, body_part_text=body_part,
