@@ -818,14 +818,36 @@ def process_videos_test():
         ref_fps = extract_motion_from_video(ref_path, out_ref_csv)
         user_fps = extract_motion_from_video(user_path, out_user_csv)
 
-        return jsonify({
+        # Updated nested structure to match your Next.js results page expectations character-for-character
+        response_payload = {
             "status": "success",
             "run_id": run_id,
             "ref_csv": out_ref_csv,
             "user_csv": out_user_csv,
             "ref_effective_fps": ref_fps,
-            "user_effective_fps": user_fps
-        })
+            "user_effective_fps": user_fps,
+            
+            "comparison": {
+                "similarity_score": 85.5,  # Replace with your calculated calculation score variable when integrated
+                "deviation_moments_ui": {
+                    "summaries": {
+                        "what_went_well": "Excellent execution! Your timing matched the template smoothly across major rhythm intervals.",
+                        "where_to_improve": "Work on arm extension accuracy during high-velocity changes."
+                    },
+                    "deviation_moments": [
+                        {
+                            "rank": 1,
+                            "issue": "Arm position deviation detected.",
+                            "recommendation": "Raise your left elbow slightly higher to mirror the choreography.",
+                            "user_time_clip_label": "00:04",
+                            "gif_path": f"motion_outputs/{run_id}.gif"
+                        }
+                    ]
+                }
+            }
+        }
+        return jsonify(response_payload)
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
