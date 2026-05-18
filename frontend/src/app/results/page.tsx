@@ -18,7 +18,6 @@ interface DeviationMoment {
   path_sample_end?: number;
 }
 
-// 🎯 FIXED: Types updated to match the flat structure sent by the proxy
 interface AnalysisData {
   status: string;
   run_id: string;
@@ -58,7 +57,6 @@ function ResultsContent() {
 
   if (!data) return null;
 
-  // 🎯 FIXED: Variables assigned from direct flat keys rather than nested paths
   const score = data.dtw_similarity_score ?? 0;
   const summaries = data.summaries;
   const moments = data.deviation_moments ?? [];
@@ -121,10 +119,12 @@ function ResultsContent() {
         <div className="space-y-6">
           <h3 className="text-2xl font-bold text-slate-800 ml-2">Visual Breakdown</h3>
           {moments.map((moment, idx) => {
-            // Evaluates absolute URL path completely intact
+            // 🎯 FIXED: Directs relative media requests straight to your active DuckDNS storage location
+            const backendDomain = "https://danceperfect.duckdns.org";
+
             const gifUrl = moment.gif_path.startsWith('http')
               ? moment.gif_path
-              : `${API_BASE_URL}/assets/${moment.gif_path.split('/').pop()}`;
+              : `${backendDomain}/deviation_gifs/${moment.gif_path.split('/').pop()}`;
 
             return (
               <motion.div 
