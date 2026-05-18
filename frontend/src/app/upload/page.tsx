@@ -188,9 +188,6 @@ export default function UploadPage() {
     }
   };
 
-  // ─────────────────────────────────────────────
-  // HANDLERS
-  // ─────────────────────────────────────────────
   const handleAnalyze = async () => {
     if (!dancerVideo || !choreoVideo) {
       setStatus('Please upload both videos first.');
@@ -210,7 +207,7 @@ export default function UploadPage() {
       formData.append('user_fps', '30');
       formData.append('user_motion_fps', '30');
 
-      // 🌟 FIXED TARGET URL: Changed from DuckDNS straight to your Next.js internal api endpoint
+      // Hits your local internal route.ts proxy directly
       const response = await fetch('/api/analyze', {
         method: 'POST',
         body: formData,
@@ -256,21 +253,34 @@ export default function UploadPage() {
   const primaryColor = appSettings?.primary_color ?? '#7C3AED';
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.8 }}
-      className="min-h-screen flex flex-col items-center justify-center px-4 bg-gradient-to-br from-[#d6c1ff] via-[#cde7ff] to-white"
-    >
+    <div className="min-h-screen flex flex-col items-center justify-center px-4 bg-gradient-to-br from-[#d6c1ff] via-[#cde7ff] to-white">
       <div className="w-full max-w-6xl flex flex-col gap-6 py-10">
         {cmsError && <p className="text-center text-sm text-red-600">CMS load warning: {cmsError}</p>}
 
-        {guidelinesPage && (
-          <motion.div className="bg-white/60 border border-white/70 rounded-xl p-6">
-            <h2 className="text-lg font-semibold mb-2" style={{ color: primaryColor }}>{guidelinesPage.title}</h2>
-            <p className="text-slate-700 whitespace-pre-line">{guidelinesPage.body}</p>
-          </motion.div>
-        )}
+        {/* 🌟 FIXED: Rendered About and Guidelines dynamically side-by-side inside this container */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {aboutPage && (
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-white/60 border border-white/70 rounded-xl p-6"
+            >
+              <h2 className="text-lg font-semibold mb-2" style={{ color: primaryColor }}>{aboutPage.title}</h2>
+              <p className="text-slate-700 whitespace-pre-line text-sm leading-relaxed">{aboutPage.body}</p>
+            </motion.div>
+          )}
+
+          {guidelinesPage && (
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-white/60 border border-white/70 rounded-xl p-6"
+            >
+              <h2 className="text-lg font-semibold mb-2" style={{ color: primaryColor }}>{guidelinesPage.title}</h2>
+              <p className="text-slate-700 whitespace-pre-line text-sm leading-relaxed">{guidelinesPage.body}</p>
+            </motion.div>
+          )}
+        </div>
 
         <motion.div className="bg-white/70 backdrop-blur-lg border border-white/60 shadow-lg rounded-2xl p-8 relative">
           <AnimatePresence>
@@ -331,6 +341,6 @@ export default function UploadPage() {
           </motion.div>
         )}
       </div>
-    </motion.div>
+    </div>
   );
 }
