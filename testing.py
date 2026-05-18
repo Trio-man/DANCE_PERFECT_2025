@@ -41,7 +41,7 @@ mp_pose = mp.solutions.pose
 
 def compress_video_storage_optimized(input_path, output_path, target_fps=30):
     """
-    Downscales incoming assets to a uniform max resolution for optimization.
+    Downscales incoming videos to a uniform height for fast frame parsing.
     """
     logging.info(f"Optimizing video for analysis speed: {input_path} -> {output_path}")
     command = [
@@ -81,20 +81,20 @@ def _deviation_gif_clip_time_meta(path_segment, user_fps):
     }
 
 # =========================================================================
-# UNIFORM 16:9 CONTAINER LAYOUT STITCHER (NO CROPPING)
+# FIXED CONTAINER VISUALIZATION STITCHER (NO CLIPPING, NO INLINE LABELS)
 # =========================================================================
 
 def save_side_by_side_deviation_gif(ref_video_path, user_video_path, path_segment, body_part_text, rank_idx, run_id):
     """
-    ANTI-CROPPING LAYOUT ENGINE:
-    - Enforces uniform 640x360 window slots per track to give canvas text absolute safety boundaries.
-    - Manually maps and paints bone wireframes across key segments to prevent missing landmarks.
-    - Retains fast sample downsampling to guarantee minimal server execution time overhead.
+    PROPER VIDEO SCALING ENGINE:
+    - Omitted inline "YOUR CLIP" / "REFERENCE" text blocks to prevent overlapping layout constraints.
+    - Uniform 640x360 side-by-side letterboxing guarantees high-portrait feeds scale cleanly without cropping.
+    - Manually forces limb connections via an absolute blueprint route map.
     """
     cap_ref = cv2.VideoCapture(ref_video_path)
     cap_user = cv2.VideoCapture(user_video_path)
     
-    # Enforce static slot targets to eliminate vertical/horizontal clipping
+    # Enforce clear 16:9 boxes per slot (Stitches to a clean 1280x360 layout frame)
     slot_w, slot_h = 640, 360
 
     def letterbox_to_fixed_slot(frame, target_w, target_h):
@@ -109,7 +109,7 @@ def save_side_by_side_deviation_gif(ref_video_path, user_video_path, path_segmen
         padded[y_offset:y_offset+new_h, x_offset:x_offset+new_w] = resized
         return padded
 
-    # Identify tracking anomaly targets
+    # Isolate error targets
     target_joints = []
     bp_lower = body_part_text.lower()
     if "shoulder" in bp_lower:
@@ -119,15 +119,15 @@ def save_side_by_side_deviation_gif(ref_video_path, user_video_path, path_segmen
     elif "knee" in bp_lower or "foot" in bp_lower or "placement" in bp_lower:
         target_joints = [25, 26, 27, 28, 29, 30, 31, 32]
 
-    # Explicit skeletal topology connection map
+    # Explicit skeletal wireframe connections mapping joints together
     SKELETON_CONNECTIONS = [
-        (11, 12), (11, 13), (13, 15), (12, 14), (14, 16), # Shoulders and arm linkages
-        (11, 23), (12, 24), (23, 24),                     # Upper torso and hip base connections
-        (23, 25), (24, 26), (25, 27), (26, 28),           # Thighs and lower leg links
-        (27, 29), (28, 30), (29, 31), (30, 32)            # Feet tracker connections
+        (11, 12), (11, 13), (13, 15), (12, 14), (14, 16), # Shoulders and arm segments
+        (11, 23), (12, 24), (23, 24),                     # Upper body frame structure bounds
+        (23, 25), (24, 26), (25, 27), (26, 28),           # Hip and leg alignment linkages
+        (27, 29), (28, 30), (29, 31), (30, 32)            # Ankles, heels, and toes layout markers
     ]
 
-    # Speed Optimization Slicing
+    # Performance slicing downsample
     optimized_path = path_segment[::2]
     needed_ref = sorted(list(set(pt[0] for pt in optimized_path)))
     needed_user = sorted(list(set(pt[1] for pt in optimized_path)))
@@ -162,44 +162,36 @@ def save_side_by_side_deviation_gif(ref_video_path, user_video_path, path_segmen
             for current_frame, is_user in [(frame_user, True), (frame_ref, False)]:
                 res = pose.process(cv2.cvtColor(current_frame, cv2.COLOR_BGR2RGB))
                 if res.pose_landmarks:
-                    # Parse spatial coordinate vectors mapping out all visibility points
                     coords = {}
                     for idx, lm in enumerate(res.pose_landmarks.landmark):
                         if lm.visibility > 0.4:
                             coords[idx] = (int(lm.x * slot_w), int(lm.y * slot_h))
                     
-                    # 1. Manual Limb Wireframing Implementation
+                    # 1. Continuous Manual Wireframing Engine
                     for start_j, end_j in SKELETON_CONNECTIONS:
                         if start_j in coords and end_j in coords:
-                            # Color whole limb bright orange/red if it touches error tracking targets
                             if start_j in target_joints or end_j in target_joints:
-                                line_color = (80, 80, 255)  
+                                line_color = (80, 80, 255)  # Error limb links turn bright red/orange
                                 line_thickness = 3
                             else:
-                                line_color = (235, 235, 235)  
+                                line_color = (240, 240, 240)  # Standard track links draw white
                                 line_thickness = 2
                             cv2.line(current_frame, coords[start_j], coords[end_j], line_color, line_thickness, cv2.LINE_AA)
 
-                    # 2. Manual Joint Dot Mapping
+                    # 2. Joint Mapping Coordinates
                     for idx, pt in coords.items():
                         if idx in target_joints:
-                            cv2.circle(current_frame, pt, 6, (0, 0, 255), -1, cv2.LINE_AA)  # Large Red Error Node
+                            cv2.circle(current_frame, pt, 6, (0, 0, 255), -1, cv2.LINE_AA)  # Red key target marker
                         else:
-                            cv2.circle(current_frame, pt, 3, (70, 220, 70), -1, cv2.LINE_AA) # Small Green Standard Node
+                            cv2.circle(current_frame, pt, 3, (60, 220, 60), -1, cv2.LINE_AA) # Green reference track node
 
-                # Apply layout descriptive headers safely enclosed in contrast backdrops
-                label_text = "YOUR CLIP" if is_user else "REFERENCE"
-                label_color = (80, 80, 255) if is_user else (80, 255, 80)
-                cv2.rectangle(current_frame, (20, 20), (145, 52), (12, 12, 12), -1)
-                cv2.putText(current_frame, label_text, (30, 42), cv2.FONT_HERSHEY_SIMPLEX, 0.45, label_color, 2, cv2.LINE_AA)
-
-            # Horizontal Canvas Stitching (Locks total output block dimensions to 1280x360)
+            # Combine left and right slots horizontally into a fixed landscape output grid
             stitched_canvas = np.hstack((frame_user, frame_ref))
             
-            # Apply lower layout information banner strip
+            # Bottom info banner strip (Isolated away from individual side frames)
             cv2.rectangle(stitched_canvas, (0, slot_h - 45), (slot_w * 2, slot_h), (12, 12, 12), -1)
             cv2.putText(stitched_canvas, f"DISCREPANCY POSITION TRACKER: {body_part_text.upper()}", (35, slot_h - 17),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, (220, 220, 220), 1, cv2.LINE_AA)
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, (225, 225, 225), 1, cv2.LINE_AA)
             
             frames_combined.append(cv2.cvtColor(stitched_canvas, cv2.COLOR_BGR2RGB))
 
