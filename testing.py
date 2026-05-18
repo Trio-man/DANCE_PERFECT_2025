@@ -8,6 +8,10 @@ import numpy as np
 import pandas as pd
 import mediapipe as mp
 import imageio
+# 🎯 FIX: Added explicit Flask imports to prevent Gunicorn boot crashes
+from flask import Flask, request, jsonify, send_from_directory
+from fastdtw import fastdtw
+from scipy.spatial.distance import euclidean
 
 app = Flask(__name__)
 
@@ -78,7 +82,7 @@ def _deviation_gif_clip_time_meta(path_segment, user_fps):
     }
 
 # =========================================================================
-# TARGETED SELECTION SIDE-BY-SIDE GENERATOR (WITH RED HIGHLIGHTS)
+# TARGETED SELECTION SIDE-BY-SIDE GENERATOR (YOUR CLIP LEFT | REFERENCE RIGHT)
 # =========================================================================
 
 def save_side_by_side_deviation_gif(ref_video_path, user_video_path, path_segment, body_part_text, rank_idx, run_id):
@@ -152,15 +156,13 @@ def save_side_by_side_deviation_gif(ref_video_path, user_video_path, path_segmen
             frame_ref = frame_ref.copy()
             frame_user = frame_user.copy()
             
-            # Process & Render User side (Left)
+            # Process & Render User side
             res_user = pose.process(cv2.cvtColor(frame_user, cv2.COLOR_BGR2RGB))
             if res_user.pose_landmarks:
-                # Draw skeletal connection routes
                 mp_drawing.draw_landmarks(
                     frame_user, res_user.pose_landmarks, mp_pose.POSE_CONNECTIONS,
                     landmark_drawing_spec=None, connection_drawing_spec=pose_connection_spec
                 )
-                # Paint regular vs highlighted problem nodes individually
                 for idx, lm in enumerate(res_user.pose_landmarks.landmark):
                     cx, cy = int(lm.x * canvas_w), int(lm.y * canvas_h)
                     if idx in target_joints:
@@ -168,7 +170,7 @@ def save_side_by_side_deviation_gif(ref_video_path, user_video_path, path_segmen
                     else:
                         cv2.circle(frame_user, (cx, cy), normal_joint_spec.circle_radius, normal_joint_spec.color, -1)
 
-            # Process & Render Reference side (Right)
+            # Process & Render Reference side
             res_ref = pose.process(cv2.cvtColor(frame_ref, cv2.COLOR_BGR2RGB))
             if res_ref.pose_landmarks:
                 mp_drawing.draw_landmarks(
@@ -186,6 +188,7 @@ def save_side_by_side_deviation_gif(ref_video_path, user_video_path, path_segmen
             cv2.putText(frame_user, "YOUR CLIP", (15, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2, cv2.LINE_AA)
             cv2.putText(frame_ref, "REFERENCE", (15, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2, cv2.LINE_AA)
             
+            # 🎯 CONFIRMED: Your clip on the left, Reference guide on the right
             stitched_canvas = np.hstack((frame_user, frame_ref))
             
             cv2.putText(stitched_canvas, f"DISCREPANCY DETECTED: {body_part_text.upper()}", (20, canvas_h - 15),
