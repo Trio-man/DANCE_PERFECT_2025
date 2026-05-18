@@ -41,13 +41,12 @@ def compress_video_storage_optimized(input_path, output_path, target_fps=30):
     command = [
         'ffmpeg', '-y',
         '-i', input_path,
-        # Force 30fps for stable DTW math, scale down to 480p vertical resolution
         '-vf', f'fps={target_fps},scale=-2:480',
         '-vcodec', 'libx264',
-        '-crf', '28',         # 28 provides highly efficient compression while retaining pose clarity
-        '-preset', 'fast',     # Quick processing speed to keep API responses snappy
-        '-pix_fmt', 'yuv420p', # Maximizes compatibility with OpenCV/MediaPipe
-        '-an',                 # Strip audio tracking entirely to save even more space
+        '-crf', '28',         
+        '-preset', 'fast',     
+        '-pix_fmt', 'yuv420p', 
+        '-an',                 
         output_path
     ]
     
@@ -94,7 +93,7 @@ def compare_motion_csvs_dtw(ref_csv_path, user_csv_path, ref_fps, user_fps):
     Simulated DTW analysis engine. Replace this internal mock data logic 
     with your actual MediaPipe coordinate matrix distance logic.
     """
-    ref_len = 1800 if ref_fps == 30 else 3600  # Default scale fallback for a 1-min clip
+    ref_len = 1800 if ref_fps == 30 else 3600  
     user_len = 1800 if user_fps == 30 else 3600
     
     simulated_distance = 12.4
@@ -163,7 +162,7 @@ def process_videos_test():
 
         out_ref_csv = os.path.join(UPLOAD_FOLDER, f"{run_id}_ref.csv")
         out_user_csv = os.path.join(UPLOAD_FOLDER, f"{run_id}_user.csv")
-        pd.DataFrame().to_csv(out_ref_csv) # Placeholder tracking targets
+        pd.DataFrame().to_csv(out_ref_csv) 
         pd.DataFrame().to_csv(out_user_csv)
 
         # 3. Dynamic Alignment Analysis Logic
@@ -172,13 +171,14 @@ def process_videos_test():
         raw_deviations = analysis_results.get("detected_deviations", [])
         deviation_moments_ui = []
         
-        # Scrape all files matching the background processor's prefix schema
-        all_gifs = glob.glob(os.path.join(DEVIATION_GIFS_FOLDER, "deviation_rank*.gif"))
+        # ─────────────────────────────────────────────────────────────────
+        # 🎯 THE FIX: FILTER ASS-SET FILES STRICTLY BY THIS ACTIVE RUN_ID
+        # ─────────────────────────────────────────────────────────────────
+        # Scrapes only the files belonging to this unique execution run to prevent old loops
+        all_gifs = glob.glob(os.path.join(DEVIATION_GIFS_FOLDER, f"deviation_rank*_{run_id}.gif"))
         
-        # Sort files based on modification timestamps (newest additions prioritized first)
+        # Sort files based on modification timestamps
         all_gifs.sort(key=os.path.getmtime, reverse=True)
-        
-        # Isolate the newest 3 clips rendered on disk
         latest_gifs = all_gifs[:3]
         
         for idx, dev in enumerate(raw_deviations[:3]):
@@ -197,7 +197,6 @@ def process_videos_test():
                 path_sample_start = user_start
                 path_sample_end = user_start + len(path_segment)
 
-            # Map index array indices straight into 'deviation_rank1_', 'deviation_rank2_', etc.
             target_rank_prefix = f"deviation_rank{idx+1}_"
             matched_filename = None
             
@@ -207,13 +206,10 @@ def process_videos_test():
                     matched_filename = base_name
                     break
             
-            # Smart structural string fallback configuration to protect pipeline parsing logs
+            # 🎯 FIXED: Ensure backup file strings track the run_id dynamically as well
             if not matched_filename:
-                import datetime
-                fallback_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                matched_filename = f"deviation_rank{idx+1}_{fallback_time}.gif"
+                matched_filename = f"deviation_rank{idx+1}_{run_id}.gif"
 
-            # 🎯 FIXED: Stripped the hardcoded duckdns domain. Returns just the raw filename string.
             gif_path = matched_filename
             
             deviation_moments_ui.append({
@@ -262,10 +258,6 @@ def process_videos_test():
 
 @app.route('/deviation_gifs/<path:filename>')
 def serve_deviation_gifs(filename):
-    """
-    🎯 FIXED: Points directly to your secure production asset storage location
-    instead of the old local execution context folder.
-    """
     return send_from_directory(DEVIATION_GIFS_FOLDER, filename, mimetype='image/gif')
 
 
