@@ -4,7 +4,7 @@ import glob
 import logging
 import subprocess
 import pandas as pd
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 
 app = Flask(__name__)
 
@@ -233,6 +233,21 @@ def process_videos_test():
             "message": "Internal processing engine error.",
             "error_details": str(e)
         }), 500
+
+
+# =========================================================================
+# STATIC FILE SERVING FOR GENERATED DEVIATION CLIPS
+# =========================================================================
+
+@app.route('/deviation_gifs/<path:filename>')
+def serve_deviation_gifs(filename):
+    """
+    🎯 FIXED: Safely intercepts browser asset inquiries targeting DuckDNS
+    and pipes requested .gif streams straight out of local disk storage.
+    """
+    gifs_directory = os.path.join(os.getcwd(), 'deviation_gifs')
+    return send_from_directory(gifs_directory, filename)
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
