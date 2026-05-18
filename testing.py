@@ -225,34 +225,45 @@ def compare_motion_csvs_dtw(ref_video_path, user_video_path, ref_fps, user_fps):
     return analysis_results, dtw_path
 
 # =========================================================================
-# PHYSICAL DEVIATION VIDEO CHOPPER & GIF SLICER WITH AI SKELETON RENDER
+# SIDE-BY-SIDE VISUAL CHOPPER & GIF SLICER WITH SKELETON RENDER
 # =========================================================================
 
-def save_deviation_clip_as_gif(video_path, start_frame, end_frame, rank_idx, run_id):
+def save_deviation_clip_as_gif(ref_video_path, user_video_path, path_segment, rank_idx, run_id):
     """
-    🎯 AI VISUAL OVERLAY GENERATOR
-    Cuts problem windows, tracks poses, draws full diagnostic skeletons,
-    and exports a clear dashboard-ready looping web animation.
+    🎯 SIDE-BY-SIDE AI VISUAL COMPARISON GENERATOR
+    Reads matching frames from both videos based on the DTW alignment path segment,
+    draws MediaPipe tracking skeletons on both, stitches them horizontally, and outputs a comparison GIF.
     """
     mp_drawing = mp.solutions.drawing_utils
     mp_drawing_styles = mp.solutions.drawing_styles
     
-    cap = cv2.VideoCapture(video_path)
+    cap_ref = cv2.VideoCapture(ref_video_path)
+    cap_user = cv2.VideoCapture(user_video_path)
     frames = []
-    current_frame = 0
+    
+    # Target uniform frame dimensions for each side of the panel
+    target_w, target_h = 360, 480
     
     with mp_pose.Pose(static_image_mode=False, min_detection_confidence=0.5) as pose:
-        while cap.isOpened():
-            ret, frame = cap.read()
-            if not ret:
-                break
+        for ref_idx, user_idx in path_segment:
+            # Seek and extract specific matched frames from both timelines
+            cap_ref.set(cv2.CAP_PROP_POS_FRAMES, ref_idx)
+            ret_ref, frame_ref = cap_ref.read()
+            
+            cap_user.set(cv2.CAP_PROP_POS_FRAMES, user_idx)
+            ret_user, frame_user = cap_user.read()
+            
+            if not ret_ref or not ret_user:
+                continue
                 
-            # Capture frames that sit inside our deviation window
-            if start_frame <= current_frame <= end_frame:
-                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                results = pose.process(rgb_frame)
-                
-                # Draw the tracking skeleton connections directly onto our frame canvas
+            # Equalize scales
+            frame_ref = cv2.resize(frame_ref, (target_w, target_h))
+            frame_user = cv2.resize(frame_user, (target_w, target_h))
+            
+            # Process and overlay skeletons onto both feeds
+            for frame in [frame_ref, frame_user]:
+                rgb_canvas = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                results = pose.process(rgb_canvas)
                 if results.pose_landmarks:
                     mp_drawing.draw_landmarks(
                         frame,
@@ -260,32 +271,30 @@ def save_deviation_clip_as_gif(video_path, start_frame, end_frame, rank_idx, run
                         mp_pose.POSE_CONNECTIONS,
                         landmark_drawing_spec=mp_drawing_styles.get_default_pose_landmarks_style()
                     )
-                
-                # Imprint clear tracking markings onto the active matrix corner
-                cv2.putText(
-                    frame, f"DEV MOMENT #{rank_idx}", (20, 40),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2, cv2.LINE_AA
-                )
-                
-                # Resize to safe layout resolution sizes to clear rendering speed bottlenecks
-                gif_canvas = cv2.resize(frame, (640, 480))
-                rgb_gif_frame = cv2.cvtColor(gif_canvas, cv2.COLOR_BGR2RGB)
-                frames.append(rgb_gif_frame)
-                
-            if current_frame > end_frame:
-                break
-            current_frame += 1
             
-    cap.release()
+            # Text layout tags for identification
+            cv2.putText(frame_ref, "REFERENCE", (15, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2, cv2.LINE_AA)
+            cv2.putText(frame_user, "YOUR VIDEO", (15, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2, cv2.LINE_AA)
+            
+            # Stitch side-by-side horizontally
+            side_by_side = cv2.hconcat([frame_ref, frame_user])
+            
+            # Imprint deviation ranking label banner across the center intersection
+            cv2.putText(side_by_side, f"DEV #{rank_idx}", (target_w - 55, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2, cv2.LINE_AA)
+            
+            rgb_gif_frame = cv2.cvtColor(side_by_side, cv2.COLOR_BGR2RGB)
+            frames.append(rgb_gif_frame)
+            
+    cap_ref.release()
+    cap_user.release()
     
     if frames:
-        # Securely locks filename directly against the tracking execution instance id
         output_filename = f"deviation_rank{rank_idx}_{run_id}.gif"
         output_path = os.path.join(DEVIATION_GIFS_FOLDER, output_filename)
         
-        # Save compressed frames frame array into an active animation file
-        imageio.mimsave(output_path, frames, fps=15, loop=0)
-        logging.info(f"Generated dynamic asset file: {output_filename}")
+        # Save output comparison frames at 12fps loop configuration
+        imageio.mimsave(output_path, frames, fps=12, loop=0)
+        logging.info(f"Generated side-by-side comparison asset: {output_filename}")
         return output_filename
     return None
 
@@ -357,13 +366,13 @@ def process_videos_test():
                 path_sample_end = user_start + len(path_segment)
 
             # ─────────────────────────────────────────────────────────────────
-            # 🎯 GENERATING INTERPOLATED DEVIATION VIDEO Slices WITH OVERLAYS
+            # 🎯 GENERATING SIDE-BY-SIDE DEVIATION VISUAL PANELS WITH SKELETONS
             # ─────────────────────────────────────────────────────────────────
             generated_filename = save_deviation_clip_as_gif(
-                compressed_user_path, 
-                start_frame=path_sample_start, 
-                end_frame=path_sample_end, 
-                rank_idx=idx+1, 
+                ref_video_path=compressed_ref_path,
+                user_video_path=compressed_user_path,
+                path_segment=path_segment,
+                rank_idx=idx+1,
                 run_id=run_id
             )
             
