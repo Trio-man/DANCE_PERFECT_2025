@@ -81,66 +81,43 @@ def _deviation_gif_clip_time_meta(path_segment, user_fps):
     }
 
 # =========================================================================
-# STANDARDIZED CANVAS SIDE-BY-SIDE GENERATOR WITH ISOLATED TEXT BANNER
+# ULTRA-FAST SIDE-BY-SIDE GENERATOR (THE BEST OF BOTH DESIGNS)
 # =========================================================================
 
 def save_side_by_side_deviation_gif(ref_video_path, user_video_path, path_segment, body_part_text, rank_idx, run_id):
     """
-    STANDARDIZED GRID ENGINE:
-    - Normalizes video feeds into safe, identical 360x480 container slots.
-    - Eliminates vertical/horizontal clipping across unpredictable phone aspect ratios.
-    - Appends a dedicated bottom banner row for text overlays to guarantee zero label cropping.
+    HIGH-SPEED HYBRID VISUALIZATION ENGINE:
+    - Retains tight dynamic portrait scaling (no middle dead space from current design).
+    - Restores full skeleton rendering + oversized red variance highlights (from older design).
+    - Performance-optimized by skipping every other frame lookup to slash inference time in half.
     """
     mp_drawing = mp.solutions.drawing_utils
     
     cap_ref = cv2.VideoCapture(ref_video_path)
     cap_user = cv2.VideoCapture(user_video_path)
     
-    # Define a rock-solid standardized container slot for portrait mode video feeds
-    slot_w = 360
-    slot_h = 480
+    orig_w = int(cap_user.get(cv2.CAP_PROP_FRAME_WIDTH)) or 480
+    orig_h = int(cap_user.get(cv2.CAP_PROP_FRAME_HEIGHT)) or 640
+    
+    canvas_h = 400
+    canvas_w = int((orig_w / orig_h) * canvas_h)
+    if canvas_w % 2 != 0: canvas_w += 1 
 
-    def fit_in_standard_slot(frame, target_w, target_h):
-        """Resizes proportionally and pads with black bars to fill the exact slot size"""
+    def letterbox_frame_smart(frame, target_w, target_h):
         h, w = frame.shape[:2]
-        scale = min(target_w / w, target_h / h)
-        new_w, new_h = int(w * scale), int(h * scale)
+        scale = target_h / h  
+        new_w = int(w * scale)
+        resized = cv2.resize(frame, (new_w, target_h))
         
-        resized = cv2.resize(frame, (new_w, new_h))
-        
+        if new_w == target_w:
+            return resized
         padded = np.zeros((target_h, target_w, 3), dtype=np.uint8)
-        x_offset = (target_w - new_w) // 2
-        y_offset = (target_h - new_h) // 2
-        padded[y_offset:y_offset+new_h, x_offset:x_offset+new_w] = resized
-        return padded, scale, x_offset, y_offset
+        x_offset = max(0, (target_w - new_w) // 2)
+        use_w = min(target_w, new_w)
+        padded[:, x_offset:x_offset+use_w] = resized[:, :use_w]
+        return padded
 
-    # Capture and instantly normalize frame blocks
-    needed_ref = sorted(list(set(pt[0] for pt in path_segment)))
-    needed_user = sorted(list(set(pt[1] for pt in path_segment)))
-    
-    ref_frames, user_frames = {}, {}
-    ref_meta, user_meta = {}, {}
-    
-    for f_idx in needed_ref:
-        cap_ref.set(cv2.CAP_PROP_POS_FRAMES, f_idx)
-        ret, frame = cap_ref.read()
-        if ret:
-            padded, scale, x_off, y_off = fit_in_standard_slot(frame, slot_w, slot_h)
-            ref_frames[f_idx] = padded
-            ref_meta[f_idx] = (scale, x_off, y_off)
-        
-    for f_idx in needed_user:
-        cap_user.set(cv2.CAP_PROP_POS_FRAMES, f_idx)
-        ret, frame = cap_user.read()
-        if ret:
-            padded, scale, x_off, y_off = fit_in_standard_slot(frame, slot_w, slot_h)
-            user_frames[f_idx] = padded
-            user_meta[f_idx] = (scale, x_off, y_off)
-        
-    cap_ref.release()
-    cap_user.release()
-
-    # Map joint node indices
+    # Identify tracking targets
     target_joints = []
     bp_lower = body_part_text.lower()
     if "shoulder" in bp_lower:
@@ -150,13 +127,37 @@ def save_side_by_side_deviation_gif(ref_video_path, user_video_path, path_segmen
     elif "knee" in bp_lower or "foot" in bp_lower or "placement" in bp_lower:
         target_joints = [25, 26, 27, 28, 29, 30, 31, 32]
 
+    # SPEED BOOST: Downsample the path segment immediately. 
+    # Since the final output targets 10 FPS, analyzing every single frame sequence is redundant overhead.
+    optimized_path = path_segment[::2]
+
+    needed_ref = sorted(list(set(pt[0] for pt in optimized_path)))
+    needed_user = sorted(list(set(pt[1] for pt in optimized_path)))
+    
+    ref_frames, user_frames = {}, {}
+    
+    for f_idx in needed_ref:
+        cap_ref.set(cv2.CAP_PROP_POS_FRAMES, f_idx)
+        ret, frame = cap_ref.read()
+        if ret: ref_frames[f_idx] = letterbox_frame_smart(frame, canvas_w, canvas_h)
+        
+    for f_idx in needed_user:
+        cap_user.set(cv2.CAP_PROP_POS_FRAMES, f_idx)
+        ret, frame = cap_user.read()
+        if ret: user_frames[f_idx] = letterbox_frame_smart(frame, canvas_w, canvas_h)
+        
+    cap_ref.release()
+    cap_user.release()
+
+    # Legacy-style explicit specs
+    pose_connection_spec = mp_drawing.DrawingSpec(color=(240, 240, 240), thickness=2)
+    normal_joint_spec = mp_drawing.DrawingSpec(color=(50, 220, 50), thickness=-1, circle_radius=3)
+    error_joint_spec = mp_drawing.DrawingSpec(color=(0, 0, 255), thickness=-1, circle_radius=6) 
+
     frames_combined = []
-    pose_connection_spec = mp_drawing.DrawingSpec(color=(220, 220, 220), thickness=2, circle_radius=1)
-    normal_joint_spec = mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=2, circle_radius=2)
-    error_joint_spec = mp_drawing.DrawingSpec(color=(0, 0, 255), thickness=4, circle_radius=5) 
 
     with mp_pose.Pose(static_image_mode=False, min_detection_confidence=0.4) as pose:
-        for ref_idx, user_idx in path_segment:
+        for ref_idx, user_idx in optimized_path:
             frame_ref = ref_frames.get(ref_idx)
             frame_user = user_frames.get(user_idx)
             
@@ -166,56 +167,53 @@ def save_side_by_side_deviation_gif(ref_video_path, user_video_path, path_segmen
             frame_ref = frame_ref.copy()
             frame_user = frame_user.copy()
             
-            # --- RENDER USER TRACKING WITH ACCURATE SCALED COORDINATES ---
+            # --- PROCESS USER DATA TRACKING ---
             res_user = pose.process(cv2.cvtColor(frame_user, cv2.COLOR_BGR2RGB))
             if res_user.pose_landmarks:
+                # Render full skeleton wireframe with green base joints
                 mp_drawing.draw_landmarks(
                     frame_user, res_user.pose_landmarks, mp_pose.POSE_CONNECTIONS,
-                    landmark_drawing_spec=None, connection_drawing_spec=pose_connection_spec
+                    landmark_drawing_spec=normal_joint_spec, connection_drawing_spec=pose_connection_spec
                 )
+                # Overlap large red dots directly onto variance points
                 for idx, lm in enumerate(res_user.pose_landmarks.landmark):
-                    cx, cy = int(lm.x * slot_w), int(lm.y * slot_h)
-                    if idx in target_joints:
+                    if idx in target_joints and lm.visibility > 0.5:
+                        cx, cy = int(lm.x * canvas_w), int(lm.y * canvas_h)
                         cv2.circle(frame_user, (cx, cy), error_joint_spec.circle_radius, error_joint_spec.color, -1)
-                    else:
-                        cv2.circle(frame_user, (cx, cy), normal_joint_spec.circle_radius, normal_joint_spec.color, -1)
 
-            # --- RENDER REFERENCE TRACKING WITH ACCURATE SCALED COORDINATES ---
+            # --- PROCESS REFERENCE DATA TRACKING ---
             res_ref = pose.process(cv2.cvtColor(frame_ref, cv2.COLOR_BGR2RGB))
             if res_ref.pose_landmarks:
                 mp_drawing.draw_landmarks(
                     frame_ref, res_ref.pose_landmarks, mp_pose.POSE_CONNECTIONS,
-                    landmark_drawing_spec=None, connection_drawing_spec=pose_connection_spec
+                    landmark_drawing_spec=normal_joint_spec, connection_drawing_spec=pose_connection_spec
                 )
                 for idx, lm in enumerate(res_ref.pose_landmarks.landmark):
-                    cx, cy = int(lm.x * slot_w), int(lm.y * slot_h)
-                    if idx in target_joints:
+                    if idx in target_joints and lm.visibility > 0.5:
+                        cx, cy = int(lm.x * canvas_w), int(lm.y * canvas_h)
                         cv2.circle(frame_ref, (cx, cy), error_joint_spec.circle_radius, error_joint_spec.color, -1)
-                    else:
-                        cv2.circle(frame_ref, (cx, cy), normal_joint_spec.circle_radius, normal_joint_spec.color, -1)
 
-            # Draw the permanent category panel headers inside safe zones
-            cv2.putText(frame_user, "YOUR CLIP", (20, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2, cv2.LINE_AA)
-            cv2.putText(frame_ref, "REFERENCE", (20, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2, cv2.LINE_AA)
+            # Draw upper text bounding headers with dark safety bars
+            for img, text, color in [(frame_user, "YOUR CLIP", (50, 50, 255)), (frame_ref, "REFERENCE", (50, 255, 50))]:
+                cv2.rectangle(img, (0, 0), (canvas_w, 45), (12, 12, 12), -1)
+                cv2.putText(img, text, (15, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.55, color, 2, cv2.LINE_AA)
             
-            # Fuse the two standard slots side by side (Total width: 720px)
-            video_strip = np.hstack((frame_user, frame_ref))
+            # Stack layout cleanly flush in the center
+            stitched_canvas = np.hstack((frame_user, frame_ref))
             
-            # Create the dedicated bottom banner bar (720px wide, 45px tall)
-            banner_bar = np.zeros((45, slot_w * 2, 3), dtype=np.uint8)
+            # Draw bottom label bar
+            total_w = canvas_w * 2
+            cv2.rectangle(stitched_canvas, (0, canvas_h - 40), (total_w, canvas_h), (15, 15, 15), -1)
+            cv2.putText(stitched_canvas, f"CRITICAL VARIANCE DETECTED: {body_part_text.upper()}", (20, canvas_h - 15),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 200, 200), 1, cv2.LINE_AA)
             
-            # Print text into the dedicated banner box with breathing room
-            cv2.putText(banner_bar, f"DISCREPANCY DETECTED: {body_part_text.upper()}", (20, 28),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
-            
-            # Vertically stack video elements safely on top of the banner
-            final_canvas = np.vstack((video_strip, banner_bar))
-            frames_combined.append(cv2.cvtColor(final_canvas, cv2.COLOR_BGR2RGB))
+            frames_combined.append(cv2.cvtColor(stitched_canvas, cv2.COLOR_BGR2RGB))
 
     if frames_combined:
         output_filename = f"deviation_rank{rank_idx}_{run_id}.gif"
         output_path = os.path.join(DEVIATION_GIFS_FOLDER, output_filename)
-        imageio.mimsave(output_path, frames_combined[::2], fps=10, loop=0)
+        # We already downsampled above, so write frames directly without extra slicing
+        imageio.mimsave(output_path, frames_combined, fps=10, loop=0)
         return output_filename
     return None
 
