@@ -207,7 +207,6 @@ export default function UploadPage() {
       formData.append('user_fps', '30');
       formData.append('user_motion_fps', '30');
 
-      // Hits your local internal route.ts proxy directly
       const response = await fetch('/api/analyze', {
         method: 'POST',
         body: formData,
@@ -257,31 +256,15 @@ export default function UploadPage() {
       <div className="w-full max-w-6xl flex flex-col gap-6 py-10">
         {cmsError && <p className="text-center text-sm text-red-600">CMS load warning: {cmsError}</p>}
 
-        {/* 🌟 FIXED: Rendered About and Guidelines dynamically side-by-side inside this container */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {aboutPage && (
-            <motion.div 
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-white/60 border border-white/70 rounded-xl p-6"
-            >
-              <h2 className="text-lg font-semibold mb-2" style={{ color: primaryColor }}>{aboutPage.title}</h2>
-              <p className="text-slate-700 whitespace-pre-line text-sm leading-relaxed">{aboutPage.body}</p>
-            </motion.div>
-          )}
+        {/* 1. Guidelines (Top Element) */}
+        {guidelinesPage && (
+          <motion.div className="bg-white/60 border border-white/70 rounded-xl p-6">
+            <h2 className="text-lg font-semibold mb-2" style={{ color: primaryColor }}>{guidelinesPage.title}</h2>
+            <p className="text-slate-700 whitespace-pre-line text-sm leading-relaxed">{guidelinesPage.body}</p>
+          </motion.div>
+        )}
 
-          {guidelinesPage && (
-            <motion.div 
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-white/60 border border-white/70 rounded-xl p-6"
-            >
-              <h2 className="text-lg font-semibold mb-2" style={{ color: primaryColor }}>{guidelinesPage.title}</h2>
-              <p className="text-slate-700 whitespace-pre-line text-sm leading-relaxed">{guidelinesPage.body}</p>
-            </motion.div>
-          )}
-        </div>
-
+        {/* 2. Main Upload Processing Hub */}
         <motion.div className="bg-white/70 backdrop-blur-lg border border-white/60 shadow-lg rounded-2xl p-8 relative">
           <AnimatePresence>
             {loading && (
@@ -327,6 +310,7 @@ export default function UploadPage() {
           </div>
         </motion.div>
 
+        {/* 3. FAQs Section */}
         {faqs.length > 0 && (
           <motion.div className="bg-white/60 border border-white/70 rounded-xl p-6">
             <h2 className="text-lg font-semibold mb-3" style={{ color: primaryColor }}>FAQs</h2>
@@ -338,6 +322,18 @@ export default function UploadPage() {
                 </div>
               ))}
             </div>
+          </motion.div>
+        )}
+
+        {/* 4. 🌟 FIXED: About Page Section (Positioned cleanly below FAQs at the very bottom) */}
+        {aboutPage && (
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-white/60 border border-white/70 rounded-xl p-6"
+          >
+            <h2 className="text-lg font-semibold mb-2" style={{ color: primaryColor }}>{aboutPage.title}</h2>
+            <p className="text-slate-700 whitespace-pre-line text-sm leading-relaxed">{aboutPage.body}</p>
           </motion.div>
         )}
       </div>
