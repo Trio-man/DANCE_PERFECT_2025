@@ -119,9 +119,9 @@ function ResultsContent() {
         <div className="space-y-6">
           <h3 className="text-2xl font-bold text-slate-800 ml-2">Visual Breakdown</h3>
           {moments.map((moment, idx) => {
-            // 🎯 FIXED: Directs relative media requests straight to your active DuckDNS storage location
             const backendDomain = "https://danceperfect.duckdns.org";
 
+            // Normalizes paths cleanly regardless of string generation source format
             const gifUrl = moment.gif_path.startsWith('http')
               ? moment.gif_path
               : `${backendDomain}/deviation_gifs/${moment.gif_path.split('/').pop()}`;
@@ -135,13 +135,16 @@ function ResultsContent() {
                 className="bg-white/80 backdrop-blur-md rounded-2xl shadow-lg border border-white/60 overflow-hidden flex flex-col md:flex-row"
               >
                 {/* GIF Preview Section */}
-                <div className="w-full md:w-1/2 bg-black aspect-video flex items-center justify-center">
+                <div className="w-full md:w-1/2 bg-black aspect-video flex items-center justify-center overflow-hidden">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img 
                     src={gifUrl} 
                     alt={`Moment Rank ${moment.rank}`}
-                    className="w-full h-full object-contain"
+                    className="w-full h-full object-cover"
+                    crossOrigin="anonymous" // 🎯 FIXED: Tells browser to securely accept CORS cross-domain image payload streams
+                    loading="eager"         // 🎯 FIXED: Forces fast image asset decoding rendering
                     onError={(e) => {
+                      // Fallback protection if network drops out mid-session
                       e.currentTarget.src = 'https://placehold.co/600x400/7c3aed/ffffff?text=AI+Visual+Unavailable';
                     }}
                   />
