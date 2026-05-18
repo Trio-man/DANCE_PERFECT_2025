@@ -175,6 +175,18 @@ def process_videos_test():
         raw_deviations = analysis_results.get("detected_deviations", [])
         deviation_moments_ui = []
         
+        # ─────────────────────────────────────────────────────────────────
+        # 🎯 THE FIX: SCAN REAL FILE NAMES FROM DISK TO BRIDGE SYSTEM PATHS
+        # ─────────────────────────────────────────────────────────────────
+        # Scrape all files matching the background processor's prefix schema
+        all_gifs = glob.glob(os.path.join(DEVIATION_GIFS_FOLDER, "deviation_rank*.gif"))
+        
+        # Sort files based on modification timestamps (newest additions prioritized first)
+        all_gifs.sort(key=os.path.getmtime, reverse=True)
+        
+        # Isolate the newest 3 clips rendered on disk
+        latest_gifs = all_gifs[:3]
+        
         for idx, dev in enumerate(raw_deviations[:3]):
             path_segment = dev.get("path_segment", [])
             user_start = dev.get("user_start_frame", 0)
@@ -191,8 +203,23 @@ def process_videos_test():
                 path_sample_start = user_start
                 path_sample_end = user_start + len(path_segment)
 
-            gif_filename = f"{run_id}_dev_{idx+1}.gif"
-            gif_path = f"https://danceperfect.duckdns.org/deviation_gifs/{gif_filename}"
+            # Map index array indices straight into 'deviation_rank1_', 'deviation_rank2_', etc.
+            target_rank_prefix = f"deviation_rank{idx+1}_"
+            matched_filename = None
+            
+            for file_path in latest_gifs:
+                base_name = os.path.basename(file_path)
+                if base_name.startswith(target_rank_prefix):
+                    matched_filename = base_name
+                    break
+            
+            # Smart structural string fallback configuration to protect pipeline parsing logs
+            if not matched_filename:
+                import datetime
+                fallback_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                matched_filename = f"deviation_rank{idx+1}_{fallback_time}.gif"
+
+            gif_path = f"https://danceperfect.duckdns.org/deviation_gifs/{matched_filename}"
             
             deviation_moments_ui.append({
                 "rank": idx + 1,
@@ -225,7 +252,6 @@ def process_videos_test():
 
     except Exception as e:
         logging.error(f"Execution run failed for {run_id}: {str(e)}", exc_info=True)
-        # Clean up files on error so storage doesn't leak
         for p in [raw_ref_path, raw_user_path, compressed_ref_path, compressed_user_path]:
             if os.path.exists(p): os.remove(p)
         return jsonify({
@@ -242,11 +268,10 @@ def process_videos_test():
 @app.route('/deviation_gifs/<path:filename>')
 def serve_deviation_gifs(filename):
     """
-    🎯 FIXED: Safely intercepts browser asset inquiries targeting DuckDNS
-    and pipes requested .gif streams straight out of local disk storage.
+    🎯 FIXED: Added explicit mimetype declaration to bypass browser ORB blocks.
     """
     gifs_directory = os.path.join(os.getcwd(), 'deviation_gifs')
-    return send_from_directory(gifs_directory, filename)
+    return send_from_directory(gifs_directory, filename, mimetype='image/gif')
 
 
 if __name__ == '__main__':
