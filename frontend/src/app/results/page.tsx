@@ -14,19 +14,25 @@ interface DeviationMoment {
   recommendation: string;
   user_time_clip_label: string;
   gif_path: string;
+  path_sample_start?: number;
+  path_sample_end?: number;
 }
 
+// 🎯 FIXED: Types updated to match the flat structure sent by the proxy
 interface AnalysisData {
-  comparison?: {
-    similarity_score: number;
-    deviation_moments_ui: {
-      summaries: {
-        what_went_well: string;
-        where_to_improve: string;
-      };
-      deviation_moments: DeviationMoment[];
-    };
+  status: string;
+  run_id: string;
+  ref_effective_fps: number;
+  user_effective_fps: number;
+  ref_sequence_length: number;
+  user_sequence_length: number;
+  dtw_distance: number;
+  dtw_similarity_score: number;
+  summaries: {
+    what_went_well: string;
+    where_to_improve: string;
   };
+  deviation_moments: DeviationMoment[];
 }
 
 function ResultsContent() {
@@ -52,9 +58,10 @@ function ResultsContent() {
 
   if (!data) return null;
 
-  const score = data?.comparison?.similarity_score ?? 0;
-  const summaries = data?.comparison?.deviation_moments_ui?.summaries;
-  const moments = data?.comparison?.deviation_moments_ui?.deviation_moments ?? [];
+  // 🎯 FIXED: Variables assigned from direct flat keys rather than nested paths
+  const score = data.dtw_similarity_score ?? 0;
+  const summaries = data.summaries;
+  const moments = data.deviation_moments ?? [];
 
   return (
     <div className="min-h-screen py-10 px-4 bg-gradient-to-br from-[#d6c1ff] via-[#cde7ff] to-white">
@@ -114,8 +121,7 @@ function ResultsContent() {
         <div className="space-y-6">
           <h3 className="text-2xl font-bold text-slate-800 ml-2">Visual Breakdown</h3>
           {moments.map((moment, idx) => {
-            // 🌟 THE CRITICAL FIX: If the path from backend starts with 'http', use it completely intact!
-            // This bypasses the problematic raw IP base URL for the assets.
+            // Evaluates absolute URL path completely intact
             const gifUrl = moment.gif_path.startsWith('http')
               ? moment.gif_path
               : `${API_BASE_URL}/assets/${moment.gif_path.split('/').pop()}`;
@@ -130,6 +136,7 @@ function ResultsContent() {
               >
                 {/* GIF Preview Section */}
                 <div className="w-full md:w-1/2 bg-black aspect-video flex items-center justify-center">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img 
                     src={gifUrl} 
                     alt={`Moment Rank ${moment.rank}`}
