@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import mediapipe as mp
 import imageio
+import re
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS  # ✅ Added for Cross-Origin Resource Sharing
 from fastdtw import fastdtw
@@ -21,16 +22,20 @@ app = Flask(__name__)
 # =========================================================================
 # This explicitly allows your Vercel frontend and local development machine 
 # to securely access your backend endpoints and pass browser security checks.
-origins = [
-    "http://localhost:3000",                  # Next.js Local Development
-    "https://danceperfect.vercel.app",        # Your Live Vercel Production Site
-]
+def is_allowed_origin(origin):
+    if not origin:
+        return False
+    allowed = [
+        "http://localhost:3000",
+        "https://danceperfect.vercel.app",
+    ]
+    if origin in allowed:
+        return True
+    if re.match(r"https://danceperfect-.*\.vercel\.app", origin):
+        return True
+    return False
 
-CORS(
-    app, 
-    resources={r"/*": {"origins": origins}},
-    supports_credentials=True                 # Required to forward auth session tokens
-)
+CORS(app, origins=is_allowed_origin, supports_credentials=True)
 
 # =========================================================================
 # CONFIGURATIONS & STORAGE CONSTANTS
