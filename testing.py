@@ -58,8 +58,8 @@ mp_pose = mp.solutions.pose
 # =========================================================================
 # Hardcoded client fallback pointing directly to your primary Supabase project instance.
 # For optimal security practices later, you can swap these strings out for os.environ.get().
-SUPABASE_URL = "https://vycitegtmnlrsrztrhvk.supabase.co"
-SUPABASE_SERVICE_ROLE_KEY = "YOUR_SUPABASE_SERVICE_ROLE_KEY" # ⚠️ Paste your service role bypass key here
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
 supabase_admin: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
