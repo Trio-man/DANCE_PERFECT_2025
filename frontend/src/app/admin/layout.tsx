@@ -78,67 +78,66 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <div className="min-h-screen bg-gradient-to-br from-[#d6c1ff] via-[#cde7ff] to-white">
       <div className="max-w-7xl mx-auto px-4 py-6">
         <div className="bg-white/70 backdrop-blur-lg border border-white/60 shadow-lg rounded-2xl overflow-hidden">
-          {/* Top bar */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-white/60">
-            <div className="flex items-center gap-3">
-              <div className="h-9 w-9 rounded-xl bg-white/70 border border-white/60 flex items-center justify-center font-bold">
-                DP
-              </div>
-              <div>
-                <div className="font-bold text-lg">DancePerfect Admin</div>
-                <div className="text-xs text-slate-600">
-                  Signed in as {user?.email?.split('@')[0]} •{' '}
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-black/5 border border-black/10">
-                    {role}
-                  </span>
-                </div>
-              </div>
-            </div>
+{/* Top bar */}
+<div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-4 sm:px-6 py-4 border-b border-white/60 gap-3">
+  <div className="flex items-center gap-3">
+    <div className="h-9 w-9 rounded-xl bg-white/70 border border-white/60 flex items-center justify-center font-bold shrink-0">
+      DP
+    </div>
+    <div>
+      <div className="font-bold text-base sm:text-lg">DancePerfect Admin</div>
+      <div className="text-xs text-slate-600">
+        Signed in as {user?.email?.split('@')[0]} •{' '}
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-black/5 border border-black/10">
+          {role}
+        </span>
+      </div>
+    </div>
+  </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => router.push('/upload')}
-                className="px-3 py-2 rounded-lg border border-slate-200 bg-white/70 text-slate-700 hover:bg-white text-sm font-medium"
-              >
-                Go to Upload
-              </button>
-              <button
-                onClick={logout}
-                className="px-3 py-2 rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
-              >
-                Logout
-              </button>
-            </div>
-          </div>
+  <div className="flex items-center gap-2 self-end sm:self-auto">
+    <button
+      onClick={() => router.push('/upload')}
+      className="px-3 py-2 rounded-lg border border-slate-200 bg-white/70 text-slate-700 hover:bg-white text-sm font-medium"
+    >
+      Go to Upload
+    </button>
+    <button
+      onClick={logout}
+      className="px-3 py-2 rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 text-sm"
+    >
+      Logout
+    </button>
+  </div>
+</div>
+{/* Body */}
+<div className="flex flex-col sm:flex-row">
+  {/* Sidebar - horizontal scroll on mobile, vertical on desktop */}
+  <aside className="sm:w-64 border-b sm:border-b-0 sm:border-r border-white/60 bg-white/40">
+    <nav className="flex sm:flex-col flex-row overflow-x-auto p-3 sm:p-4 gap-1 sm:space-y-1">
+      {nav.map((item) => {
+        const active = pathname === item.href;
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            className={[
+              'block px-3 py-2 rounded-lg border whitespace-nowrap shrink-0 text-sm',
+              active
+                ? 'bg-white/70 border-white/80 font-semibold'
+                : 'bg-transparent border-transparent hover:bg-white/50 hover:border-white/60',
+            ].join(' ')}
+          >
+            {item.label}
+          </Link>
+        );
+      })}
+    </nav>
+  </aside>
 
-          {/* Body */}
-          <div className="flex">
-            {/* Sidebar */}
-            <aside className="w-64 border-r border-white/60 bg-white/40">
-              <nav className="p-4 space-y-1">
-                {nav.map((item) => {
-                  const active = pathname === item.href;
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className={[
-                        'block px-3 py-2 rounded-lg border',
-                        active
-                          ? 'bg-white/70 border-white/80 font-semibold'
-                          : 'bg-transparent border-transparent hover:bg-white/50 hover:border-white/60',
-                      ].join(' ')}
-                    >
-                      {item.label}
-                    </Link>
-                  );
-                })}
-              </nav>
-            </aside>
-
-            {/* Content */}
-            <main className="flex-1 p-6">{children}</main>
-          </div>
+  {/* Content */}
+  <main className="flex-1 p-4 sm:p-6">{children}</main>
+</div>
         </div>
       </div>
     </div>
