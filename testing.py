@@ -422,6 +422,25 @@ def get_admin_users():
 # =========================================================================
 # RUN KICKSTART ENGINE
 # =========================================================================
+# =========================================================================
+# ADMIN DELETE (PRODUCTION DATABASE - NO MOCK CORES)
+# =========================================================================
+@app.route('/admin/runs/<run_id>', methods=['DELETE'])
+def delete_run(run_id):
+    try:
+        # Delete GIFs associated with the run
+        gif_pattern = os.path.join(DEVIATION_GIFS_FOLDER, f"*_{run_id}.gif")
+        for gif_file in glob.glob(gif_pattern):
+            os.remove(gif_file)
+            logging.info(f"Deleted GIF: {gif_file}")
+
+        # Delete from Supabase
+        supabase_admin.table("analysis_runs").delete().eq("id", run_id).execute()
+
+        return jsonify({"status": "success", "message": f"Run {run_id} deleted."}), 200
+    except Exception as e:
+        logging.error(f"Failed to delete run {run_id}: {str(e)}")
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == '__main__':
     # Make sure flask-cors package is installed (`pip install flask-cors`)
