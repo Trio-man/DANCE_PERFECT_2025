@@ -10,8 +10,8 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-// ⚠️ Change this in production (Render URL etc.)
-const BACKEND_URL = process.env.BACKEND_URL;
+// ✅ Fixed: Changed prefix to NEXT_PUBLIC_ so it securely exposes the API endpoint to the browser
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL;
 
 type ProfileRow = {
   id: string;
@@ -55,11 +55,7 @@ export default function AdminDashboardPage() {
   const [role, setRole] = useState<string>('user');
 
   const normRole = (role || '').toLowerCase().trim();
-
-  // ✅ keep deactivate for it_admin + super_admin
   const canManageUsers = ['super_admin', 'it_admin'].includes(normRole);
-
-  // ✅ only super_admin can change roles
   const canChangeRoles = normRole === 'super_admin';
 
   const [runs, setRuns] = useState<RunRow[]>([]);
@@ -67,7 +63,7 @@ export default function AdminDashboardPage() {
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // filters
+  // Filters
   const [q, setQ] = useState('');
   const [roleFilter, setRoleFilter] = useState<'all' | 'user' | 'it_admin' | 'super_admin'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
@@ -77,15 +73,6 @@ export default function AdminDashboardPage() {
     userId: '',
     nextActive: false,
   });
-
-  const totalRuns = runs.length;
-  const totalUsers = users.length;
-
-  const todayRuns = useMemo(() => {
-    const now = new Date();
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    return runs.filter((r) => new Date(r.created_at).getTime() >= startOfDay).length;
-  }, [runs]);
 
   const getEmail = (r: RunRow) => {
     if (!r.profile) return '—';
@@ -293,6 +280,13 @@ export default function AdminDashboardPage() {
     load();
   }, [router, refreshUsers]);
 
+  // Derived tracking values using useMemo arrays
+  const todayRuns = useMemo(() => {
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    return runs.filter((r) => new Date(r.created_at).getTime() >= startOfDay).length;
+  }, [runs]);
+
   const filteredUsers = useMemo(() => {
     const query = q.trim().toLowerCase();
 
@@ -312,7 +306,7 @@ export default function AdminDashboardPage() {
       .sort((a, b) => b.created_at.localeCompare(a.created_at));
   }, [users, q, roleFilter, statusFilter]);
 
-  if (loading) return <div>Loading dashboard…</div>;
+  if (loading) return <div className="p-8 text-slate-500 font-medium">Loading dashboard telemetry maps…</div>;
 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6">
@@ -320,7 +314,7 @@ export default function AdminDashboardPage() {
         <div className="bg-red-50 border border-red-200 text-red-800 rounded-xl p-3">{error}</div>
       )}
 
-      {/* ✅ KPI cards */}
+      {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white/60 border border-white/70 rounded-xl p-4">
           <div className="text-sm text-slate-600">Total Users</div>
@@ -340,7 +334,7 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
-      {/* ✅ Recent runs */}
+      {/* Recent runs */}
       <div className="bg-white/60 border border-white/70 rounded-xl p-4">
         <div className="flex items-center justify-between mb-3">
           <div className="font-bold">Recent Analysis Runs</div>
@@ -392,7 +386,7 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
-      {/* ✅ Users */}
+      {/* Users table */}
       <div className="bg-white/60 border border-white/70 rounded-xl p-4">
         <div className="flex flex-col md:flex-row md:items-center gap-3 justify-between mb-4">
           <div className="font-bold">Users</div>
@@ -488,7 +482,7 @@ export default function AdminDashboardPage() {
                         <td className="py-2 pr-3">
                           <button
                             className={[
-                              'px-3 py-1.5 rounded-lg border',
+                              'px-3 py-1.5 rounded-lg border transition-colors',
                               active
                                 ? 'bg-red-50 border-red-200 text-red-700 hover:bg-red-100'
                                 : 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100',
@@ -511,7 +505,7 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
-      {/* ✅ Confirm modal */}
+      {/* Confirmation Modal */}
       {confirm.open && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center px-4 z-50">
           <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-white/60 p-5">
