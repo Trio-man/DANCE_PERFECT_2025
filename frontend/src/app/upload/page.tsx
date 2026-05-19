@@ -206,6 +206,7 @@ export default function UploadPage() {
       formData.append('ref_fps', '30');
       formData.append('user_fps', '30');
       formData.append('user_motion_fps', '30');
+      formData.append('user_id', user?.id ?? '');
 
       const response = await fetch('/api/analyze', {
         method: 'POST',
