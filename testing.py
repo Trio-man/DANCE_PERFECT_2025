@@ -12,6 +12,7 @@ from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS  # ✅ Added for Cross-Origin Resource Sharing
 from fastdtw import fastdtw
 from scipy.spatial.distance import euclidean
+from supabase import create_client, Client  # ✅ Direct production database integration
 
 app = Flask(__name__)
 
@@ -51,6 +52,16 @@ logging.basicConfig(
 )
 
 mp_pose = mp.solutions.pose
+
+# =========================================================================
+# LIVE PRODUCTION DATABASE CONNECTION (REAL DATA ONLY)
+# =========================================================================
+# Hardcoded client fallback pointing directly to your primary Supabase project instance.
+# For optimal security practices later, you can swap these strings out for os.environ.get().
+SUPABASE_URL = "https://vycitegtmnlrsrztrhvk.supabase.co"
+SUPABASE_SERVICE_ROLE_KEY = "YOUR_SUPABASE_SERVICE_ROLE_KEY" # ⚠️ Paste your service role bypass key here
+
+supabase_admin: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
 # =========================================================================
 # SPEED-OPTIMIZED FFMPEG COMPRESSION UTILITY
@@ -280,7 +291,7 @@ def compare_motion_csvs_dtw(ref_video_path, user_video_path, ref_fps, user_fps):
     }, dtw_path
 
 # =========================================================================
-# FLASK ROUTE ENDPOINT
+# FLASK ROUTE ENDPOINTS
 # =========================================================================
 
 @app.route('/analyze', methods=['POST'])
@@ -364,6 +375,33 @@ def process_videos_test():
 @app.route('/deviation_gifs/<path:filename>')
 def serve_deviation_gifs(filename):
     return send_from_directory(DEVIATION_GIFS_FOLDER, filename, mimetype='image/gif')
+
+# =========================================================================
+# ADMIN MANAGEMENT ENDPOINTS (PRODUCTION DATABASE - NO MOCK CORES)
+# =========================================================================
+
+@app.route('/admin/users', methods=['GET'])
+def get_admin_users():
+    """
+    Queries real-time profile records from the database using service-level client initialization.
+    """
+    try:
+        # Directly targets your database schema table named 'profiles'
+        # Change "profiles" to "users" or your exact database target name if different
+        response = supabase_admin.table("profiles").select("*").execute()
+        
+        return jsonify({
+            "status": "success",
+            "users": response.data  # Returns raw real data array back to frontend component
+        }), 200
+
+    except Exception as e:
+        logging.error(f"Live database profile fetch failed: {str(e)}")
+        return jsonify({"status": "error", "message": f"Database interaction fault: {str(e)}"}), 500
+
+# =========================================================================
+# RUN KICKSTART ENGINE
+# =========================================================================
 
 if __name__ == '__main__':
     # Make sure flask-cors package is installed (`pip install flask-cors`)
