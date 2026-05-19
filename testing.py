@@ -9,10 +9,27 @@ import pandas as pd
 import mediapipe as mp
 import imageio
 from flask import Flask, request, jsonify, send_from_directory
+from flask_cors import CORS  # ✅ Added for Cross-Origin Resource Sharing
 from fastdtw import fastdtw
 from scipy.spatial.distance import euclidean
 
 app = Flask(__name__)
+
+# =========================================================================
+# CORS MIDDLEWARE PIPELINE CONFIGURATION
+# =========================================================================
+# This explicitly allows your Vercel frontend and local development machine 
+# to securely access your backend endpoints and pass browser security checks.
+origins = [
+    "http://localhost:3000",                  # Next.js Local Development
+    "https://danceperfect.vercel.app",        # Your Live Vercel Production Site
+]
+
+CORS(
+    app, 
+    resources={r"/*": {"origins": origins}},
+    supports_credentials=True                 # Required to forward auth session tokens
+)
 
 # =========================================================================
 # CONFIGURATIONS & STORAGE CONSTANTS
@@ -349,4 +366,5 @@ def serve_deviation_gifs(filename):
     return send_from_directory(DEVIATION_GIFS_FOLDER, filename, mimetype='image/gif')
 
 if __name__ == '__main__':
+    # Make sure flask-cors package is installed (`pip install flask-cors`)
     app.run(host='0.0.0.0', port=5000, debug=True)
