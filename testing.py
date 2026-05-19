@@ -22,21 +22,11 @@ app = Flask(__name__)
 # =========================================================================
 # This explicitly allows your Vercel frontend and local development machine 
 # to securely access your backend endpoints and pass browser security checks.
-def is_allowed_origin(origin):
-    if not origin:
-        return False
-    allowed = [
-        "http://localhost:3000",
-        "https://danceperfect.vercel.app",
-    ]
-    if origin in allowed:
-        return True
-    if re.match(r"https://danceperfect-.*\.vercel\.app", origin):
-        return True
-    return False
-
-CORS(app, origins=is_allowed_origin, supports_credentials=True)
-
+CORS(app, origins=[
+    "http://localhost:3000",
+    "https://danceperfect.vercel.app",
+    r"https://danceperfect-.*\.vercel\.app",
+], supports_credentials=True)
 # =========================================================================
 # CONFIGURATIONS & STORAGE CONSTANTS
 # =========================================================================
