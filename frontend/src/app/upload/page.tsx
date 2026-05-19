@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { createClient, Session, User } from '@supabase/supabase-js';
-import { FiArrowLeft, FiLogOut, FiUploadCloud, FiList } from 'react-icons/fi';
+import { createClient, User } from '@supabase/supabase-js';
+import { FiArrowLeft, FiLogOut, FiUploadCloud, FiX } from 'react-icons/fi';
+import { MdAdminPanelSettings } from 'react-icons/md';
 
 // ─────────────────────────────────────────────
 // SUPABASE CLIENT
@@ -56,8 +57,17 @@ function VideoUpload({ label, preview, setFile, loading }: VideoUploadProps) {
         initial={{ scale: 0.95, opacity: 0, y: 20 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="flex-1 border rounded-xl p-6 bg-gray-50"
+        className="flex-1 border rounded-xl p-6 bg-gray-50 relative"
       >
+        {/* ✅ X button to remove video */}
+        <button
+          onClick={() => setFile(null)}
+          disabled={loading}
+          className="absolute top-3 right-3 z-10 bg-white border border-slate-200 rounded-full p-1 shadow hover:bg-red-50 hover:border-red-300 hover:text-red-600 transition-colors"
+          title="Remove video"
+        >
+          <FiX size={16} />
+        </button>
         <h2 className="text-lg font-semibold mb-3 text-center">{label}</h2>
         <div className="w-full h-36 md:h-80 rounded-lg overflow-hidden border border-slate-300 bg-black">
           <video src={preview} controls className="w-full h-full object-contain" />
@@ -94,6 +104,7 @@ export default function UploadPage() {
 
   // Auth
   const [user, setUser] = useState<User | null>(null);
+  const [userRole, setUserRole] = useState<string>('user');
 
   // Videos
   const [dancerVideo, setDancerVideo] = useState<File | null>(null);
@@ -112,6 +123,8 @@ export default function UploadPage() {
   const [faqs, setFaqs] = useState<FaqRow[]>([]);
   const [cmsError, setCmsError] = useState<string | null>(null);
 
+  const isAdmin = ['super_admin', 'it_admin'].includes(userRole);
+
   // Auth Hook check
   useEffect(() => {
     const checkUser = async () => {
@@ -120,6 +133,14 @@ export default function UploadPage() {
         router.replace('/login');
       } else {
         setUser(data.user);
+
+        // ✅ Fetch role to show admin button
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', data.user.id)
+          .single();
+        setUserRole((profile?.role || 'user').toLowerCase().trim());
       }
     };
     checkUser();
@@ -176,18 +197,6 @@ export default function UploadPage() {
     router.replace('/login');
   };
 
-  const handleListFiles = async () => {
-    if (!user) { setStatus('Please log in to view files.'); return; }
-    try {
-      const { data, error } = await supabase.storage.from('videos').list(user.id, { limit: 100 });
-      if (error) throw error;
-      setStatus(data.map(f => f.name).length > 0 ? 'Files retrieved.' : 'No files found.');
-    } catch (err) {
-      console.error(err);
-      setStatus('Failed to list files.');
-    }
-  };
-
   const handleAnalyze = async () => {
     if (!dancerVideo || !choreoVideo) {
       setStatus('Please upload both videos first.');
@@ -199,10 +208,10 @@ export default function UploadPage() {
 
     try {
       const formData = new FormData();
-      
+
       formData.append('user_video', dancerVideo);
       formData.append('ref_video', choreoVideo);
-      
+
       formData.append('ref_fps', '30');
       formData.append('user_fps', '30');
       formData.append('user_motion_fps', '30');
@@ -281,9 +290,23 @@ export default function UploadPage() {
           <button onClick={() => router.back()} className="absolute top-4 left-4 text-gray-600 hover:text-gray-800">
             <FiArrowLeft size={24} />
           </button>
-          <button onClick={handleLogout} className="absolute top-4 right-4 text-red-600 hover:text-red-800">
-            <FiLogOut size={24} />
-          </button>
+
+          {/* ✅ Top right: Admin Dashboard button (admin only) + Logout */}
+          <div className="absolute top-4 right-4 flex items-center gap-2">
+            {isAdmin && (
+              <motion.button
+                whileTap={{ scale: 0.97 }}
+                onClick={() => router.push('/admin')}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white/80 text-slate-700 hover:bg-white text-sm font-medium shadow-sm"
+              >
+                <MdAdminPanelSettings size={18} />
+                Admin Dashboard
+              </motion.button>
+            )}
+            <button onClick={handleLogout} className="text-red-600 hover:text-red-800">
+              <FiLogOut size={24} />
+            </button>
+          </div>
 
           <div className="flex items-center justify-center gap-3 mb-2">
             {appSettings?.logo_url && (
@@ -302,10 +325,13 @@ export default function UploadPage() {
           {status && <p className="text-center text-gray-600 mt-3">{status}</p>}
 
           <div className="flex flex-col md:flex-row gap-4 justify-center mt-6">
-            <motion.button whileTap={{ scale: 0.97 }} disabled={!user || loading} onClick={handleListFiles} className="text-white py-3 px-6 rounded-lg font-semibold transition" style={{ backgroundColor: primaryColor }}>
-              <FiList className="inline mr-2" /> List Files
-            </motion.button>
-            <motion.button whileTap={{ scale: 0.97 }} disabled={loading || !user} onClick={handleAnalyze} className="text-white py-3 px-6 rounded-lg font-semibold transition" style={{ backgroundColor: primaryColor }}>
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              disabled={loading || !user}
+              onClick={handleAnalyze}
+              className="text-white py-3 px-6 rounded-lg font-semibold transition"
+              style={{ backgroundColor: primaryColor }}
+            >
               Analyze 🎯
             </motion.button>
           </div>
@@ -326,9 +352,9 @@ export default function UploadPage() {
           </motion.div>
         )}
 
-        {/* 4. 🌟 FIXED: About Page Section (Positioned cleanly below FAQs at the very bottom) */}
+        {/* 4. About Page Section */}
         {aboutPage && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             className="bg-white/60 border border-white/70 rounded-xl p-6"
