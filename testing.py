@@ -441,6 +441,29 @@ def delete_run(run_id):
     except Exception as e:
         logging.error(f"Failed to delete run {run_id}: {str(e)}")
         return jsonify({"status": "error", "message": str(e)}), 500
+# =========================================================================
+# SUPER ADMIN ROLE CHANGE AND SELF LOCKOUT PROTECTION
+# =========================================================================
+@app.route('/admin/users/<user_id>/role', methods=['PATCH'])
+def update_user_role(user_id):
+    try:
+        body = request.get_json()
+        new_role = body.get('role')
+        if new_role not in ['user', 'it_admin', 'super_admin']:
+            return jsonify({"status": "error", "error": "Invalid role."}), 400
+
+        # ✅ Prevent super_admin from changing their own role
+        auth_header = request.headers.get('Authorization', '')
+        token = auth_header.replace('Bearer ', '')
+        user_response = supabase_admin.auth.get_user(token)
+        if user_response.user and user_response.user.id == user_id:
+            return jsonify({"status": "error", "error": "You cannot change your own role."}), 403
+
+        supabase_admin.table("profiles").update({"role": new_role}).eq("id", user_id).execute()
+        return jsonify({"status": "success", "message": f"Role updated to {new_role}."}), 200
+    except Exception as e:
+        logging.error(f"Failed to update role: {str(e)}")
+        return jsonify({"status": "error", "error": str(e)}), 500
 
 if __name__ == '__main__':
     # Make sure flask-cors package is installed (`pip install flask-cors`)
