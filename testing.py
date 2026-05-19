@@ -308,6 +308,7 @@ def process_videos_test():
         ref_fps = float(request.form.get('ref_fps', 30.0))
         user_fps = float(request.form.get('user_fps', 30.0))
         user_motion_fps = float(request.form.get('user_motion_fps', user_fps))
+        user_id = request.form.get('user_id')  # ✅ Received from frontend
         
         compress_video_storage_optimized(raw_ref_path, compressed_ref_path, target_fps=int(ref_fps))
         compress_video_storage_optimized(raw_user_path, compressed_user_path, target_fps=int(user_fps))
@@ -350,6 +351,30 @@ def process_videos_test():
 
         for path in [compressed_ref_path, compressed_user_path]:
             if os.path.exists(path): os.remove(path)
+
+        # ✅ Log run to Supabase
+        try:
+            supabase_admin.table("analysis_runs").insert({
+                "id": run_id,
+                "user_id": user_id,
+                "status": "done",
+                "score": analysis_results.get("dtw_similarity_score"),
+                "summary_feedback": analysis_results.get("summary_bad"),
+                "result_json": {
+                    "dtw_distance": analysis_results.get("dtw_distance"),
+                    "detected_deviations": [
+                        {
+                            "body_part": d.get("body_part"),
+                            "user_start_frame": d.get("user_start_frame"),
+                            "gif_path": deviation_moments_ui[i].get("gif_path") if i < len(deviation_moments_ui) else None
+                        }
+                        for i, d in enumerate(raw_deviations[:3])
+                    ]
+                }
+            }).execute()
+            logging.info(f"Run {run_id} logged to Supabase successfully.")
+        except Exception as db_err:
+            logging.warning(f"Failed to log run to Supabase: {db_err}")
 
         return jsonify({
             "status": "success",
