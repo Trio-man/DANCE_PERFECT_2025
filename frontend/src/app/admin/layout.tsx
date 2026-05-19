@@ -64,6 +64,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const logout = async () => {
     await supabase.auth.signOut();
+    Object.keys(localStorage).forEach((key) => {
+      if (key.startsWith('sb-')) localStorage.removeItem(key);
+    });
     router.replace('/login');
   };
 
@@ -92,12 +95,20 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               </div>
             </div>
 
-            <button
-              onClick={logout}
-              className="px-3 py-2 rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
-            >
-              Logout
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => router.push('/upload')}
+                className="px-3 py-2 rounded-lg border border-slate-200 bg-white/70 text-slate-700 hover:bg-white text-sm font-medium"
+              >
+                Go to Upload
+              </button>
+              <button
+                onClick={logout}
+                className="px-3 py-2 rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
+              >
+                Logout
+              </button>
+            </div>
           </div>
 
           {/* Body */}
