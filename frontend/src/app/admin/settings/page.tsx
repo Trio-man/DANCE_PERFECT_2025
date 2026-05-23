@@ -38,7 +38,7 @@ export default function AdminSettingsPage() {
 
       const r = (prof?.role || 'user').toLowerCase();
       setRole(r);
-      if (r !== 'super_admin') return router.push('/admin');
+      if (!['super_admin', 'it_admin'].includes(r)) return router.push('/admin');
 
       const { data, error } = await supabase.from('app_settings').select('*').single();
       if (error) return setError(error.message);
