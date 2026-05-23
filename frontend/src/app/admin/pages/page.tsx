@@ -40,7 +40,7 @@ export default function AdminContentPages() {
 
       const r = (prof?.role || 'user').toLowerCase();
       setRole(r);
-      if (r !== 'super_admin') return router.push('/admin');
+      if (!['super_admin', 'it_admin'].includes(r)) return router.push('/admin');
 
       const { data, error } = await supabase
         .from('content_pages')
