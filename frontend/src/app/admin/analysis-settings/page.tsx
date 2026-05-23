@@ -47,7 +47,7 @@ export default function AdminAnalysisSettingsPage() {
 
       const r = (prof?.role || 'user').toLowerCase();
       setRole(r);
-      if (!['super_admin', 'it_admin'].includes(r)) return router.push('/admin');
+      if (!['super_admin', 'it_admin'].includes(r)) {
         return;
       }
 
