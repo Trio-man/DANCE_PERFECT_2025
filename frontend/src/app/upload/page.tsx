@@ -59,7 +59,6 @@ function VideoUpload({ label, preview, setFile, loading }: VideoUploadProps) {
         transition={{ duration: 0.5 }}
         className="flex-1 border rounded-xl p-6 bg-gray-50 relative"
       >
-        {/* ✅ X button to remove video */}
         <button
           onClick={() => setFile(null)}
           disabled={loading}
@@ -134,7 +133,6 @@ export default function UploadPage() {
       } else {
         setUser(data.user);
 
-        // ✅ Fetch role to show admin button
         const { data: profile } = await supabase
           .from('profiles')
           .select('role')
@@ -211,7 +209,6 @@ export default function UploadPage() {
 
       formData.append('user_video', dancerVideo);
       formData.append('ref_video', choreoVideo);
-
       formData.append('ref_fps', '30');
       formData.append('user_fps', '30');
       formData.append('user_motion_fps', '30');
@@ -275,7 +272,7 @@ export default function UploadPage() {
         )}
 
         {/* 2. Main Upload Processing Hub */}
-        <motion.div className="bg-white/70 backdrop-blur-lg border border-white/60 shadow-lg rounded-2xl p-8 relative">
+        <motion.div className="bg-white/70 backdrop-blur-lg border border-white/60 shadow-lg rounded-2xl p-6 md:p-8 relative">
           <AnimatePresence>
             {loading && (
               <motion.div className="absolute inset-0 bg-white/70 backdrop-blur-sm flex items-center justify-center rounded-2xl z-50">
@@ -287,49 +284,73 @@ export default function UploadPage() {
             )}
           </AnimatePresence>
 
-          <button onClick={() => router.back()} className="absolute top-4 left-4 text-gray-600 hover:text-gray-800">
-            <FiArrowLeft size={24} />
-          </button>
-
-          {/* ✅ Top right: Admin Dashboard button (admin only) + Logout */}
-          <div className="absolute top-4 right-4 flex items-center gap-2">
-            {isAdmin && (
-              <motion.button
-                whileTap={{ scale: 0.97 }}
-                onClick={() => router.push('/admin')}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white/80 text-slate-700 hover:bg-white text-sm font-medium shadow-sm"
+          {/* ─── NEW RESPONSIVE ACTIONS NAVIGATION CONTAINER ─── */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-100 pb-4 mb-6">
+            {/* Left Side Navigation */}
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={() => router.back()} 
+                className="text-gray-600 hover:text-gray-800 transition-colors p-1"
+                aria-label="Go back"
               >
-                <MdAdminPanelSettings size={18} />
-                Admin Dashboard
-              </motion.button>
-            )}
-            <button onClick={handleLogout} className="text-red-600 hover:text-red-800">
-              <FiLogOut size={24} />
-            </button>
+                <FiArrowLeft size={24} />
+              </button>
+              
+              {/* Dynamic Logo & Title integration into flow */}
+              <div className="flex items-center gap-2">
+                {appSettings?.logo_url && (
+                  <img 
+                    src={appSettings.logo_url} 
+                    alt="System Logo" 
+                    className="h-8 w-8 rounded-lg object-contain border border-white/60 bg-white/60" 
+                  />
+                )}
+                <h1 className="text-2xl font-bold tracking-tight" style={{ color: primaryColor }}>
+                  {systemName}
+                </h1>
+              </div>
+            </div>
+
+            {/* Right Side Controls */}
+            <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
+              {isAdmin && (
+                <motion.button
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => router.push('/admin')}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white/80 text-slate-700 hover:bg-white text-xs md:text-sm font-medium shadow-sm transition-all"
+                >
+                  <MdAdminPanelSettings size={18} />
+                  Admin Dashboard
+                </motion.button>
+              )}
+              <button 
+                onClick={handleLogout} 
+                className="text-red-600 hover:text-red-800 transition-colors flex items-center gap-1 p-1 text-sm font-medium ml-auto sm:ml-0"
+                title="Logout"
+              >
+                <span className="sm:hidden mr-1">Logout</span>
+                <FiLogOut size={22} />
+              </button>
+            </div>
           </div>
 
-          <div className="flex items-center justify-center gap-3 mb-2">
-            {appSettings?.logo_url && (
-              <img src={appSettings.logo_url} alt="System Logo" className="h-10 w-10 rounded-lg object-contain border border-white/60 bg-white/60" />
-            )}
-            <h1 className="text-3xl font-bold text-center" style={{ color: primaryColor }}>{systemName}</h1>
-          </div>
+          <p className="text-slate-600 text-center mb-6 font-medium">
+            Welcome, <span className="text-slate-800 font-semibold">{user?.email?.split('@')[0]}</span>
+          </p>
 
-          <p className="text-slate-600 text-center mb-4">Welcome {user?.email?.split('@')[0]}</p>
-
-          <div className="flex flex-col md:flex-row gap-8">
+          <div className="flex flex-col md:flex-row gap-6 md:gap-8">
             <VideoUpload label="Dancer Video" preview={previewDancer} setFile={setDancerVideo} loading={loading} />
             <VideoUpload label="Choreographer Video" preview={previewChoreo} setFile={setChoreoVideo} loading={loading} />
           </div>
 
-          {status && <p className="text-center text-gray-600 mt-3">{status}</p>}
+          {status && <p className="text-center text-gray-600 mt-4 font-medium">{status}</p>}
 
           <div className="flex flex-col md:flex-row gap-4 justify-center mt-6">
             <motion.button
               whileTap={{ scale: 0.97 }}
               disabled={loading || !user}
               onClick={handleAnalyze}
-              className="text-white py-3 px-6 rounded-lg font-semibold transition"
+              className="text-white py-3 px-8 rounded-lg font-semibold transition shadow-md w-full sm:w-auto hover:opacity-90"
               style={{ backgroundColor: primaryColor }}
             >
               Analyze 🎯
@@ -345,7 +366,7 @@ export default function UploadPage() {
               {faqs.map((f) => (
                 <div key={f.id} className="border border-white/70 rounded-lg p-3 bg-white/50">
                   <p className="font-semibold text-slate-800">{f.question}</p>
-                  <p className="text-slate-700 whitespace-pre-line mt-1">{f.answer}</p>
+                  <p className="text-slate-700 whitespace-pre-line mt-1 text-sm">{f.answer}</p>
                 </div>
               ))}
             </div>
