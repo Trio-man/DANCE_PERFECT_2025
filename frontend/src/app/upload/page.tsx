@@ -332,13 +332,13 @@ export default function UploadPage() {
             
             {/* Catchy dynamic marketing tagline line */}
             <p className="text-sm md:text-base text-slate-600 max-w-md font-medium leading-relaxed px-4">
-              Sync your moves. Perfect your rhythm. AI-powered motion capture feedback.
+              Your personal dance buddy.
             </p>
           </div>
 
           {/* User Welcome Label */}
           <p className="text-xs md:text-sm text-slate-500 text-center mb-6 bg-slate-100/60 w-fit mx-auto px-3 py-1 rounded-full border border-slate-200/40">
-            Logged in as: <span className="text-slate-700 font-semibold">{user?.email?.split('@')[0]}</span>
+            Welcome back, <span className="text-slate-700 font-semibold">{user?.email?.split('@')[0]}</span>
           </p>
 
           <div className="flex flex-col md:flex-row gap-6 md:gap-8">
@@ -356,7 +356,7 @@ export default function UploadPage() {
               className="text-white py-3 px-10 rounded-xl font-bold transition shadow-md w-full sm:w-auto hover:brightness-95 text-base tracking-wide"
               style={{ backgroundColor: primaryColor }}
             >
-              Analyze Performance 🎯
+              Analyze Performance
             </motion.button>
           </div>
         </motion.div>
