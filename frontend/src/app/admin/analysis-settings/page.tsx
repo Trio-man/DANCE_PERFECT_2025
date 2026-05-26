@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
-import { FiSliders, FiAlertCircle, FiCheckCircle, FiSave, FiCornerUpLeft, FiInfo } from 'react-icons/fi';
+import { FiAlertCircle, FiCheckCircle, FiSave, FiCornerUpLeft, FiInfo } from 'react-icons/fi';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -69,13 +69,12 @@ export default function AdminAnalysisSettingsPage() {
   const save = async () => {
     if (!row) return;
 
-    // Simple sanity checks (thesis-safe validation matrix)
     if (row.excellent_threshold < 0 || row.good_threshold < 0 || row.acceptable_threshold < 0) {
-      setError('Threshold parameter metrics must be 0 or greater.');
+      setError('Threshold values must be 0 or greater.');
       return;
     }
     if (!(row.excellent_threshold <= row.good_threshold && row.good_threshold <= row.acceptable_threshold)) {
-      setError('Invalid logical order. Expected configuration boundary: Excellent ≤ Good ≤ Acceptable.');
+      setError('Invalid order. Thresholds must follow: Excellent ≤ Good ≤ Acceptable.');
       return;
     }
 
@@ -106,7 +105,7 @@ export default function AdminAnalysisSettingsPage() {
     return (
       <div className="flex items-center justify-center py-12 text-slate-500 font-medium text-sm">
         <div className="animate-spin h-5 w-5 border-2 border-slate-300 border-t-slate-600 rounded-full mr-3" />
-        Loading analytical validation matrices...
+        Loading settings...
       </div>
     );
   }
@@ -114,13 +113,9 @@ export default function AdminAnalysisSettingsPage() {
   return (
     <div className="space-y-6 w-full max-w-3xl">
       
-      {/* Upper Title Section */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-2 border-b border-slate-100">
         <div>
           <h1 className="text-xl font-bold text-slate-900 tracking-tight">Analysis Settings</h1>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Calibrate core mechanical engine algorithm scores based on domain expert parameters.
-          </p>
         </div>
         <button
           onClick={() => router.push('/admin')}
@@ -141,11 +136,10 @@ export default function AdminAnalysisSettingsPage() {
       {saveSuccess && (
         <div className="bg-emerald-50 border border-emerald-100 text-emerald-800 rounded-xl p-3.5 text-sm font-medium flex items-center gap-2 transition-all">
           <FiCheckCircle className="text-emerald-500 shrink-0" size={16} />
-          Engine algorithmic thresholds updated successfully.
+          Analysis thresholds updated successfully.
         </div>
       )}
 
-      {/* Information Banner block */}
       <div className="bg-blue-50/60 border border-blue-100/70 rounded-xl p-4 flex items-start gap-2.5 text-blue-800">
         <FiInfo className="text-blue-500 shrink-0 mt-0.5" size={16} />
         <p className="text-xs font-medium leading-relaxed">
@@ -153,12 +147,10 @@ export default function AdminAnalysisSettingsPage() {
         </p>
       </div>
 
-      {/* Primary Configuration Workspace Panel */}
       <div className="bg-white border border-slate-200 rounded-xl p-5 md:p-6 shadow-sm space-y-6">
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           
-          {/* Excellent Limit Setting Row */}
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-slate-700 block">Excellent Threshold</label>
             <div className="relative">
@@ -170,12 +162,8 @@ export default function AdminAnalysisSettingsPage() {
                 className="w-full px-3 py-2 text-xs font-mono font-bold text-slate-800 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-slate-400 focus:ring-0 transition-all"
               />
             </div>
-            <span className="text-[10px] text-slate-400 block font-medium leading-tight">
-              Maximum tolerance limit for premium grading tier evaluations.
-            </span>
           </div>
 
-          {/* Good Limit Setting Row */}
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-slate-700 block">Good Threshold</label>
             <div className="relative">
@@ -187,12 +175,8 @@ export default function AdminAnalysisSettingsPage() {
                 className="w-full px-3 py-2 text-xs font-mono font-bold text-slate-800 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-slate-400 focus:ring-0 transition-all"
               />
             </div>
-            <span className="text-[10px] text-slate-400 block font-medium leading-tight">
-              Intermediate target mapping value index boundary.
-            </span>
           </div>
 
-          {/* Acceptable Limit Setting Row */}
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-slate-700 block">Acceptable Threshold</label>
             <div className="relative">
@@ -204,14 +188,10 @@ export default function AdminAnalysisSettingsPage() {
                 className="w-full px-3 py-2 text-xs font-mono font-bold text-slate-800 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-slate-400 focus:ring-0 transition-all"
               />
             </div>
-            <span className="text-[10px] text-slate-400 block font-medium leading-tight">
-              Baseline limit floor before classification tags fall into variance warnings.
-            </span>
           </div>
 
         </div>
 
-        {/* Action Triggers Grid Footer */}
         <div className="pt-4 border-t border-slate-100 flex justify-end">
           <button
             onClick={save}
@@ -221,7 +201,7 @@ export default function AdminAnalysisSettingsPage() {
             {saving ? (
               <>
                 <div className="animate-spin h-3.5 w-3.5 border-2 border-white/30 border-t-white rounded-full" />
-                Saving Framework Values...
+                Saving...
               </>
             ) : (
               <>
