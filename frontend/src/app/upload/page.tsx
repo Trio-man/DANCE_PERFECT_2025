@@ -409,7 +409,7 @@ export default function UploadPage() {
               className="text-white py-3.5 px-12 rounded-xl font-bold transition shadow-lg shadow-violet-200 w-full sm:w-auto text-base tracking-wide active:shadow-none"
               style={{ backgroundColor: primaryColor }}
             >
-              Analyze Performance 🎯
+              Analyze Performance
             </motion.button>
           </div>
         </motion.div>
@@ -470,4 +470,4 @@ export default function UploadPage() {
   );
 }
 
-```
+
