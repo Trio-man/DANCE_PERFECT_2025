@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createClient } from '@supabase/supabase-js';
+import Image from 'next/image';
 import { FiLock, FiMail, FiAlertCircle } from 'react-icons/fi';
 
 const supabase = createClient(
@@ -19,7 +20,6 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Set default to your specific #4b0082, dynamic fetch will override if changed in DB
   const [systemName, setSystemName] = useState('DancePerfect');
   const [primaryColor, setPrimaryColor] = useState('#4b0082');
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
@@ -33,8 +33,8 @@ export default function LoginPage() {
           if (data.primary_color) setPrimaryColor(data.primary_color);
           if (data.logo_url) setLogoUrl(data.logo_url);
         }
-      } catch (err) {
-        console.error('Branding fetch skipped, using defaults.');
+      } catch (_err) {
+        console.error('Branding fetch skipped.');
       }
     };
     fetchBranding();
@@ -46,8 +46,8 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
+      const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password });
+      if (authError) throw authError;
 
       if (!data?.user) throw new Error('Login failed.');
 
@@ -64,8 +64,9 @@ export default function LoginPage() {
 
       const role = (profile?.role || 'user').toLowerCase().trim();
       router.replace(['admin', 'super_admin', 'it_admin'].includes(role) ? '/admin' : '/upload');
-    } catch (err: any) {
-      setError(err.message || 'An unexpected error occurred.');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'An unexpected error occurred.';
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -78,7 +79,11 @@ export default function LoginPage() {
         animate={{ scale: 1, opacity: 1, y: 0 }}
         className="w-full max-w-md p-8 sm:p-10 bg-white/80 backdrop-blur-xl border border-white rounded-3xl shadow-xl text-center"
       >
-        {logoUrl && <img src={logoUrl} alt="Logo" className="h-14 w-14 mx-auto mb-4 rounded-2xl object-contain shadow-sm bg-white p-1" />}
+        {logoUrl && (
+            <div className="relative h-14 w-14 mx-auto mb-4">
+                <Image src={logoUrl} alt="Logo" fill className="rounded-2xl object-contain bg-white p-1" />
+            </div>
+        )}
         <h1 className="text-3xl font-black tracking-tight mb-1" style={{ color: primaryColor }}>{systemName}</h1>
         <p className="text-slate-500 font-medium text-sm mb-8">Welcome back! Sign in to continue</p>
 
