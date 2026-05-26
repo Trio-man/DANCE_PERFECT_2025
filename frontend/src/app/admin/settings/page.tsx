@@ -161,7 +161,7 @@ export default function AdminSettingsPage() {
               }
 
               const { data } = supabase.storage
-                .from('logos')
+                .from('Logos')
                 .getPublicUrl(fileName);
 
               setRow({
