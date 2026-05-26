@@ -299,12 +299,12 @@ export default function UploadPage() {
   const primaryColor = appSettings?.primary_color ?? '#7C3AED';
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-start px-4 md:px-8 bg-gradient-to-br from-violet-100 via-blue-50 to-white antialiased selection:bg-violet-200">
+    <div className="min-h-screen flex flex-col items-center justify-start px-4 md:px-8 bg-gradient-to-br from-[#d6c1ff] via-[#cde7ff] to-white antialiased selection:bg-violet-200">
       <div className="w-full max-w-5xl flex flex-col gap-6 py-8 md:py-12">
         
         {cmsError && <p className="text-center text-xs bg-red-50 text-red-600 px-4 py-2 rounded-lg border border-red-100">{cmsError}</p>}
 
-        {/* ─── 1. CORE COMPRESSION ANALYSIS HUB CARD (FROSTED GLASS BLEND) ─── */}
+        {/* ─── 1. CORE COMPRESSION ANALYSIS HUB CARD (VIBRANT BACKGROUND COMBO) ─── */}
         <motion.div 
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
@@ -341,7 +341,7 @@ export default function UploadPage() {
                   onClick={() => router.push('/admin')}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-xs md:text-sm font-semibold shadow-sm transition-all"
                 >
-                  <MdAdminPanelSettings size={18} style={{ color: primaryColor }} />
+                  <MdAdminPanelSettings size={18} className="text-violet-500" />
                   Admin Dashboard
                 </motion.button>
               )}
@@ -391,7 +391,7 @@ export default function UploadPage() {
             </p>
           )}
 
-          {/* CENTRAL COMMAND SUBMIT INTERRUPTER (EMOJI REMOVED) */}
+          {/* CENTRAL COMMAND SUBMIT INTERRUPTER */}
           <div className="flex flex-col md:flex-row gap-4 justify-center mt-8">
             <motion.button
               whileTap={{ scale: 0.97 }}
@@ -460,3 +460,5 @@ export default function UploadPage() {
     </div>
   );
 }
+
+```
