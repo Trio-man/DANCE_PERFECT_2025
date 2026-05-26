@@ -4,20 +4,15 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createClient, User } from '@supabase/supabase-js';
+import Image from 'next/image';
 import { FiArrowLeft, FiLogOut, FiUploadCloud, FiX, FiChevronDown, FiFileText, FiInfo, FiHelpCircle } from 'react-icons/fi';
 import { MdAdminPanelSettings } from 'react-icons/md';
 
-// ─────────────────────────────────────────────
-// SUPABASE CLIENT
-// ─────────────────────────────────────────────
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-// ─────────────────────────────────────────────
-// CMS TYPES
-// ─────────────────────────────────────────────
 type AppSettingsRow = {
   id: number;
   system_name: string;
@@ -40,9 +35,6 @@ type FaqRow = {
   is_active: boolean;
 };
 
-// ─────────────────────────────────────────────
-// INTERACTIVE FAQ ACCORDION COMPONENT
-// ─────────────────────────────────────────────
 function FaqItem({ faq }: { faq: FaqRow }) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -76,9 +68,6 @@ function FaqItem({ faq }: { faq: FaqRow }) {
   );
 }
 
-// ─────────────────────────────────────────────
-// PREMIUM VIDEO UPLOAD COMPONENT
-// ─────────────────────────────────────────────
 interface VideoUploadProps {
   label: string;
   file: File | null;
@@ -139,27 +128,20 @@ function VideoUpload({ label, file, preview, setFile, loading }: VideoUploadProp
   );
 }
 
-// ─────────────────────────────────────────────
-// MAIN UPLOAD PAGE HUB
-// ─────────────────────────────────────────────
 export default function UploadPage() {
   const router = useRouter();
 
-  // Auth States
   const [user, setUser] = useState<User | null>(null);
   const [userRole, setUserRole] = useState<string>('user');
 
-  // Video Buffers & File Hooks
   const [dancerVideo, setDancerVideo] = useState<File | null>(null);
   const [choreoVideo, setChoreoVideo] = useState<File | null>(null);
   const [previewDancer, setPreviewDancer] = useState<string | null>(null);
   const [previewChoreo, setPreviewChoreo] = useState<string | null>(null);
 
-  // Layout Controls
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
-  // CMS Repositories
   const [appSettings, setAppSettings] = useState<AppSettingsRow | null>(null);
   const [aboutPage, setAboutPage] = useState<ContentPageRow | null>(null);
   const [guidelinesPage, setGuidelinesPage] = useState<ContentPageRow | null>(null);
@@ -168,7 +150,6 @@ export default function UploadPage() {
 
   const isAdmin = ['super_admin', 'it_admin'].includes(userRole);
 
-  // Authentication Context Mount Hooks
   useEffect(() => {
     const checkUser = async () => {
       const { data } = await supabase.auth.getUser();
@@ -176,7 +157,6 @@ export default function UploadPage() {
         router.replace('/login');
       } else {
         setUser(data.user);
-
         const { data: profile } = await supabase
           .from('profiles')
           .select('role')
@@ -186,14 +166,8 @@ export default function UploadPage() {
       }
     };
     checkUser();
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session?.user) router.replace('/login');
-      else setUser(session.user);
-    });
-    return () => listener.subscription.unsubscribe();
   }, [router]);
 
-  // CMS Settings Integration Fetch Hooks
   useEffect(() => {
     const loadCms = async () => {
       setCmsError(null);
@@ -216,7 +190,6 @@ export default function UploadPage() {
     loadCms();
   }, []);
 
-  // Object Blob Cleaners
   useEffect(() => {
     if (!dancerVideo) { setPreviewDancer(null); return; }
     const url = URL.createObjectURL(dancerVideo);
@@ -233,9 +206,6 @@ export default function UploadPage() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    Object.keys(localStorage).forEach((key) => {
-      if (key.startsWith('sb-')) localStorage.removeItem(key);
-    });
     router.replace('/login');
   };
 
@@ -278,7 +248,7 @@ export default function UploadPage() {
         const dancerDataUrl = await toDataUrl(dancerVideo);
         const choreoDataUrl = await toDataUrl(choreoVideo);
 
-        sessionBuffer.setItem('dp_dancer', dancerDataUrl);
+        sessionStorage.setItem('dp_dancer', dancerDataUrl);
         sessionStorage.setItem('dp_choreo', choreoDataUrl);
 
         const { data: authData } = await supabase.auth.getSession();
@@ -302,169 +272,85 @@ export default function UploadPage() {
   const primaryColor = appSettings?.primary_color ?? '#7C3AED';
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-start px-4 md:px-8 bg-gradient-to-br from-[#d6c1ff] via-[#cde7ff] to-white antialiased selection:bg-violet-200">
+    <div className="min-h-screen flex flex-col items-center justify-start px-4 md:px-8 bg-gradient-to-br from-[#d6c1ff] via-[#cde7ff] to-white antialiased">
       <div className="w-full max-w-5xl flex flex-col gap-8 py-8 md:py-12">
-        
         {cmsError && <p className="text-center text-xs bg-red-50 text-red-600 px-4 py-2 rounded-lg border border-red-100">{cmsError}</p>}
 
-        {/* ─── 1. CORE COMPRESSION ANALYSIS HUB CARD ─── */}
         <motion.div 
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           className="bg-white/80 backdrop-blur-xl border border-white shadow-xl shadow-slate-200/50 rounded-3xl p-5 md:p-8 relative"
         >
-          <AnimatePresence>
-            {loading && (
-              <motion.div className="absolute inset-0 bg-white/80 backdrop-blur-md flex items-center justify-center rounded-3xl z-50">
-                <div className="text-center">
-                  <div className="animate-spin h-10 w-10 rounded-full border-4 border-slate-200 border-t-slate-800 mx-auto mb-4" />
-                  <p className="text-slate-800 font-bold text-base tracking-wide">Processing & Compressing...</p>
-                  <p className="text-slate-400 text-xs mt-1">Please keep this browser tab open</p>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {loading && (
+            <div className="absolute inset-0 bg-white/80 backdrop-blur-md flex items-center justify-center rounded-3xl z-50">
+              <div className="text-center">
+                <div className="animate-spin h-10 w-10 rounded-full border-4 border-slate-200 border-t-slate-800 mx-auto mb-4" />
+                <p className="text-slate-800 font-bold text-base tracking-wide">Processing & Compressing...</p>
+              </div>
+            </div>
+          )}
 
-          {/* APPLICATION NAVIGATION SUBBAR */}
-          <div className="flex items-center justify-between mb-8 w-full">
-            <motion.button 
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => router.back()} 
-              className="text-slate-500 hover:text-slate-800 transition-colors p-2 rounded-xl bg-slate-100/60 hover:bg-slate-100"
-              aria-label="Go back"
-            >
+          <div className="flex items-center justify-between mb-8">
+            <button onClick={() => router.back()} className="text-slate-500 hover:text-slate-800 p-2 rounded-xl bg-slate-100/60">
               <FiArrowLeft size={20} />
-            </motion.button>
-
+            </button>
             <div className="flex items-center gap-3">
               {isAdmin && (
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => router.push('/admin')}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-xs md:text-sm font-semibold shadow-sm transition-all"
-                >
-                  <MdAdminPanelSettings size={18} className="text-violet-500" />
-                  Admin Dashboard
-                </motion.button>
+                <button onClick={() => router.push('/admin')} className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-xs md:text-sm font-semibold shadow-sm transition-all">
+                  <MdAdminPanelSettings size={18} className="text-violet-500" /> Admin
+                </button>
               )}
-              <motion.button 
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={handleLogout} 
-                className="text-slate-400 hover:text-red-600 transition-colors p-2 rounded-xl bg-slate-100/60 hover:bg-red-50"
-                title="Logout"
-              >
+              <button onClick={handleLogout} className="text-slate-400 hover:text-red-600 p-2 rounded-xl bg-slate-100/60">
                 <FiLogOut size={20} />
-              </motion.button>
+              </button>
             </div>
           </div>
 
-          {/* BRAND IDENTITY IDENTIFIER CONTAINER */}
           <div className="flex flex-col items-center text-center mb-6">
-            <div className="flex items-center justify-center gap-3 mb-2">
-              {appSettings?.logo_url && (
-                <img 
-                  src={appSettings.logo_url} 
-                  alt="System Logo" 
-                  className="h-12 w-12 rounded-xl object-contain shadow-sm border border-slate-100" 
-                />
-              )}
-              <h1 className="text-3xl md:text-4xl font-black tracking-tight" style={{ color: primaryColor }}>
-                {systemName}
-              </h1>
-            </div>
-            <p className="text-sm md:text-base text-slate-500 font-medium max-w-sm">
-              Your personal dance buddy. 🕺✨
-            </p>
+            {appSettings?.logo_url && (
+              <div className="mb-2 w-12 h-12 relative">
+                <Image src={appSettings.logo_url} alt="Logo" fill className="rounded-xl object-contain" />
+              </div>
+            )}
+            <h1 className="text-3xl md:text-4xl font-black tracking-tight" style={{ color: primaryColor }}>{systemName}</h1>
           </div>
 
-          {/* SECURE IDENTITY ACCOUNT NOTIFICATION BADGE */}
-          <div className="text-center mb-8">
-            <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-4 py-1.5 rounded-full border border-slate-200/40 shadow-inner">
-              Welcome back, <span className="text-violet-600 font-bold">{user?.email?.split('@')[0]}</span>
-            </span>
-          </div>
-
-          {/* FILE PROCESSING INPUT LAYOUT MODULES */}
           <div className="flex flex-col md:flex-row gap-6">
             <VideoUpload label="Dancer Video" file={dancerVideo} preview={previewDancer} setFile={setDancerVideo} loading={loading} />
             <VideoUpload label="Choreographer Video" file={choreoVideo} preview={previewChoreo} setFile={setChoreoVideo} loading={loading} />
           </div>
 
-          {status && (
-            <p className="text-center text-slate-600 mt-6 font-medium text-xs md:text-sm bg-slate-50 border border-slate-100 rounded-xl py-2.5 px-4 w-fit mx-auto">
-              {status}
-            </p>
-          )}
-
-          {/* CENTRAL COMMAND SUBMIT INTERRUPTER */}
           <div className="flex justify-center mt-8">
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              disabled={loading || !user}
-              onClick={handleAnalyze}
-              className="text-white py-3.5 px-12 rounded-xl font-bold transition shadow-lg shadow-violet-200 w-full sm:w-auto text-base tracking-wide active:shadow-none"
-              style={{ backgroundColor: primaryColor }}
-            >
+            <button disabled={loading || !user} onClick={handleAnalyze} className="text-white py-3.5 px-12 rounded-xl font-bold w-full sm:w-auto" style={{ backgroundColor: primaryColor }}>
               Analyze Performance
-            </motion.button>
+            </button>
           </div>
         </motion.div>
 
-        {/* ─── 2. DESKTOP 2-COLUMN SIDEBAR GRID (RESOURCES) ─── */}
         <div className="grid grid-cols-1 md:grid-cols-5 gap-6 items-stretch">
-          
-          {/* LEFT COLUMN: GUIDELINES & ABOUT DOCUMENT BLOCKS (3/5 width) */}
-          <div className="md:col-span-3 flex flex-col gap-6 md:h-[500px] overflow-y-auto pr-1 subtle-scrollbar">
+          <div className="md:col-span-3 flex flex-col gap-6 md:h-[500px] overflow-y-auto pr-1">
             {guidelinesPage && (
-              <motion.div 
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="bg-white/70 border border-white shadow-sm rounded-2xl p-6"
-              >
-                <div className="flex items-center gap-2 mb-3">
-                  <FiFileText className="text-violet-500" size={20} />
-                  <h2 className="text-base md:text-lg font-bold text-slate-800">{guidelinesPage.title}</h2>
-                </div>
-                <p className="text-slate-600 whitespace-pre-line text-xs md:text-sm leading-relaxed">{guidelinesPage.body}</p>
-              </motion.div>
+              <div className="bg-white/70 border border-white shadow-sm rounded-2xl p-6">
+                <h2 className="text-lg font-bold mb-3">{guidelinesPage.title}</h2>
+                <p className="text-slate-600 text-sm">{guidelinesPage.body}</p>
+              </div>
             )}
-
             {aboutPage && (
-              <motion.div 
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="bg-white/70 border border-white shadow-sm rounded-2xl p-6"
-              >
-                <div className="flex items-center gap-2 mb-3">
-                  <FiInfo className="text-violet-500" size={20} />
-                  <h2 className="text-base md:text-lg font-bold text-slate-800">{aboutPage.title}</h2>
-                </div>
-                <p className="text-slate-600 whitespace-pre-line text-xs md:text-sm leading-relaxed">{aboutPage.body}</p>
-              </motion.div>
+              <div className="bg-white/70 border border-white shadow-sm rounded-2xl p-6">
+                <h2 className="text-lg font-bold mb-3">{aboutPage.title}</h2>
+                <p className="text-slate-600 text-sm">{aboutPage.body}</p>
+              </div>
             )}
           </div>
-
-          {/* RIGHT COLUMN: ACCORDION LIST EXPANDER INTERFACE (2/5 width) */}
           {faqs.length > 0 && (
             <div className="md:col-span-2 bg-white/70 border border-white shadow-sm rounded-2xl p-6 flex flex-col md:h-[500px]">
-              <div className="flex items-center gap-2 mb-4 shrink-0">
-                <FiHelpCircle className="text-violet-500" size={20} />
-                <h2 className="text-base md:text-lg font-bold text-slate-800">Frequently Asked Questions</h2>
-              </div>
-              <div className="flex-1 overflow-y-auto space-y-2.5 pr-1 subtle-scrollbar">
-                {faqs.map((f) => (
-                  <FaqItem key={f.id} faq={f} />
-                ))}
+              <h2 className="text-lg font-bold mb-4">FAQ</h2>
+              <div className="flex-1 overflow-y-auto space-y-2.5 pr-1">
+                {faqs.map((f) => <FaqItem key={f.id} faq={f} />)}
               </div>
             </div>
           )}
-
         </div>
-
       </div>
     </div>
   );
