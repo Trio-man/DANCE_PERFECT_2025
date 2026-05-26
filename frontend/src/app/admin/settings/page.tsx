@@ -149,7 +149,7 @@ export default function AdminSettingsPage() {
               const fileName = `logo-${Date.now()}.${fileExt}`;
 
               const { error: uploadError } = await supabase.storage
-                .from('logos')
+                .from('Logos')
                 .upload(fileName, file, {
                   upsert: true,
                 });
