@@ -47,15 +47,15 @@ function FaqItem({ faq }: { faq: FaqRow }) {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
-    <div className="border border-slate-200 rounded-xl bg-white/90 overflow-hidden shadow-sm transition-all duration-200 hover:border-slate-300">
+    <div className="border border-slate-200/60 rounded-xl bg-white/50 overflow-hidden transition-all duration-200 hover:bg-white/80">
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between p-4 text-left font-bold text-slate-800 text-sm md:text-base gap-2"
+        className="w-full flex items-center justify-between p-4 text-left font-semibold text-slate-800 text-sm md:text-base gap-2"
       >
         <span>{faq.question}</span>
         <motion.div animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
-          <FiChevronDown className="text-slate-600" size={18} />
+          <FiChevronDown className="text-slate-500" size={18} />
         </motion.div>
       </button>
       <AnimatePresence initial={false}>
@@ -64,9 +64,9 @@ function FaqItem({ faq }: { faq: FaqRow }) {
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2, ease: 'easeInOut' }}
+            transition={{ duration: 0.25, ease: 'easeInOut' }}
           >
-            <p className="p-4 pt-0 text-slate-700 whitespace-pre-line text-xs md:text-sm border-t border-slate-100 leading-relaxed">
+            <p className="p-4 pt-0 text-slate-600 whitespace-pre-line text-xs md:text-sm border-t border-slate-100/50 leading-relaxed">
               {faq.answer}
             </p>
           </motion.div>
@@ -77,7 +77,7 @@ function FaqItem({ faq }: { faq: FaqRow }) {
 }
 
 // ─────────────────────────────────────────────
-// VIDEO UPLOAD COMPONENT
+// PREMIUM VIDEO UPLOAD COMPONENT
 // ─────────────────────────────────────────────
 interface VideoUploadProps {
   label: string;
@@ -93,23 +93,23 @@ function VideoUpload({ label, file, preview, setFile, loading }: VideoUploadProp
       <motion.div
         initial={{ scale: 0.98, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        className="flex-1 border border-slate-200 rounded-xl p-5 bg-slate-50 shadow-sm relative"
+        className="flex-1 border border-slate-200 rounded-2xl p-4 bg-white/90 shadow-sm relative"
       >
         <button
           type="button"
           onClick={() => setFile(null)}
           disabled={loading}
-          className="absolute top-3 right-3 z-10 bg-white border border-slate-200 text-slate-600 rounded-full p-1.5 shadow-sm hover:bg-red-50 hover:border-red-300 hover:text-red-600 transition-colors duration-200"
+          className="absolute top-3 right-3 z-10 bg-slate-900 text-white rounded-full p-1.5 shadow-md hover:bg-red-600 transition-colors duration-200"
           title="Remove video"
         >
-          <FiX size={16} />
+          <FiX size={14} />
         </button>
-        <h2 className="text-base font-bold text-slate-800 mb-3 text-center">{label}</h2>
-        <div className="w-full h-44 md:h-72 rounded-lg overflow-hidden border border-slate-300 bg-black shadow-inner">
+        <h2 className="text-sm font-bold uppercase tracking-wider text-slate-400 mb-3 text-center">{label}</h2>
+        <div className="w-full h-44 md:h-72 rounded-xl overflow-hidden border border-slate-200 bg-slate-950 shadow-inner">
           <video src={preview} controls className="w-full h-full object-contain" />
         </div>
         {file && (
-          <div className="mt-3 flex items-center justify-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-700 font-semibold shadow-sm">
+          <div className="mt-3 flex items-center justify-center gap-2 px-3 py-1.5 bg-slate-100 rounded-lg text-xs text-slate-600 font-medium">
             <span className="truncate max-w-full text-center">Selected: {file.name}</span>
           </div>
         )}
@@ -121,10 +121,13 @@ function VideoUpload({ label, file, preview, setFile, loading }: VideoUploadProp
     <motion.label
       whileHover={{ scale: 1.01, y: -2 }}
       whileTap={{ scale: 0.99 }}
-      className="flex-1 flex flex-col items-center justify-center w-full h-44 md:h-72 border border-slate-300 border-dashed rounded-xl cursor-pointer hover:border-slate-400 transition-all duration-200 bg-white shadow-sm group"
+      className="flex-1 flex flex-col items-center justify-center w-full h-44 md:h-72 border-2 border-dashed border-slate-300 rounded-2xl cursor-pointer hover:border-violet-400 hover:bg-violet-50/30 transition-all duration-200 bg-white/50 shadow-sm group"
     >
-      <FiUploadCloud size={44} className="text-slate-400 group-hover:text-slate-600 transition-colors" />
-      <span className="mt-3 text-sm font-semibold text-slate-700">Upload {label}</span>
+      <div className="p-4 bg-white rounded-2xl shadow-sm border border-slate-100 group-hover:scale-105 transition-transform duration-200">
+        <FiUploadCloud size={32} className="text-slate-400 group-hover:text-violet-500 transition-colors" />
+      </div>
+      <span className="mt-4 font-semibold text-slate-700 text-sm md:text-base">Upload {label}</span>
+      <span className="mt-1 text-xs text-slate-400 px-4 text-center">Drag and drop or click to browse files</span>
       <input
         type="file"
         accept="video/*"
@@ -300,7 +303,7 @@ export default function UploadPage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-start px-4 md:px-8 bg-gradient-to-br from-[#d6c1ff] via-[#cde7ff] to-white antialiased selection:bg-violet-200">
-      <div className="w-full max-w-5xl flex flex-col gap-6 py-8 md:py-12">
+      <div className="w-full max-w-5xl flex flex-col gap-8 py-8 md:py-12">
         
         {cmsError && <p className="text-center text-xs bg-red-50 text-red-600 px-4 py-2 rounded-lg border border-red-100">{cmsError}</p>}
 
@@ -308,11 +311,11 @@ export default function UploadPage() {
         <motion.div 
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white/85 backdrop-blur-xl border border-slate-200/80 shadow-xl rounded-2xl p-6 md:p-8 relative"
+          className="bg-white/80 backdrop-blur-xl border border-white shadow-xl shadow-slate-200/50 rounded-3xl p-5 md:p-8 relative"
         >
           <AnimatePresence>
             {loading && (
-              <motion.div className="absolute inset-0 bg-white/95 backdrop-blur-sm flex items-center justify-center rounded-2xl z-50">
+              <motion.div className="absolute inset-0 bg-white/80 backdrop-blur-md flex items-center justify-center rounded-3xl z-50">
                 <div className="text-center">
                   <div className="animate-spin h-10 w-10 rounded-full border-4 border-slate-200 border-t-slate-800 mx-auto mb-4" />
                   <p className="text-slate-800 font-bold text-base tracking-wide">Processing & Compressing...</p>
@@ -323,81 +326,87 @@ export default function UploadPage() {
           </AnimatePresence>
 
           {/* APPLICATION NAVIGATION SUBBAR */}
-          <div className="flex items-center justify-between mb-6 w-full">
+          <div className="flex items-center justify-between mb-8 w-full">
             <motion.button 
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => router.back()} 
-              className="text-slate-600 hover:text-slate-800 transition-colors p-2 rounded-lg hover:bg-slate-100"
+              className="text-slate-500 hover:text-slate-800 transition-colors p-2 rounded-xl bg-slate-100/60 hover:bg-slate-100"
               aria-label="Go back"
             >
-              <FiArrowLeft size={22} />
+              <FiArrowLeft size={20} />
             </motion.button>
 
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-3">
               {isAdmin && (
                 <motion.button
-                  whileTap={{ scale: 0.97 }}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
                   onClick={() => router.push('/admin')}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-xs md:text-sm font-semibold shadow-sm transition-all"
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-xs md:text-sm font-semibold shadow-sm transition-all"
                 >
-                  <MdAdminPanelSettings size={18} style={{ color: primaryColor }} />
+                  <MdAdminPanelSettings size={18} className="text-violet-500" />
                   Admin Dashboard
                 </motion.button>
               )}
-              <button 
+              <motion.button 
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
                 onClick={handleLogout} 
-                className="text-red-600 hover:text-red-800 transition-colors p-2 rounded-lg hover:bg-red-50"
+                className="text-slate-400 hover:text-red-600 transition-colors p-2 rounded-xl bg-slate-100/60 hover:bg-red-50"
                 title="Logout"
               >
-                <FiLogOut size={22} />
-              </button>
+                <FiLogOut size={20} />
+              </motion.button>
             </div>
           </div>
 
           {/* BRAND IDENTITY IDENTIFIER CONTAINER */}
-          <div className="flex flex-col items-center text-center mt-2 mb-8">
-            <div className="flex items-center justify-center gap-3.5 mb-2.5">
+          <div className="flex flex-col items-center text-center mb-6">
+            <div className="flex items-center justify-center gap-3 mb-2">
               {appSettings?.logo_url && (
                 <img 
                   src={appSettings.logo_url} 
                   alt="System Logo" 
-                  className="h-12 w-12 md:h-14 md:w-14 rounded-xl object-contain border border-slate-200 bg-white shadow-sm" 
+                  className="h-12 w-12 rounded-xl object-contain shadow-sm border border-slate-100" 
                 />
               )}
-              <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight" style={{ color: primaryColor }}>
+              <h1 className="text-3xl md:text-4xl font-black tracking-tight" style={{ color: primaryColor }}>
                 {systemName}
               </h1>
             </div>
-            <p className="text-sm md:text-base text-slate-600 max-w-md font-medium leading-relaxed px-4">
+            <p className="text-sm md:text-base text-slate-500 font-medium max-w-sm">
               Your personal dance buddy. 🕺✨
             </p>
           </div>
 
           {/* SECURE IDENTITY ACCOUNT NOTIFICATION BADGE */}
-          <p className="text-xs md:text-sm text-slate-500 text-center mb-6 bg-slate-100 w-fit mx-auto px-3 py-1 rounded-full border border-slate-200/60">
-            Welcome back, <span className="text-slate-700 font-bold">{user?.email?.split('@')[0]}</span>
-          </p>
+          <div className="text-center mb-8">
+            <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-4 py-1.5 rounded-full border border-slate-200/40 shadow-inner">
+              Welcome back, <span className="text-violet-600 font-bold">{user?.email?.split('@')[0]}</span>
+            </span>
+          </div>
 
           {/* FILE PROCESSING INPUT LAYOUT MODULES */}
-          <div className="flex flex-col md:flex-row gap-6 md:gap-8">
+          <div className="flex flex-col md:flex-row gap-6">
             <VideoUpload label="Dancer Video" file={dancerVideo} preview={previewDancer} setFile={setDancerVideo} loading={loading} />
             <VideoUpload label="Choreographer Video" file={choreoVideo} preview={previewChoreo} setFile={setChoreoVideo} loading={loading} />
           </div>
 
           {status && (
-            <p className="text-center text-slate-700 mt-5 font-semibold text-sm bg-slate-50 border border-slate-200 rounded-xl py-2 px-4 w-fit mx-auto">
+            <p className="text-center text-slate-600 mt-6 font-medium text-xs md:text-sm bg-slate-50 border border-slate-100 rounded-xl py-2.5 px-4 w-fit mx-auto">
               {status}
             </p>
           )}
 
           {/* CENTRAL COMMAND SUBMIT INTERRUPTER */}
-          <div className="flex flex-col md:flex-row gap-4 justify-center mt-8">
+          <div className="flex justify-center mt-8">
             <motion.button
-              whileTap={{ scale: 0.97 }}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
               disabled={loading || !user}
               onClick={handleAnalyze}
-              className="text-white py-3 px-10 rounded-xl font-bold transition shadow-md w-full sm:w-auto hover:brightness-95 text-base tracking-wide"
+              className="text-white py-3.5 px-12 rounded-xl font-bold transition shadow-lg shadow-violet-200 w-full sm:w-auto text-base tracking-wide active:shadow-none"
               style={{ backgroundColor: primaryColor }}
             >
               Analyze Performance
@@ -408,19 +417,19 @@ export default function UploadPage() {
         {/* ─── 2. DESKTOP 2-COLUMN SIDEBAR GRID (RESOURCES) ─── */}
         <div className="grid grid-cols-1 md:grid-cols-5 gap-6 items-start">
           
-          {/* LEFT COLUMN: GUIDELINES & ABOUT DOCUMENT BLOCKS */}
+          {/* LEFT COLUMN: GUIDELINES & ABOUT DOCUMENT BLOCKS (3/5 width) */}
           <div className="md:col-span-3 flex flex-col gap-6">
             {guidelinesPage && (
               <motion.div 
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="bg-white/85 backdrop-blur-xl border border-slate-200/80 shadow-sm rounded-xl p-6"
+                className="bg-white/70 border border-white shadow-sm rounded-2xl p-6"
               >
-                <div className="flex items-center gap-2.5 mb-3">
-                  <FiFileText style={{ color: primaryColor }} size={22} />
-                  <h2 className="text-xl md:text-2xl font-bold text-slate-800">{guidelinesPage.title}</h2>
+                <div className="flex items-center gap-2 mb-3">
+                  <FiFileText className="text-violet-500" size={20} />
+                  <h2 className="text-base md:text-lg font-bold text-slate-800">{guidelinesPage.title}</h2>
                 </div>
-                <p className="text-slate-700 whitespace-pre-line text-sm md:text-base leading-relaxed">{guidelinesPage.body}</p>
+                <p className="text-slate-600 whitespace-pre-line text-xs md:text-sm leading-relaxed">{guidelinesPage.body}</p>
               </motion.div>
             )}
 
@@ -428,25 +437,25 @@ export default function UploadPage() {
               <motion.div 
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="bg-white/85 backdrop-blur-xl border border-slate-200/80 shadow-sm rounded-xl p-6"
+                className="bg-white/70 border border-white shadow-sm rounded-2xl p-6"
               >
-                <div className="flex items-center gap-2.5 mb-3">
-                  <FiInfo style={{ color: primaryColor }} size={22} />
-                  <h2 className="text-xl md:text-2xl font-bold text-slate-800">{aboutPage.title}</h2>
+                <div className="flex items-center gap-2 mb-3">
+                  <FiInfo className="text-violet-500" size={20} />
+                  <h2 className="text-base md:text-lg font-bold text-slate-800">{aboutPage.title}</h2>
                 </div>
-                <p className="text-slate-700 whitespace-pre-line text-sm md:text-base leading-relaxed">{aboutPage.body}</p>
+                <p className="text-slate-600 whitespace-pre-line text-xs md:text-sm leading-relaxed">{aboutPage.body}</p>
               </motion.div>
             )}
           </div>
 
-          {/* RIGHT COLUMN: ACCORDION LIST EXPANDER INTERFACE */}
+          {/* RIGHT COLUMN: ACCORDION LIST EXPANDER INTERFACE (2/5 width) */}
           {faqs.length > 0 && (
-            <div className="md:col-span-2 bg-white/85 backdrop-blur-xl border border-slate-200/80 shadow-sm rounded-xl p-6 flex flex-col gap-4">
-              <div className="flex items-center gap-2.5 mb-1">
-                <FiHelpCircle style={{ color: primaryColor }} size={22} />
-                <h2 className="text-xl md:text-2xl font-bold text-slate-800">Frequently Asked Questions</h2>
+            <div className="md:col-span-2 bg-white/70 border border-white shadow-sm rounded-2xl p-6 flex flex-col gap-4">
+              <div className="flex items-center gap-2 mb-1">
+                <FiHelpCircle className="text-violet-500" size={20} />
+                <h2 className="text-base md:text-lg font-bold text-slate-800">Frequently Asked Questions</h2>
               </div>
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 {faqs.map((f) => (
                   <FaqItem key={f.id} faq={f} />
                 ))}
