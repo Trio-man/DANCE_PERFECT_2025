@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
+import { FiSearch, FiEye, FiTrash2, FiAlertCircle, FiActivity } from 'react-icons/fi';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -120,94 +121,108 @@ export default function AdminRunsPage() {
     );
   });
 
-  if (loading) return (
-    <div className="p-8 text-slate-500 font-medium">Loading runs...</div>
-  );
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12 text-slate-500 font-medium text-sm=w-full">
+        <div className="animate-spin h-5 w-5 border-2 border-slate-300 border-t-slate-600 rounded-full mr-3" />
+        Loading system execution passes...
+      </div>
+    );
+  }
 
   return (
-    <div className="w-full max-w-7xl mx-auto space-y-4">
+    <div className="w-full max-w-7xl mx-auto space-y-5">
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-800 rounded-xl p-3 text-sm">
+        <div className="bg-rose-50 border border-rose-100 text-rose-800 rounded-xl p-3.5 text-sm font-medium flex items-center gap-2">
+          <FiAlertCircle className="text-rose-500 shrink-0" size={16} />
           {error}
         </div>
       )}
 
-      <div className="flex items-center justify-between">
+      {/* Control Actions Header Block */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-2">
         <div>
-          <h1 className="text-xl font-bold">Analysis Runs</h1>
-          <p className="text-sm text-slate-500">{runs.length} total runs</p>
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            <FiActivity className="text-slate-500" size={20} />
+            Analysis Runs
+          </h1>
+          <p className="text-xs text-slate-500 mt-0.5">{runs.length} total operational profiles recorded</p>
         </div>
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Search email, ID, status…"
-          className="px-3 py-2 rounded-lg border border-white/70 bg-white/70 text-sm w-64"
-        />
+        <div className="relative w-full sm:w-64">
+          <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search email, ID, execution status…"
+            className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 bg-white text-xs font-medium focus:outline-none focus:border-slate-400 shadow-xs transition-all"
+          />
+        </div>
       </div>
 
-      <div className="bg-white/60 border border-white/70 rounded-xl p-4">
-        <div className="overflow-auto">
-          <table className="w-full text-sm">
+      {/* Primary Logging Matrix Wrapper */}
+      <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="text-left text-slate-500 border-b border-white/60">
-                <th className="py-2 pr-4 font-medium">Date</th>
-                <th className="py-2 pr-4 font-medium">User</th>
-                <th className="py-2 pr-4 font-medium">Status</th>
-                <th className="py-2 pr-4 font-medium">Score</th>
-                <th className="py-2 pr-4 font-medium">Summary</th>
-                <th className="py-2 font-medium">Actions</th>
+              <tr className="bg-slate-50/70 text-slate-500 font-bold border-b border-slate-100 uppercase tracking-wider text-[10px]">
+                <th className="py-3 px-4 font-bold">Execution Date</th>
+                <th className="py-3 px-4 font-bold">User Identity Node</th>
+                <th className="py-3 px-4 font-bold">Status Flags</th>
+                <th className="py-3 px-4 font-bold">Performance Metric</th>
+                <th className="py-3 px-4 font-bold">Automated Feedback Profile</th>
+                <th className="py-3 px-4 font-bold text-right">Terminal Scope</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-slate-400">
-                    No runs found.
+                  <td colSpan={6} className="py-12 text-center text-slate-400 font-normal text-xs">
+                    No matching pipeline run operations found in the current buffer.
                   </td>
                 </tr>
               ) : (
                 filtered.map((r) => (
-                  <tr key={r.id} className="border-t border-white/60 hover:bg-white/40 transition-colors">
-                    <td className="py-2 pr-4 whitespace-nowrap">
+                  <tr key={r.id} className="hover:bg-slate-50/50 transition-colors group">
+                    <td className="py-3 px-4 whitespace-nowrap text-slate-500 font-mono">
                       {new Date(r.created_at).toLocaleString()}
                     </td>
-                    <td className="py-2 pr-4">{getEmail(r)}</td>
-                    <td className="py-2 pr-4">
-                      <span className={[
-                        'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
-                        r.status === 'done'
-                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                          : 'bg-slate-100 text-slate-600 border border-slate-200'
-                      ].join(' ')}>
+                    <td className="py-3 px-4 font-semibold text-slate-900">{getEmail(r)}</td>
+                    <td className="py-3 px-4 whitespace-nowrap">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${
+                        r.status === 'done' || r.status === 'success'
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                          : 'bg-amber-50 text-amber-700 border border-amber-100'
+                      }`}>
                         {r.status || 'pending'}
                       </span>
                     </td>
-                    <td className="py-2 pr-4">
-                      <span className={[
-                        'font-semibold',
+                    <td className="py-3 px-4 whitespace-nowrap">
+                      <span className={`font-mono font-bold text-sm ${
                         (r.score ?? 0) >= 80 ? 'text-emerald-600' :
-                        (r.score ?? 0) >= 50 ? 'text-amber-600' : 'text-red-500'
-                      ].join(' ')}>
+                        (r.score ?? 0) >= 50 ? 'text-amber-500' : 'text-rose-500'
+                      }`}>
                         {r.score !== null ? `${r.score}%` : '—'}
                       </span>
                     </td>
-                    <td className="py-2 pr-4 max-w-xs truncate text-slate-500">
-                      {r.summary_feedback || '—'}
+                    <td className="py-3 px-4 max-w-xs truncate text-slate-400 font-normal italic">
+                      {r.summary_feedback || 'No pipeline notation provided.'}
                     </td>
-                    <td className="py-2">
-                      <div className="flex items-center gap-2">
+                    <td className="py-3 px-4 whitespace-nowrap text-right">
+                      <div className="flex items-center justify-end gap-1.5 opacity-90 group-hover:opacity-100 transition-opacity">
                         <button
                           onClick={() => router.push(`/admin/runs/${r.id}`)}
-                          className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-medium transition-colors"
+                          className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-50 shadow-2xs flex items-center gap-1 font-bold transition-all"
+                          title="Inspect Vectors"
                         >
-                          View
+                          <FiEye size={13} />
                         </button>
                         <button
                           onClick={() => setConfirmDelete(r.id)}
                           disabled={deletingId === r.id}
-                          className="px-3 py-1.5 rounded-lg border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-medium transition-colors disabled:opacity-50"
+                          className="p-1.5 rounded-lg border border-rose-100 bg-rose-50 text-rose-600 hover:text-rose-800 hover:bg-rose-100 disabled:opacity-40 transition-all"
+                          title="Purge Record"
                         >
-                          {deletingId === r.id ? 'Deleting…' : 'Delete'}
+                          <FiTrash2 size={13} />
                         </button>
                       </div>
                     </td>
@@ -219,27 +234,31 @@ export default function AdminRunsPage() {
         </div>
       </div>
 
-      {/* Confirm Delete Modal */}
+      {/* Confirm Purge Vector Overlay Modal */}
       {confirmDelete && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center px-4 z-50">
-          <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-white/60 p-5">
-            <div className="font-bold text-lg mb-2">Delete this run?</div>
-            <div className="text-sm text-slate-600 mb-1">
-              This will permanently delete the run record and its associated GIF files from the server.
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
+          <div className="w-full max-w-md bg-white rounded-xl shadow-xl border border-slate-200 p-5 space-y-4">
+            <div>
+              <h3 className="font-bold text-sm text-slate-900">Purge Selected Execution Pass?</h3>
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                This will permanently delete the pipeline run logs and its associated posture deviation file mappings from local servers. This operational behavior is irreversible.
+              </p>
             </div>
-            <div className="text-xs font-mono text-slate-400 mb-4 truncate">{confirmDelete}</div>
-            <div className="flex justify-end gap-2">
+            <div className="bg-slate-50 p-2 rounded-md border border-slate-100 text-[10px] font-mono text-slate-400 truncate">
+              ID: {confirmDelete}
+            </div>
+            <div className="flex justify-end gap-2 text-xs font-bold">
               <button
-                className="px-3 py-2 rounded-lg border bg-white hover:bg-black/5 text-sm"
+                className="px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-all"
                 onClick={() => setConfirmDelete(null)}
               >
-                Cancel
+                Cancel Action
               </button>
               <button
-                className="px-3 py-2 rounded-lg border bg-red-600 text-white hover:bg-red-700 text-sm font-medium"
+                className="px-3 py-2 rounded-lg bg-rose-600 text-white hover:bg-rose-700 shadow-sm transition-all"
                 onClick={() => handleDelete(confirmDelete)}
               >
-                Delete
+                Confirm System Delete
               </button>
             </div>
           </div>
