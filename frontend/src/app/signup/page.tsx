@@ -19,9 +19,9 @@ export default function SignupPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Dynamic Branding
+  // Dynamic Branding (Defaulting to your preferred #4b0082)
   const [systemName, setSystemName] = useState('DancePerfect');
-  const [primaryColor, setPrimaryColor] = useState('#7C3AED');
+  const [primaryColor, setPrimaryColor] = useState('#4b0082');
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -67,14 +67,12 @@ export default function SignupPage() {
         transition={{ duration: 0.4, ease: 'easeOut' }}
         className="w-full max-w-md p-6 sm:p-10 bg-white/80 backdrop-blur-xl border border-white rounded-3xl shadow-xl shadow-slate-200/50 text-center"
       >
-        {/* Branding */}
         {logoUrl && (
-          <img src={logoUrl} alt="Logo" className="h-14 w-14 mx-auto mb-4 rounded-2xl object-contain shadow-sm" />
+          <img src={logoUrl} alt="Logo" className="h-14 w-14 mx-auto mb-4 rounded-2xl object-contain shadow-sm bg-white p-1" />
         )}
         <h2 className="text-3xl font-black tracking-tight mb-1" style={{ color: primaryColor }}>Create Account</h2>
         <p className="text-slate-500 font-medium text-sm mb-8">Join {systemName} today</p>
 
-        {/* Error Feedback */}
         <AnimatePresence mode="popLayout">
           {error && (
             <motion.div 
@@ -118,10 +116,15 @@ export default function SignupPage() {
             whileTap={{ scale: 0.98 }}
             type="submit"
             disabled={loading}
-            className="w-full py-3 rounded-xl font-bold text-white shadow-md hover:brightness-95 transition-all disabled:opacity-50"
+            className="w-full py-3 rounded-xl font-bold text-white shadow-md hover:brightness-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
             style={{ backgroundColor: primaryColor }}
           >
-            {loading ? 'Creating account...' : 'Create Account'}
+            {loading ? (
+                <>
+                  <div className="animate-spin h-4 w-4 border-2 border-white/30 border-t-white rounded-full" />
+                  Creating account...
+                </>
+            ) : 'Create Account'}
           </motion.button>
         </form>
 
