@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
+import { FiCornerUpLeft, FiActivity, FiAlertTriangle, FiCpu, FiFileText, FiLayers } from 'react-icons/fi';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -97,14 +98,28 @@ export default function AdminRunDetailPage() {
     if (runId) loadRunDetails();
   }, [runId, router]);
 
-  if (loading) return <div style={{ padding: 40, fontFamily: 'sans-serif', color: '#6b7280' }}>Loading motion tracking vectors...</div>;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12 text-slate-500 font-medium text-sm">
+        <div className="animate-spin h-5 w-5 border-2 border-slate-300 border-t-slate-600 rounded-full mr-3" />
+        Loading motion tracking vectors...
+      </div>
+    );
+  }
+
   if (error || !run) {
     return (
-      <div style={{ padding: 40, fontFamily: 'sans-serif' }}>
-        <div style={{ padding: 16, backgroundColor: '#fef2f2', border: '1px solid #fca5a5', color: '#991b1b', borderRadius: 6 }}>
+      <div className="space-y-4 max-w-xl mx-auto py-8">
+        <div className="bg-rose-50 border border-rose-100 text-rose-800 rounded-xl p-4 text-xs font-medium flex items-center gap-2">
+          <FiAlertTriangle className="text-rose-500 shrink-0" size={16} />
           {error || 'The requested analysis session run profile was not located.'}
         </div>
-        <button onClick={() => router.push('/admin')} style={{ marginTop: 16 }}>Back to Safety</button>
+        <button 
+          onClick={() => router.push('/admin')} 
+          className="w-full py-2 bg-slate-900 text-white rounded-lg text-xs font-bold transition-all shadow-sm hover:bg-slate-800"
+        >
+          Return to Dashboard Control
+        </button>
       </div>
     );
   }
@@ -113,59 +128,97 @@ export default function AdminRunDetailPage() {
   const deviations: DeviationSegment[] = parsedJson?.detected_deviations || [];
 
   return (
-    <div style={{ padding: 40, fontFamily: 'sans-serif', backgroundColor: '#f9fafb', minHeight: '100vh', color: '#111827' }}>
+    <div className="space-y-6 w-full max-w-7xl mx-auto text-slate-900">
       
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28, borderBottom: '1px solid #e5e7eb', paddingBottom: 20 }}>
+      {/* Top Navigation Frame Terminal Header */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-2 border-b border-slate-100">
         <div>
-          <span style={{ fontSize: '13px', textTransform: 'uppercase', fontWeight: 600, color: '#4f46e5', letterSpacing: '0.05em' }}>Inspection Terminal</span>
-          <h1 style={{ margin: '4px 0 0 0', fontSize: '28px', fontWeight: 700 }}>Run Detailed Analytics</h1>
+          <span className="text-[10px] uppercase font-bold text-indigo-600 tracking-widest block font-mono">Inspection Terminal</span>
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight mt-0.5">Run Detailed Analytics</h1>
         </div>
-        <button 
+        <button
           onClick={() => router.push('/admin')}
-          style={{ padding: '10px 18px', borderRadius: 6, border: '1px solid #d1d5db', backgroundColor: '#fff', cursor: 'pointer', fontWeight: 500, fontSize: '14px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}
+          className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-50 text-xs font-bold shadow-sm flex items-center gap-1.5 transition-all w-full sm:w-auto justify-center"
         >
-          &larr; Back to Admin Control
+          <FiCornerUpLeft size={14} />
+          Back to Admin Control
         </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 32 }}>
+      {/* Main Structural Twin Columns Dashboard Grid Splitter */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-          <div style={{ backgroundColor: '#fff', padding: 24, borderRadius: 8, border: '1px solid #e5e7eb', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-            <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', borderBottom: '1px solid #f3f4f6', paddingBottom: 10, color: '#374151' }}>Session Specifications</h3>
+        {/* Left Specification Deck (Occupies 1 Column Layer) */}
+        <div className="lg:col-span-1 space-y-6">
+          
+          {/* Metadata Specifications Parameter Frame Card */}
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-50 pb-2.5">
+              <FiActivity size={14} className="text-slate-500" />
+              Session Specifications
+            </h3>
             
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, fontSize: '14px' }}>
-              <p style={{ margin: 0 }}><b style={{ color: '#6b7280' }}>Target User:</b> <span style={{ fontWeight: 500 }}>{userProfile?.email || run.user_id}</span></p>
-              <p style={{ margin: 0 }}><b style={{ color: '#6b7280' }}>Status Flags:</b> 
-                <span style={{ marginLeft: 8, padding: '2px 8px', borderRadius: 12, fontSize: '11px', fontWeight: 600, backgroundColor: run.status === 'success' ? '#dcfce7' : '#fee2e2', color: run.status === 'success' ? '#15803d' : '#991b1b' }}>
+            <div className="space-y-3 text-xs font-medium">
+              <div className="flex justify-between items-center gap-4 py-1 border-b border-slate-50/50">
+                <span className="text-slate-400">Target User:</span>
+                <span className="text-slate-800 font-bold max-w-[180px] truncate">{userProfile?.email || run.user_id}</span>
+              </div>
+              <div className="flex justify-between items-center gap-4 py-1 border-b border-slate-50/50">
+                <span className="text-slate-400">Status Flags:</span>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${
+                  run.status === 'success' || run.status === 'done'
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                    : 'bg-rose-50 text-rose-700 border border-rose-100'
+                }`}>
                   {run.status || 'PENDING'}
                 </span>
-              </p>
-              <p style={{ margin: 0 }}><b style={{ color: '#6b7280' }}>Captured Time:</b> <span>{new Date(run.created_at).toLocaleString()}</span></p>
-              <p style={{ margin: 0 }}><b style={{ color: '#6b7280' }}>DTW Vector Error:</b> <span style={{ fontFamily: 'monospace' }}>{parsedJson?.dtw_distance ? Number(parsedJson.dtw_distance).toFixed(2) : '—'}</span></p>
+              </div>
+              <div className="flex justify-between items-center gap-4 py-1 border-b border-slate-50/50">
+                <span className="text-slate-400">Captured Time:</span>
+                <span className="text-slate-600 font-mono text-[11px]">{new Date(run.created_at).toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between items-center gap-4 py-1">
+                <span className="text-slate-400">DTW Vector Error:</span>
+                <span className="text-slate-800 font-mono font-bold">
+                  {parsedJson?.dtw_distance ? Number(parsedJson.dtw_distance).toFixed(2) : '—'}
+                </span>
+              </div>
               
-              <div style={{ marginTop: 12, padding: 16, backgroundColor: '#f8fafc', borderRadius: 6, border: '1px solid #f1f5f9', textAlign: 'center' }}>
-                <div style={{ fontSize: '12px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Performance Index</div>
-                <div style={{ fontSize: '36px', fontWeight: 800, color: (run.score ?? 0) >= 80 ? '#16a34a' : (run.score ?? 0) >= 50 ? '#d97706' : '#dc2626' }}>
+              {/* Internal Performance Evaluation Target Ring Block */}
+              <div className="mt-4 bg-slate-50 rounded-xl p-4 border border-slate-100 text-center space-y-1">
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Performance Index</div>
+                <div className={`text-3xl font-black tracking-tighter ${
+                  (run.score ?? 0) >= 80 ? 'text-emerald-600' : 
+                  (r.score ?? 0) >= 50 ? 'text-amber-500' : 'text-rose-500'
+                }`}>
                   {run.score !== null ? `${run.score}%` : '—'}
                 </div>
               </div>
             </div>
           </div>
 
-          <div style={{ backgroundColor: '#fff', padding: 24, borderRadius: 8, border: '1px solid #e5e7eb', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-            <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', color: '#374151' }}>Automated AI Summary</h3>
-            <div style={{ fontSize: '14px', lineHeight: '1.6', color: '#4b5563', backgroundColor: '#f9fafb', padding: 14, borderRadius: 6, border: '1px solid #f3f4f6', fontStyle: 'italic' }}>
+          {/* Automated Narrative Summary Evaluation Notation Block Card */}
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-3">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+              <FiFileText size={14} className="text-slate-500" />
+              Automated AI Summary
+            </h3>
+            <div className="text-xs font-medium leading-relaxed text-slate-600 bg-slate-50/70 border border-slate-100 p-3.5 rounded-lg italic">
               &ldquo;{run.summary_feedback || 'No automated evaluation text was written for this execution block.'}&rdquo;
             </div>
           </div>
+
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <h2 style={{ fontSize: '20px', margin: '0 0 4px 0', fontWeight: 600 }}>Visual Breakdown Moments</h2>
+        {/* Right Execution Deviations Array Display Box (Occupies 2 Column Layout Blocks) */}
+        <div className="lg:col-span-2 space-y-4">
+          <h2 className="text-sm font-bold text-slate-800 tracking-tight flex items-center gap-2 mb-1">
+            <FiLayers className="text-slate-400" />
+            Visual Breakdown Moments
+          </h2>
           
           {deviations.length === 0 ? (
-            <div style={{ backgroundColor: '#fff', padding: 40, borderRadius: 8, border: '1px solid #e5e7eb', textAlign: 'center', color: '#6b7280' }}>
+            <div className="bg-white border border-slate-200 p-12 rounded-xl text-center text-xs text-slate-400 font-medium">
               No critical skeletal posture standard deviations recorded for this run.
             </div>
           ) : (
@@ -173,37 +226,45 @@ export default function AdminRunDetailPage() {
               const absoluteGifUrl = dev.gif_path ? `/deviation_gifs/${dev.gif_path}` : null;
 
               return (
-                <div key={index} style={{ display: 'flex', backgroundColor: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', overflow: 'hidden', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                <div key={index} className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs flex flex-col sm:flex-row group transition-all hover:border-slate-300">
                   
-                  <div style={{ width: '45%', backgroundColor: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '220px', position: 'relative' }}>
+                  {/* Left Column Aspect Media Viewer Container */}
+                  <div className="sm:w-[42%] bg-slate-950 flex items-center justify-center min-h-[180px] sm:min-h-[200px] relative border-b sm:border-b-0 sm:border-r border-slate-100">
                     {absoluteGifUrl ? (
                       <img 
                         src={absoluteGifUrl} 
                         alt={dev.body_part} 
-                        style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                        className="w-full h-full object-contain absolute inset-0 p-1"
+                        loading="lazy"
                       />
                     ) : (
-                      <div style={{ color: '#4b5563', fontSize: '13px' }}>Rendering Frame Preview Vector</div>
+                      <div className="text-slate-500 font-mono text-[10px] font-bold uppercase tracking-wide flex items-center gap-1.5">
+                        <FiCpu className="animate-pulse" size={12} />
+                        Rendering Preview Vector
+                      </div>
                     )}
                   </div>
 
-                  <div style={{ flex: 1, padding: 24, display: 'flex', flexDirection: 'column', justifyContent: 'center', backgroundColor: '#fff' }}>
-                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#4f46e5', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      Moment Rank #{index + 1}
-                    </span>
-                    <h4 style={{ margin: '6px 0 10px 0', fontSize: '17px', fontWeight: 700, lineHeight: '1.3', color: '#111827' }}>
-                      Incorrect {dev.body_part} position sequence.
-                    </h4>
-                    
-                    <div style={{ padding: '12px 14px', backgroundColor: '#faf5ff', border: '1px solid #f3e8ff', borderRadius: 6, color: '#6b21a8', fontSize: '13px', fontStyle: 'italic', marginBottom: 14 }}>
-                      &ldquo;Adjust your {dev.body_part} tracking to match the reference guide.&rdquo;
+                  {/* Right Column Core Text Parameters Description */}
+                  <div className="flex-1 p-5 flex flex-col justify-between space-y-4 bg-white">
+                    <div className="space-y-2">
+                      <span className="text-[9px] font-extrabold text-indigo-600 uppercase tracking-widest block font-mono">
+                        Moment Rank #{index + 1}
+                      </span>
+                      <h4 className="text-sm font-bold text-slate-900 tracking-tight leading-snug">
+                        Incorrect <span className="text-indigo-600 underline decoration-indigo-200 decoration-2 underline-offset-2">{dev.body_part}</span> position sequence.
+                      </h4>
+                      
+                      <div className="p-2.5 bg-purple-50/50 border border-purple-100/60 rounded-lg text-xs text-purple-900/90 font-medium italic">
+                        &ldquo;Adjust your {dev.body_part} tracking to match the reference guide.&rdquo;
+                      </div>
                     </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
-                      <span style={{ fontSize: '12px', fontFamily: 'monospace', color: '#9ca3af' }}>
-                        FRAME REFERENCE: [#{dev.user_start_frame}]
+                    <div className="pt-2 border-t border-slate-50 flex items-center justify-between text-[10px] font-bold">
+                      <span className="font-mono text-slate-400 tracking-wider">
+                        FRAME REFERENCE: <span className="text-slate-600">[#{dev.user_start_frame}]</span>
                       </span>
-                      <span style={{ fontSize: '10px', fontWeight: 600, color: '#9333ea', backgroundColor: '#f3e8ff', padding: '2px 8px', borderRadius: 10, textTransform: 'uppercase' }}>
+                      <span className="text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md uppercase text-[9px] border border-purple-100/40 tracking-wider">
                         AI Processed
                       </span>
                     </div>
@@ -214,13 +275,17 @@ export default function AdminRunDetailPage() {
             })
           )}
 
-          <details style={{ marginTop: 20, backgroundColor: '#f1f5f9', borderRadius: 8, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-            <summary style={{ padding: '12px 16px', fontWeight: 600, fontSize: '14px', color: '#475569', cursor: 'pointer', userSelect: 'none' }}>
-              Open Raw Matrix System Inspector (`result_json`)
+          {/* Raw System JSON Vector Inspection Module Panel */}
+          <details className="group border border-slate-200 bg-white rounded-xl overflow-hidden transition-all shadow-2xs">
+            <summary className="p-3.5 font-bold text-xs text-slate-600 hover:text-slate-900 hover:bg-slate-50/80 cursor-pointer user-select-none flex items-center justify-between transition-colors">
+              <span>Open Raw Matrix System Inspector (`result_json`)</span>
+              <span className="text-slate-400 text-[10px] font-mono group-open:rotate-180 transition-transform">▼</span>
             </summary>
-            <pre style={{ margin: 0, padding: 16, backgroundColor: '#0f172a', color: '#38bdf8', fontSize: '12px', overflowX: 'auto', fontFamily: 'monospace', maxHeight: '300px' }}>
-              {JSON.stringify(parsedJson, null, 2)}
-            </pre>
+            <div className="border-t border-slate-100 p-4 bg-slate-950">
+              <pre className="text-[11px] font-mono font-medium text-sky-400 overflow-x-auto max-h-72 leading-relaxed selection:bg-slate-800">
+                {JSON.stringify(parsedJson, null, 2)}
+              </pre>
+            </div>
           </details>
 
         </div>
