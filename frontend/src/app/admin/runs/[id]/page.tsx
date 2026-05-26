@@ -100,7 +100,7 @@ export default function AdminRunDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12 text-slate-500 font-medium text-sm">
+      <div className="flex items-center justify-center py-12 text-slate-500 font-medium text-sm w-full">
         <div className="animate-spin h-5 w-5 border-2 border-slate-300 border-t-slate-600 rounded-full mr-3" />
         Loading motion tracking vectors...
       </div>
@@ -109,7 +109,7 @@ export default function AdminRunDetailPage() {
 
   if (error || !run) {
     return (
-      <div className="space-y-4 max-w-xl mx-auto py-8">
+      <div className="space-y-4 max-w-xl mx-auto py-8 p-4">
         <div className="bg-rose-50 border border-rose-100 text-rose-800 rounded-xl p-4 text-xs font-medium flex items-center gap-2">
           <FiAlertTriangle className="text-rose-500 shrink-0" size={16} />
           {error || 'The requested analysis session run profile was not located.'}
@@ -128,9 +128,9 @@ export default function AdminRunDetailPage() {
   const deviations: DeviationSegment[] = parsedJson?.detected_deviations || [];
 
   return (
-    <div className="space-y-6 w-full max-w-7xl mx-auto text-slate-900">
+    <div className="space-y-6 w-full max-w-7xl mx-auto text-slate-900 p-4 md:p-6">
       
-      {/* Top Navigation Frame Terminal Header */}
+      {/* Top Navigation Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-2 border-b border-slate-100">
         <div>
           <span className="text-[10px] uppercase font-bold text-indigo-600 tracking-widest block font-mono">Inspection Terminal</span>
@@ -145,13 +145,13 @@ export default function AdminRunDetailPage() {
         </button>
       </div>
 
-      {/* Main Structural Twin Columns Dashboard Grid Splitter */}
+      {/* Main Grid View */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         
-        {/* Left Specification Deck (Occupies 1 Column Layer) */}
+        {/* Left Specification Deck */}
         <div className="lg:col-span-1 space-y-6">
           
-          {/* Metadata Specifications Parameter Frame Card */}
+          {/* Metadata Frame Card */}
           <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-50 pb-2.5">
               <FiActivity size={14} className="text-slate-500" />
@@ -184,12 +184,12 @@ export default function AdminRunDetailPage() {
                 </span>
               </div>
               
-              {/* Internal Performance Evaluation Target Ring Block */}
+              {/* Performance Score Badge */}
               <div className="mt-4 bg-slate-50 rounded-xl p-4 border border-slate-100 text-center space-y-1">
                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Performance Index</div>
                 <div className={`text-3xl font-black tracking-tighter ${
                   (run.score ?? 0) >= 80 ? 'text-emerald-600' : 
-                  (r.score ?? 0) >= 50 ? 'text-amber-500' : 'text-rose-500'
+                  (run.score ?? 0) >= 50 ? 'text-amber-500' : 'text-rose-500'
                 }`}>
                   {run.score !== null ? `${run.score}%` : '—'}
                 </div>
@@ -197,7 +197,7 @@ export default function AdminRunDetailPage() {
             </div>
           </div>
 
-          {/* Automated Narrative Summary Evaluation Notation Block Card */}
+          {/* AI Narrative Summary Card */}
           <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-3">
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
               <FiFileText size={14} className="text-slate-500" />
@@ -210,7 +210,7 @@ export default function AdminRunDetailPage() {
 
         </div>
 
-        {/* Right Execution Deviations Array Display Box (Occupies 2 Column Layout Blocks) */}
+        {/* Right Execution Deviations Array Box */}
         <div className="lg:col-span-2 space-y-4">
           <h2 className="text-sm font-bold text-slate-800 tracking-tight flex items-center gap-2 mb-1">
             <FiLayers className="text-slate-400" />
@@ -228,7 +228,7 @@ export default function AdminRunDetailPage() {
               return (
                 <div key={index} className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs flex flex-col sm:flex-row group transition-all hover:border-slate-300">
                   
-                  {/* Left Column Aspect Media Viewer Container */}
+                  {/* Left Aspect Media Viewer Container */}
                   <div className="sm:w-[42%] bg-slate-950 flex items-center justify-center min-h-[180px] sm:min-h-[200px] relative border-b sm:border-b-0 sm:border-r border-slate-100">
                     {absoluteGifUrl ? (
                       <img 
@@ -245,7 +245,7 @@ export default function AdminRunDetailPage() {
                     )}
                   </div>
 
-                  {/* Right Column Core Text Parameters Description */}
+                  {/* Right Core Text Parameters Description */}
                   <div className="flex-1 p-5 flex flex-col justify-between space-y-4 bg-white">
                     <div className="space-y-2">
                       <span className="text-[9px] font-extrabold text-indigo-600 uppercase tracking-widest block font-mono">
@@ -275,9 +275,9 @@ export default function AdminRunDetailPage() {
             })
           )}
 
-          {/* Raw System JSON Vector Inspection Module Panel */}
+          {/* Raw System JSON Matrix Inspector */}
           <details className="group border border-slate-200 bg-white rounded-xl overflow-hidden transition-all shadow-2xs">
-            <summary className="p-3.5 font-bold text-xs text-slate-600 hover:text-slate-900 hover:bg-slate-50/80 cursor-pointer user-select-none flex items-center justify-between transition-colors">
+            <summary className="p-3.5 font-bold text-xs text-slate-600 hover:text-slate-900 hover:bg-slate-50/80 cursor-pointer select-none flex items-center justify-between transition-colors">
               <span>Open Raw Matrix System Inspector (`result_json`)</span>
               <span className="text-slate-400 text-[10px] font-mono group-open:rotate-180 transition-transform">▼</span>
             </summary>
