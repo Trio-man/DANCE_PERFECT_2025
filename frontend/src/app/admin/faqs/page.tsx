@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
+import { FiHelpCircle, FiAlertCircle, FiCheckCircle, FiPlus, FiSave, FiEyeOff, FiCheck, FiCornerUpLeft } from 'react-icons/fi';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -25,12 +26,15 @@ export default function AdminFaqsPage() {
   const [rows, setRows] = useState<FaqRow[]>([]);
   const [selected, setSelected] = useState<FaqRow | null>(null);
 
+  // New FAQ inputs
   const [newQ, setNewQ] = useState('');
   const [newA, setNewA] = useState('');
+  const [isAddingOpen, setIsAddingOpen] = useState(false);
 
   const [saving, setSaving] = useState(false);
   const [workingId, setWorkingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -58,6 +62,7 @@ export default function AdminFaqsPage() {
       const r = (prof?.role || 'user').toLowerCase();
       setRole(r);
       if (!['super_admin', 'it_admin'].includes(r)) {
+        router.push('/admin');
         return;
       }
 
@@ -82,9 +87,14 @@ export default function AdminFaqsPage() {
     load();
   }, [router]);
 
+  const triggerNotification = (msg: string) => {
+    setSuccessMessage(msg);
+    setTimeout(() => setSuccessMessage(null), 3000);
+  };
+
   const addFaq = async () => {
     if (!newQ.trim() || !newA.trim()) {
-      setError('Please provide both question and answer.');
+      setError('Please provide both question and answer before publishing.');
       return;
     }
 
@@ -116,6 +126,8 @@ export default function AdminFaqsPage() {
     setNewQ('');
     setNewA('');
     setSaving(false);
+    setIsAddingOpen(false);
+    triggerNotification('New FAQ item published successfully.');
   };
 
   const saveSelected = async () => {
@@ -145,14 +157,10 @@ export default function AdminFaqsPage() {
     setRows((prev) => prev.map((r) => (r.id === selected.id ? selected : r)));
     setSaving(false);
     setWorkingId(null);
+    triggerNotification('FAQ update changes successfully saved.');
   };
 
   const disableFaq = async (id: number) => {
-    const ok = window.confirm(
-      'Disable this FAQ?\n\nIt will be hidden from users (no deletion).'
-    );
-    if (!ok) return;
-
     setError(null);
     setWorkingId(id);
 
@@ -170,12 +178,10 @@ export default function AdminFaqsPage() {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, is_active: false } : r)));
     setSelected((prev) => (prev?.id === id ? { ...prev, is_active: false } : prev));
     setWorkingId(null);
+    triggerNotification('FAQ item hidden from public users.');
   };
 
   const activateFaq = async (id: number) => {
-    const ok = window.confirm('Activate this FAQ?');
-    if (!ok) return;
-
     setError(null);
     setWorkingId(id);
 
@@ -193,140 +199,92 @@ export default function AdminFaqsPage() {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, is_active: true } : r)));
     setSelected((prev) => (prev?.id === id ? { ...prev, is_active: true } : prev));
     setWorkingId(null);
+    triggerNotification('FAQ item activated publicly.');
   };
 
-  if (loading) return <div style={{ padding: 40 }}>Loading FAQs...</div>;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12 text-slate-500 font-medium text-sm">
+        <div className="animate-spin h-5 w-5 border-2 border-slate-300 border-t-slate-600 rounded-full mr-3" />
+        Loading context question maps...
+      </div>
+    );
+  }
 
   return (
-    <div style={{ padding: 40 }}>
-      <h1>FAQs Management</h1>
-      <p>Role: {role}</p>
-
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-
-      <div style={{ marginTop: 20, border: '1px solid #ccc', padding: 16 }}>
-        <h3>Add New FAQ</h3>
-        <div style={{ marginTop: 10 }}>
-          <label>Question</label>
-          <br />
-          <input
-            value={newQ}
-            onChange={(e) => setNewQ(e.target.value)}
-            style={{ width: '100%' }}
-            placeholder="Type question..."
-          />
+    <div className="space-y-6 w-full">
+      
+      {/* Upper Section Title Readout */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-2 border-b border-slate-100">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight">Help Center FAQs</h1>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Configure, deploy, and refine the knowledge base structures displayed to public accounts.
+          </p>
         </div>
-        <div style={{ marginTop: 10 }}>
-          <label>Answer</label>
-          <br />
-          <textarea
-            value={newA}
-            onChange={(e) => setNewA(e.target.value)}
-            style={{ width: '100%', height: 90 }}
-            placeholder="Type answer..."
-          />
-        </div>
-
-        <button onClick={addFaq} disabled={saving} style={{ marginTop: 12 }}>
-          {saving ? 'Adding...' : 'Add FAQ'}
+        <button
+          onClick={() => router.push('/admin')}
+          className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-50 text-xs font-bold shadow-sm flex items-center gap-1.5 transition-all"
+        >
+          <FiCornerUpLeft size={14} />
+          Back to Dashboard
         </button>
       </div>
 
-      <div style={{ display: 'flex', gap: 24, marginTop: 24 }}>
-        <div style={{ width: 360 }}>
-          <h3>FAQ List</h3>
-          {rows.length === 0 ? (
-            <p>No FAQs yet.</p>
-          ) : (
-            rows.map((r) => (
-              <div key={r.id} style={{ marginBottom: 8 }}>
-                <button onClick={() => setSelected(r)} style={{ width: '100%', textAlign: 'left' }}>
-                  #{r.id} {r.is_active ? '' : '(disabled)'}
-                  <div style={{ fontSize: 12, opacity: 0.8 }}>
-                    {r.question.length > 50 ? r.question.slice(0, 50) + '…' : r.question}
-                  </div>
-                </button>
-              </div>
-            ))
-          )}
+      {error && (
+        <div className="bg-rose-50 border border-rose-100 text-rose-800 rounded-xl p-3.5 text-sm font-medium flex items-center gap-2">
+          <FiAlertCircle className="text-rose-500 shrink-0" size={16} />
+          {error}
         </div>
+      )}
 
-        <div style={{ flex: 1 }}>
-          <h3>Edit Selected</h3>
-          {!selected ? (
-            <p>Select an FAQ to edit.</p>
-          ) : (
-            <>
-              <p>
-                <b>ID:</b> {selected.id}
-              </p>
-              <p>
-                <b>Status:</b> {selected.is_active ? 'Active' : 'Disabled'}
-              </p>
-
-              <div style={{ marginTop: 10 }}>
-                <label>Question</label>
-                <br />
-                <input
-                  value={selected.question}
-                  onChange={(e) => setSelected({ ...selected, question: e.target.value })}
-                  style={{ width: '100%' }}
-                  disabled={saving}
-                />
-              </div>
-
-              <div style={{ marginTop: 10 }}>
-                <label>Answer</label>
-                <br />
-                <textarea
-                  value={selected.answer}
-                  onChange={(e) => setSelected({ ...selected, answer: e.target.value })}
-                  style={{ width: '100%', height: 140 }}
-                  disabled={saving}
-                />
-              </div>
-
-              <div style={{ marginTop: 10 }}>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={selected.is_active}
-                    onChange={(e) => setSelected({ ...selected, is_active: e.target.checked })}
-                    disabled={saving}
-                  />{' '}
-                  Active
-                </label>
-              </div>
-
-              <div style={{ marginTop: 14, display: 'flex', gap: 10 }}>
-                <button onClick={saveSelected} disabled={saving || workingId === selected.id}>
-                  {saving || workingId === selected.id ? 'Saving...' : 'Save'}
-                </button>
-
-                {selected.is_active ? (
-                  <button
-                    onClick={() => disableFaq(selected.id)}
-                    disabled={workingId === selected.id}
-                  >
-                    {workingId === selected.id ? 'Working...' : 'Disable'}
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => activateFaq(selected.id)}
-                    disabled={workingId === selected.id}
-                  >
-                    {workingId === selected.id ? 'Working...' : 'Activate'}
-                  </button>
-                )}
-              </div>
-            </>
-          )}
+      {successMessage && (
+        <div className="bg-emerald-50 border border-emerald-100 text-emerald-800 rounded-xl p-3.5 text-sm font-medium flex items-center gap-2 transition-all">
+          <FiCheckCircle className="text-emerald-500 shrink-0" size={16} />
+          {successMessage}
         </div>
-      </div>
+      )}
 
-      <div style={{ marginTop: 24 }}>
-        <button onClick={() => router.push('/admin')}>Back</button>
-      </div>
-    </div>
-  );
-}
+      {/* EXPANDABLE CREATION FORM COMPONENT */}
+      <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
+        <button
+          onClick={() => setIsAddingOpen(!isAddingOpen)}
+          className="w-full flex items-center justify-between px-4 py-3 bg-slate-50/50 hover:bg-slate-50 text-left transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <div className="p-1 bg-violet-50 text-violet-600 rounded-md border border-violet-100">
+              <FiPlus size={14} />
+            </div>
+            <span className="text-xs font-bold text-slate-800">Deploy New Knowledge Base Entry</span>
+          </div>
+          <span className="text-xs text-slate-400 font-bold">{isAddingOpen ? 'Collapse —' : 'Expand +'}</span>
+        </button>
+
+        {isAddingOpen && (
+          <div className="p-4 border-t border-slate-100 space-y-4 bg-white">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">Question Title Text</label>
+              <input
+                value={newQ}
+                onChange={(e) => setNewQ(e.target.value)}
+                className="w-full px-3 py-2 text-xs font-medium text-slate-800 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-slate-400 transition-all"
+                placeholder="What query statement are users selecting?"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">Exploratory Solution Answer</label>
+              <textarea
+                value={newA}
+                onChange={(e) => setNewA(e.target.value)}
+                className="w-full px-3 py-2 text-xs font-medium text-slate-800 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-slate-400 transition-all font-sans leading-relaxed resize-none h-24"
+                placeholder="Provide direct, detailed answers here..."
+              />
+            </div>
+            <div className="flex justify-end pt-1">
+              <button
+                onClick={addFaq}
+                disabled={saving}
+                className="px-3 py-1.5 bg-slate-900 text-white font-bold text-xs rounded-lg hover:bg-slate-800 disabled:bg-slate-300 transition-colors shadow-xs"
+              >
+                {saving ? 'Processing Entry...' : 'Publish Knowledge Block'}
+              </button>
