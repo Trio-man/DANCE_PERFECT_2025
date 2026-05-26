@@ -304,7 +304,7 @@ export default function UploadPage() {
         
         {cmsError && <p className="text-center text-xs bg-red-50 text-red-600 px-4 py-2 rounded-lg border border-red-100">{cmsError}</p>}
 
-        {/* ─── 1. CORE COMPRESSION ANALYSIS HUB CARD (VIBRANT BACKGROUND COMBO) ─── */}
+        {/* ─── 1. CORE COMPRESSION ANALYSIS HUB CARD ─── */}
         <motion.div 
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
@@ -341,7 +341,7 @@ export default function UploadPage() {
                   onClick={() => router.push('/admin')}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-xs md:text-sm font-semibold shadow-sm transition-all"
                 >
-                  <MdAdminPanelSettings size={18} className="text-violet-500" />
+                  <MdAdminPanelSettings size={18} style={{ color: primaryColor }} />
                   Admin Dashboard
                 </motion.button>
               )}
@@ -408,7 +408,7 @@ export default function UploadPage() {
         {/* ─── 2. DESKTOP 2-COLUMN SIDEBAR GRID (RESOURCES) ─── */}
         <div className="grid grid-cols-1 md:grid-cols-5 gap-6 items-start">
           
-          {/* LEFT COLUMN: GUIDELINES & ABOUT DOCUMENT BLOCKS (3/5 width) */}
+          {/* LEFT COLUMN: GUIDELINES & ABOUT DOCUMENT BLOCKS */}
           <div className="md:col-span-3 flex flex-col gap-6">
             {guidelinesPage && (
               <motion.div 
@@ -416,11 +416,11 @@ export default function UploadPage() {
                 animate={{ opacity: 1 }}
                 className="bg-white/85 backdrop-blur-xl border border-slate-200/80 shadow-sm rounded-xl p-6"
               >
-                <div className="flex items-center gap-2 mb-3">
-                  <FiFileText style={{ color: primaryColor }} size={20} />
-                  <h2 className="text-lg font-bold" style={{ color: primaryColor }}>{guidelinesPage.title}</h2>
+                <div className="flex items-center gap-2.5 mb-3">
+                  <FiFileText style={{ color: primaryColor }} size={22} />
+                  <h2 className="text-xl md:text-2xl font-bold text-slate-800">{guidelinesPage.title}</h2>
                 </div>
-                <p className="text-slate-700 whitespace-pre-line text-sm leading-relaxed">{guidelinesPage.body}</p>
+                <p className="text-slate-700 whitespace-pre-line text-sm md:text-base leading-relaxed">{guidelinesPage.body}</p>
               </motion.div>
             )}
 
@@ -430,21 +430,21 @@ export default function UploadPage() {
                 animate={{ opacity: 1 }}
                 className="bg-white/85 backdrop-blur-xl border border-slate-200/80 shadow-sm rounded-xl p-6"
               >
-                <div className="flex items-center gap-2 mb-3">
-                  <FiInfo style={{ color: primaryColor }} size={20} />
-                  <h2 className="text-lg font-bold" style={{ color: primaryColor }}>{aboutPage.title}</h2>
+                <div className="flex items-center gap-2.5 mb-3">
+                  <FiInfo style={{ color: primaryColor }} size={22} />
+                  <h2 className="text-xl md:text-2xl font-bold text-slate-800">{aboutPage.title}</h2>
                 </div>
-                <p className="text-slate-700 whitespace-pre-line text-sm leading-relaxed">{aboutPage.body}</p>
+                <p className="text-slate-700 whitespace-pre-line text-sm md:text-base leading-relaxed">{aboutPage.body}</p>
               </motion.div>
             )}
           </div>
 
-          {/* RIGHT COLUMN: ACCORDION LIST EXPANDER INTERFACE (2/5 width) */}
+          {/* RIGHT COLUMN: ACCORDION LIST EXPANDER INTERFACE */}
           {faqs.length > 0 && (
             <div className="md:col-span-2 bg-white/85 backdrop-blur-xl border border-slate-200/80 shadow-sm rounded-xl p-6 flex flex-col gap-4">
-              <div className="flex items-center gap-2 mb-1">
-                <FiHelpCircle style={{ color: primaryColor }} size={20} />
-                <h2 className="text-lg font-bold" style={{ color: primaryColor }}>FAQs</h2>
+              <div className="flex items-center gap-2.5 mb-1">
+                <FiHelpCircle style={{ color: primaryColor }} size={22} />
+                <h2 className="text-xl md:text-2xl font-bold text-slate-800">Frequently Asked Questions</h2>
               </div>
               <div className="space-y-3">
                 {faqs.map((f) => (
