@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 import Image from 'next/image';
-import { FiSettings, FiAlertCircle, FiCheckCircle, FiUploadCloud, FiSave, FiCornerUpLeft, FiLayers } from 'react-icons/fi';
+import { FiAlertCircle, FiCheckCircle, FiUploadCloud, FiSave, FiCornerUpLeft, FiLayers } from 'react-icons/fi';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -91,7 +91,7 @@ export default function AdminSettingsPage() {
 
   if (!row) {
     return (
-      <div className="flex items-center justify-center py-12 text-slate-500 font-medium text-sm">
+      <div className="flex items-center justify-center py-12 text-slate-500 font-medium text-sm w-full">
         <div className="animate-spin h-5 w-5 border-2 border-slate-300 border-t-slate-600 rounded-full mr-3" />
         Loading system control configuration environment...
       </div>
@@ -99,7 +99,7 @@ export default function AdminSettingsPage() {
   }
 
   return (
-    <div className="space-y-6 w-full max-w-4xl">
+    <div className="space-y-6 w-full max-w-4xl mx-auto p-4 md:p-6 text-slate-900">
       
       {/* Upper Context Header Linkage */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-2 border-b border-slate-100">
@@ -197,7 +197,7 @@ export default function AdminSettingsPage() {
             
             {/* Left Conditional Image Container View */}
             {row.logo_url && (
-              <div className="bg-white border border-slate-200 p-3 rounded-lg flex items-center justify-center shadow-xs shrink-0 mx-auto sm:mx-0 w-32 h-32">
+              <div className="bg-white border border-slate-200 p-3 rounded-lg flex items-center justify-center shadow-xs shrink-0 mx-auto sm:mx-0 w-32 h-32 relative">
                 <div className="relative w-full h-full">
                   <Image
                     src={row.logo_url}
@@ -228,3 +228,93 @@ export default function AdminSettingsPage() {
                     if (!file) return;
 
                     try {
+                      setSaving(true);
+                      setError(null);
+
+                      // 1. AUTOMATIC AUTO-CLEAN: Prune legacy records if existing URL maps matching bucket values
+                      if (row.logo_url) {
+                        try {
+                          const urlParts = row.logo_url.split('/');
+                          const oldFileName = urlParts[urlParts.length - 1];
+                          
+                          if (oldFileName) {
+                            await supabase.storage
+                              .from('Logos')
+                              .remove([oldFileName]);
+                          }
+                        } catch (deleteErr) {
+                          console.error("Failed to prune old file from storage bucket:", deleteErr);
+                        }
+                      }
+
+                      // 2. PROCEED WITH FRESH LOGO IMAGE UPLOAD
+                      const fileExt = file.name.split('.').pop();
+                      const fileName = `logo-${Date.now()}.${fileExt}`;
+
+                      const { error: uploadError } = await supabase.storage
+                        .from('Logos')
+                        .upload(fileName, file, {
+                          upsert: true,
+                        });
+
+                      if (uploadError) {
+                        setError(uploadError.message);
+                        setSaving(false);
+                        return;
+                      }
+
+                      const { data } = supabase.storage
+                        .from('Logos')
+                        .getPublicUrl(fileName);
+
+                      setRow({
+                        ...row,
+                        logo_url: data.publicUrl,
+                      });
+
+                      setSaving(false);
+                    } catch (err) {
+                      const errorMessage = err instanceof Error ? err.message : 'An unknown image storage fault occurred';
+                      setError(errorMessage);
+                      setSaving(false);
+                    }
+                  }}
+                />
+              </div>
+              
+              {row.logo_url && (
+                <div className="text-[10px] text-slate-400 font-mono break-all line-clamp-1">
+                  <span className="font-bold text-slate-500">CDN URL Location:</span> {row.logo_url}
+                </div>
+              )}
+            </div>
+
+          </div>
+        </div>
+
+        {/* Action Triggers Global Commit Bar */}
+        <div className="pt-4 border-t border-slate-100 flex justify-end">
+          <button
+            onClick={save}
+            disabled={saving}
+            className="w-full sm:w-auto px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 disabled:bg-slate-300 text-xs font-bold shadow-sm flex items-center justify-center gap-1.5 transition-all"
+          >
+            {saving ? (
+              <>
+                <div className="animate-spin h-3.5 w-3.5 border-2 border-white/30 border-t-white rounded-full" />
+                Processing Assets Layout...
+              </>
+            ) : (
+              <>
+                <FiSave size={14} />
+                Save Settings
+              </>
+            )}
+          </button>
+        </div>
+
+      </div>
+
+    </div>
+  );
+}
