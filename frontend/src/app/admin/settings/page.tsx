@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 import Image from 'next/image';
+import { FiSettings, FiAlertCircle, FiCheckCircle, FiUploadCloud, FiSave, FiCornerUpLeft, FiLayers } from 'react-icons/fi';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -23,6 +24,7 @@ export default function AdminSettingsPage() {
   const [row, setRow] = useState<AppSettingsRow | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -65,6 +67,7 @@ export default function AdminSettingsPage() {
 
     setSaving(true);
     setError(null);
+    setSaveSuccess(false);
 
     const { error } = await supabase
       .from('app_settings')
@@ -78,155 +81,150 @@ export default function AdminSettingsPage() {
 
     if (error) {
       setError(error.message);
+    } else {
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
     }
 
     setSaving(false);
   };
 
   if (!row) {
-    return <div style={{ padding: 40 }}>Loading settings...</div>;
+    return (
+      <div className="flex items-center justify-center py-12 text-slate-500 font-medium text-sm">
+        <div className="animate-spin h-5 w-5 border-2 border-slate-300 border-t-slate-600 rounded-full mr-3" />
+        Loading system control configuration environment...
+      </div>
+    );
   }
 
   return (
-    <div style={{ padding: 40 }}>
-      <h1>System Settings</h1>
-
-      <p>Role: {role}</p>
-
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-
-      <div style={{ marginTop: 20 }}>
-        <label>System Name</label>
-        <br />
-
-        <input
-          value={row.system_name}
-          onChange={(e) =>
-            setRow({
-              ...row,
-              system_name: e.target.value,
-            })
-          }
-          style={{ width: 360 }}
-        />
-      </div>
-
-      <div style={{ marginTop: 20 }}>
-        <label>Upload Logo</label>
-        <br />
-
-        {row.logo_url && (
-          <div style={{ marginBottom: 10, position: 'relative', width: 120, height: 120 }}>
-            <Image
-              src={row.logo_url}
-              alt="Logo"
-              width={120}
-              height={120}
-              style={{
-                objectFit: 'contain',
-                border: '1px solid #ccc',
-                padding: 10,
-                borderRadius: 10,
-              }}
-              unoptimized // Keeps it direct from your Supabase storage CDN bucket seamlessly
-            />
-          </div>
-        )}
-
-        <input
-          type="file"
-          accept="image/*"
-          onChange={async (e) => {
-            const file = e.target.files?.[0];
-
-            if (!file) return;
-
-            try {
-              setSaving(true);
-              setError(null);
-
-              // 1. AUTOMATIC AUTO-CLEAN: Check for and delete the old logo file if it exists
-              if (row.logo_url) {
-                try {
-                  const urlParts = row.logo_url.split('/');
-                  const oldFileName = urlParts[urlParts.length - 1];
-                  
-                  if (oldFileName) {
-                    await supabase.storage
-                      .from('Logos')
-                      .remove([oldFileName]);
-                  }
-                } catch (deleteErr) {
-                  // Log the storage deletion glitch to console, but don't block upload flow
-                  console.error("Failed to prune old file from storage bucket:", deleteErr);
-                }
-              }
-
-              // 2. PROCEED WITH FRESH LOGO IMAGE UPLOAD
-              const fileExt = file.name.split('.').pop();
-              const fileName = `logo-${Date.now()}.${fileExt}`;
-
-              const { error: uploadError } = await supabase.storage
-                .from('Logos')
-                .upload(fileName, file, {
-                  upsert: true,
-                });
-
-              if (uploadError) {
-                setError(uploadError.message);
-                setSaving(false);
-                return;
-              }
-
-              const { data } = supabase.storage
-                .from('Logos')
-                .getPublicUrl(fileName);
-
-              setRow({
-                ...row,
-                logo_url: data.publicUrl,
-              });
-
-              setSaving(false);
-            } catch (err) {
-              const errorMessage = err instanceof Error ? err.message : 'An unknown image storage fault occurred';
-              setError(errorMessage);
-              setSaving(false);
-            }
-          }}
-        />
-      </div>
-
-      <div style={{ marginTop: 20 }}>
-        <label>Primary Color (hex)</label>
-        <br />
-
-        <input
-          value={row.primary_color}
-          onChange={(e) =>
-            setRow({
-              ...row,
-              primary_color: e.target.value,
-            })
-          }
-          style={{ width: 140 }}
-          placeholder="#7C3AED"
-        />
-      </div>
-
-      <button
-        onClick={save}
-        disabled={saving}
-        style={{ marginTop: 24 }}
-      >
-        {saving ? 'Saving...' : 'Save Settings'}
-      </button>
-
-      <div style={{ marginTop: 20 }}>
-        <button onClick={() => router.push('/admin')}>
-          Back
+    <div className="space-y-6 w-full max-w-4xl">
+      
+      {/* Upper Context Header Linkage */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-2 border-b border-slate-100">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight">System Settings</h1>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Modify structural platform identities, logo asset allocations, and global primary layout branding.
+          </p>
+        </div>
+        <button
+          onClick={() => router.push('/admin')}
+          className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-50 text-xs font-bold shadow-sm flex items-center gap-1.5 transition-all w-full sm:w-auto justify-center"
+        >
+          <FiCornerUpLeft size={14} />
+          Back to Dashboard
         </button>
       </div>
-    </div>
-  );
-}
+
+      {error && (
+        <div className="bg-rose-50 border border-rose-100 text-rose-800 rounded-xl p-3.5 text-sm font-medium flex items-center gap-2">
+          <FiAlertCircle className="text-rose-500 shrink-0" size={16} />
+          {error}
+        </div>
+      )}
+
+      {saveSuccess && (
+        <div className="bg-emerald-50 border border-emerald-100 text-emerald-800 rounded-xl p-3.5 text-sm font-medium flex items-center gap-2 transition-all">
+          <FiCheckCircle className="text-emerald-500 shrink-0" size={16} />
+          Application environment configurations committed successfully.
+        </div>
+      )}
+
+      {/* Main Framework Form Card Wrapper */}
+      <div className="bg-white border border-slate-200 rounded-xl p-5 md:p-6 shadow-sm space-y-6">
+        
+        {/* Core Profile Parameters Division */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-6 border-b border-slate-100">
+          
+          {/* System Name Inputs Box */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-slate-700 block">System Environment Name</label>
+            <input
+              type="text"
+              value={row.system_name}
+              onChange={(e) => setRow({ ...row, system_name: e.target.value })}
+              className="w-full px-3 py-2 text-xs font-medium text-slate-800 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-slate-400 transition-all"
+              placeholder="Application branding title..."
+            />
+            <span className="text-[10px] text-slate-400 block font-normal leading-normal">
+              Changes the structural title values rendered across browser tabs and ecosystem modules.
+            </span>
+          </div>
+
+          {/* Core Primary Color Mapping Layout */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-slate-700 block">Branding Primary Color Hex</label>
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  value={row.primary_color}
+                  onChange={(e) => setRow({ ...row, primary_color: e.target.value })}
+                  className="w-full pl-9 pr-3 py-2 text-xs font-mono font-bold text-slate-800 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-slate-400 transition-all"
+                  placeholder="#7C3AED"
+                />
+                <div 
+                  className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 rounded border border-black/10 shadow-xs pointer-events-none"
+                  style={{ backgroundColor: row.primary_color || '#7C3AED' }}
+                />
+              </div>
+              <input 
+                type="color" 
+                value={row.primary_color?.startsWith('#') && row.primary_color.length === 7 ? row.primary_color : '#7C3AED'} 
+                onChange={(e) => setRow({ ...row, primary_color: e.target.value })}
+                className="w-8 h-8 rounded-lg border border-slate-200 p-0 cursor-pointer bg-transparent overflow-hidden shrink-0"
+              />
+            </div>
+            <span className="text-[10px] text-slate-400 block font-normal leading-normal">
+              Main structural color token parameter utilized by interactive UI layouts.
+            </span>
+          </div>
+
+        </div>
+
+        {/* Global Logo Content File Assets Box */}
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs font-bold text-slate-700 block">Identity Brand Mark Logo</label>
+            <span className="text-[10px] text-slate-400 block font-normal mt-0.5">
+              Manage internal platform graphic files deployed from isolated storage buckets.
+            </span>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-5 items-start bg-slate-50/50 border border-slate-200/60 p-4 rounded-xl">
+            
+            {/* Left Conditional Image Container View */}
+            {row.logo_url && (
+              <div className="bg-white border border-slate-200 p-3 rounded-lg flex items-center justify-center shadow-xs shrink-0 mx-auto sm:mx-0 w-32 h-32">
+                <div className="relative w-full h-full">
+                  <Image
+                    src={row.logo_url}
+                    alt="Application Framework Logo"
+                    fill
+                    sizes="128px"
+                    className="object-contain"
+                    unoptimized 
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Right Standard Action Interactive File Node Wrapper */}
+            <div className="flex-1 space-y-2 w-full">
+              <div className="border border-dashed border-slate-200 hover:border-slate-300 bg-white rounded-lg p-5 transition-colors relative flex flex-col items-center justify-center text-center group cursor-pointer">
+                <FiUploadCloud size={24} className="text-slate-400 group-hover:text-slate-600 transition-colors mb-1.5" />
+                <span className="text-xs font-bold text-slate-700">Upload replacement graphic asset</span>
+                <span className="text-[10px] text-slate-400 font-medium mt-0.5">Accepts PNG, JPG, or SVG image file structures</span>
+                
+                <input
+                  type="file"
+                  accept="image/*"
+                  disabled={saving}
+                  className="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+
+                    try {
