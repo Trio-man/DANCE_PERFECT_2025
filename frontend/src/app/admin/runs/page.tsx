@@ -123,9 +123,9 @@ export default function AdminRunsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12 text-slate-500 font-medium text-sm=w-full">
+      <div className="flex items-center justify-center py-12 text-slate-500 font-medium text-sm w-full">
         <div className="animate-spin h-5 w-5 border-2 border-slate-300 border-t-slate-600 rounded-full mr-3" />
-        Loading system execution passes...
+        Loading analysis history...
       </div>
     );
   }
@@ -139,45 +139,43 @@ export default function AdminRunsPage() {
         </div>
       )}
 
-      {/* Control Actions Header Block */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-2">
         <div>
           <h1 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
             <FiActivity className="text-slate-500" size={20} />
             Analysis Runs
           </h1>
-          <p className="text-xs text-slate-500 mt-0.5">{runs.length} total operational profiles recorded</p>
+          <p className="text-xs text-slate-500 mt-0.5">{runs.length} total runs recorded</p>
         </div>
         <div className="relative w-full sm:w-64">
           <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search email, ID, execution status…"
+            placeholder="Search email, ID, or status..."
             className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 bg-white text-xs font-medium focus:outline-none focus:border-slate-400 shadow-xs transition-all"
           />
         </div>
       </div>
 
-      {/* Primary Logging Matrix Wrapper */}
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-slate-50/70 text-slate-500 font-bold border-b border-slate-100 uppercase tracking-wider text-[10px]">
-                <th className="py-3 px-4 font-bold">Execution Date</th>
-                <th className="py-3 px-4 font-bold">User Identity Node</th>
-                <th className="py-3 px-4 font-bold">Status Flags</th>
-                <th className="py-3 px-4 font-bold">Performance Metric</th>
-                <th className="py-3 px-4 font-bold">Automated Feedback Profile</th>
-                <th className="py-3 px-4 font-bold text-right">Terminal Scope</th>
+                <th className="py-3 px-4 font-bold">Date & Time</th>
+                <th className="py-3 px-4 font-bold">User Email</th>
+                <th className="py-3 px-4 font-bold">Status</th>
+                <th className="py-3 px-4 font-bold">Score</th>
+                <th className="py-3 px-4 font-bold">Summary Feedback</th>
+                <th className="py-3 px-4 font-bold text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
               {filtered.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-12 text-center text-slate-400 font-normal text-xs">
-                    No matching pipeline run operations found in the current buffer.
+                    No matching analysis runs found.
                   </td>
                 </tr>
               ) : (
@@ -205,14 +203,14 @@ export default function AdminRunsPage() {
                       </span>
                     </td>
                     <td className="py-3 px-4 max-w-xs truncate text-slate-400 font-normal italic">
-                      {r.summary_feedback || 'No pipeline notation provided.'}
+                      {r.summary_feedback || 'No feedback recorded.'}
                     </td>
                     <td className="py-3 px-4 whitespace-nowrap text-right">
                       <div className="flex items-center justify-end gap-1.5 opacity-90 group-hover:opacity-100 transition-opacity">
                         <button
                           onClick={() => router.push(`/admin/runs/${r.id}`)}
                           className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-50 shadow-2xs flex items-center gap-1 font-bold transition-all"
-                          title="Inspect Vectors"
+                          title="View Details"
                         >
                           <FiEye size={13} />
                         </button>
@@ -220,7 +218,7 @@ export default function AdminRunsPage() {
                           onClick={() => setConfirmDelete(r.id)}
                           disabled={deletingId === r.id}
                           className="p-1.5 rounded-lg border border-rose-100 bg-rose-50 text-rose-600 hover:text-rose-800 hover:bg-rose-100 disabled:opacity-40 transition-all"
-                          title="Purge Record"
+                          title="Delete Run"
                         >
                           <FiTrash2 size={13} />
                         </button>
@@ -234,14 +232,13 @@ export default function AdminRunsPage() {
         </div>
       </div>
 
-      {/* Confirm Purge Vector Overlay Modal */}
       {confirmDelete && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="w-full max-w-md bg-white rounded-xl shadow-xl border border-slate-200 p-5 space-y-4">
             <div>
-              <h3 className="font-bold text-sm text-slate-900">Purge Selected Execution Pass?</h3>
+              <h3 className="font-bold text-sm text-slate-900">Delete Analysis Run?</h3>
               <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                This will permanently delete the pipeline run logs and its associated posture deviation file mappings from local servers. This operational behavior is irreversible.
+                This will permanently delete this analysis run and its associated evaluation files. This action cannot be undone.
               </p>
             </div>
             <div className="bg-slate-50 p-2 rounded-md border border-slate-100 text-[10px] font-mono text-slate-400 truncate">
@@ -252,13 +249,13 @@ export default function AdminRunsPage() {
                 className="px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-all"
                 onClick={() => setConfirmDelete(null)}
               >
-                Cancel Action
+                Cancel
               </button>
               <button
                 className="px-3 py-2 rounded-lg bg-rose-600 text-white hover:bg-rose-700 shadow-sm transition-all"
                 onClick={() => handleDelete(confirmDelete)}
               >
-                Confirm System Delete
+                Delete Permanently
               </button>
             </div>
           </div>
