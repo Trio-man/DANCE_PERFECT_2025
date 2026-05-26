@@ -278,7 +278,7 @@ export default function UploadPage() {
         const dancerDataUrl = await toDataUrl(dancerVideo);
         const choreoDataUrl = await toDataUrl(choreoVideo);
 
-        sessionStorage.setItem('dp_dancer', dancerDataUrl);
+        sessionBuffer.setItem('dp_dancer', dancerDataUrl);
         sessionStorage.setItem('dp_choreo', choreoDataUrl);
 
         const { data: authData } = await supabase.auth.getSession();
@@ -415,10 +415,10 @@ export default function UploadPage() {
         </motion.div>
 
         {/* ─── 2. DESKTOP 2-COLUMN SIDEBAR GRID (RESOURCES) ─── */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-6 items-start">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-6 items-stretch">
           
           {/* LEFT COLUMN: GUIDELINES & ABOUT DOCUMENT BLOCKS (3/5 width) */}
-          <div className="md:col-span-3 flex flex-col gap-6">
+          <div className="md:col-span-3 flex flex-col gap-6 md:h-[500px] overflow-y-auto pr-1 subtle-scrollbar">
             {guidelinesPage && (
               <motion.div 
                 initial={{ opacity: 0 }}
@@ -450,12 +450,12 @@ export default function UploadPage() {
 
           {/* RIGHT COLUMN: ACCORDION LIST EXPANDER INTERFACE (2/5 width) */}
           {faqs.length > 0 && (
-            <div className="md:col-span-2 bg-white/70 border border-white shadow-sm rounded-2xl p-6 flex flex-col gap-4">
-              <div className="flex items-center gap-2 mb-1">
+            <div className="md:col-span-2 bg-white/70 border border-white shadow-sm rounded-2xl p-6 flex flex-col md:h-[500px]">
+              <div className="flex items-center gap-2 mb-4 shrink-0">
                 <FiHelpCircle className="text-violet-500" size={20} />
                 <h2 className="text-base md:text-lg font-bold text-slate-800">Frequently Asked Questions</h2>
               </div>
-              <div className="space-y-2.5">
+              <div className="flex-1 overflow-y-auto space-y-2.5 pr-1 subtle-scrollbar">
                 {faqs.map((f) => (
                   <FaqItem key={f.id} faq={f} />
                 ))}
