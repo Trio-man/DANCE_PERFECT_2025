@@ -145,6 +145,24 @@ export default function AdminSettingsPage() {
               setSaving(true);
               setError(null);
 
+              // 1. AUTOMATIC AUTO-CLEAN: Check for and delete the old logo file if it exists
+              if (row.logo_url) {
+                try {
+                  const urlParts = row.logo_url.split('/');
+                  const oldFileName = urlParts[urlParts.length - 1];
+                  
+                  if (oldFileName) {
+                    await supabase.storage
+                      .from('Logos')
+                      .remove([oldFileName]);
+                  }
+                } catch (deleteErr) {
+                  // Log the storage deletion glitch to console, but don't block upload flow
+                  console.error("Failed to prune old file from storage bucket:", deleteErr);
+                }
+              }
+
+              // 2. PROCEED WITH FRESH LOGO IMAGE UPLOAD
               const fileExt = file.name.split('.').pop();
               const fileName = `logo-${Date.now()}.${fileExt}`;
 
