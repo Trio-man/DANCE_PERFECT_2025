@@ -3,228 +3,122 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
-import { FiHelpCircle, FiAlertCircle, FiCheckCircle, FiPlus, FiSave, FiEyeOff, FiCheck, FiCornerUpLeft } from 'react-icons/fi';
+import { FiCornerUpLeft, FiAlertCircle, FiCheckCircle, FiSave, FiHelpCircle } from 'react-icons/fi';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-type FaqRow = {
-  id: number;
+type FAQItem = {
+  id?: number;
   question: string;
   answer: string;
-  is_active: boolean;
-  updated_at?: string;
+  category: string;
 };
 
-export default function AdminFaqsPage() {
+export default function AdminFAQsPage() {
   const router = useRouter();
-
   const [role, setRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [rows, setRows] = useState<FaqRow[]>([]);
-  const [selected, setSelected] = useState<FaqRow | null>(null);
-
-  // New FAQ inputs
-  const [newQ, setNewQ] = useState('');
-  const [newA, setNewA] = useState('');
-  const [isAddingOpen, setIsAddingOpen] = useState(false);
-
   const [saving, setSaving] = useState(false);
-  const [workingId, setWorkingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
+  // Form states for creating a new FAQ knowledge entry block
+  const [question, setQuestion] = useState('');
+  const [answer, setAnswer] = useState('');
+  const [category, setCategory] = useState('General');
 
   useEffect(() => {
-    const load = async () => {
-      setLoading(true);
+    const checkAccess = async () => {
       setError(null);
+      try {
+        const { data: authData } = await supabase.auth.getUser();
+        if (!authData?.user) return router.push('/login');
 
-      const { data: authData } = await supabase.auth.getUser();
-      if (!authData?.user) {
-        router.push('/login');
-        return;
-      }
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', authData.user.id)
+          .single();
 
-      const { data: prof, error: profErr } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', authData.user.id)
-        .single();
+        const userRole = (profile?.role || 'user').toLowerCase();
+        setRole(userRole);
 
-      if (profErr) {
-        setError(profErr.message);
+        if (!['super_admin', 'it_admin', 'admin'].includes(userRole)) {
+          return router.push('/admin');
+        }
+      } catch (err) {
+        setError('Failed to authenticate administrative profile authorization.');
+      } finally {
         setLoading(false);
-        return;
       }
-
-      const r = (prof?.role || 'user').toLowerCase();
-      setRole(r);
-      if (!['super_admin', 'it_admin'].includes(r)) {
-        router.push('/admin');
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from('faqs')
-        .select('id,question,answer,is_active,updated_at')
-        .order('id', { ascending: false })
-        .limit(300);
-
-      if (error) {
-        setError(error.message);
-        setLoading(false);
-        return;
-      }
-
-      const list = (data ?? []) as FaqRow[];
-      setRows(list);
-      setSelected(list[0] ?? null);
-      setLoading(false);
     };
 
-    load();
+    checkAccess();
   }, [router]);
 
-  const triggerNotification = (msg: string) => {
-    setSuccessMessage(msg);
-    setTimeout(() => setSuccessMessage(null), 3000);
-  };
-
-  const addFaq = async () => {
-    if (!newQ.trim() || !newA.trim()) {
-      setError('Please provide both question and answer before publishing.');
+  const handlePublish = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!question.trim() || !answer.trim()) {
+      setError('Please fill in both the inquiry query and resolution text blocks.');
       return;
     }
 
-    setError(null);
     setSaving(true);
+    setError(null);
+    setSuccess(false);
 
-    const { data, error } = await supabase
-      .from('faqs')
-      .insert([
-        {
-          question: newQ.trim(),
-          answer: newA.trim(),
-          is_active: true,
-          updated_at: new Date().toISOString(),
-        },
-      ])
-      .select('id,question,answer,is_active,updated_at')
-      .single();
+    try {
+      const { error: insertError } = await supabase
+        .from('faqs')
+        .insert([
+          {
+            question: question.trim(),
+            answer: answer.trim(),
+            category: category,
+            created_at: new Date().toISOString()
+          }
+        ]);
 
-    if (error) {
-      setError(error.message);
+      if (insertError) throw insertError;
+
+      setSuccess(true);
+      setQuestion('');
+      setAnswer('');
+      setTimeout(() => setSuccess(false), 3000);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Database execution fault while logging item.';
+      setError(msg);
+    } finally {
       setSaving(false);
-      return;
     }
-
-    const inserted = data as FaqRow;
-    setRows((prev) => [inserted, ...prev]);
-    setSelected(inserted);
-    setNewQ('');
-    setNewA('');
-    setSaving(false);
-    setIsAddingOpen(false);
-    triggerNotification('New FAQ item published successfully.');
-  };
-
-  const saveSelected = async () => {
-    if (!selected) return;
-
-    setError(null);
-    setWorkingId(selected.id);
-    setSaving(true);
-
-    const { error } = await supabase
-      .from('faqs')
-      .update({
-        question: selected.question,
-        answer: selected.answer,
-        is_active: selected.is_active,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', selected.id);
-
-    if (error) {
-      setError(error.message);
-      setSaving(false);
-      setWorkingId(null);
-      return;
-    }
-
-    setRows((prev) => prev.map((r) => (r.id === selected.id ? selected : r)));
-    setSaving(false);
-    setWorkingId(null);
-    triggerNotification('FAQ update changes successfully saved.');
-  };
-
-  const disableFaq = async (id: number) => {
-    setError(null);
-    setWorkingId(id);
-
-    const { error } = await supabase
-      .from('faqs')
-      .update({ is_active: false, updated_at: new Date().toISOString() })
-      .eq('id', id);
-
-    if (error) {
-      setError(error.message);
-      setWorkingId(null);
-      return;
-    }
-
-    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, is_active: false } : r)));
-    setSelected((prev) => (prev?.id === id ? { ...prev, is_active: false } : prev));
-    setWorkingId(null);
-    triggerNotification('FAQ item hidden from public users.');
-  };
-
-  const activateFaq = async (id: number) => {
-    setError(null);
-    setWorkingId(id);
-
-    const { error } = await supabase
-      .from('faqs')
-      .update({ is_active: true, updated_at: new Date().toISOString() })
-      .eq('id', id);
-
-    if (error) {
-      setError(error.message);
-      setWorkingId(null);
-      return;
-    }
-
-    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, is_active: true } : r)));
-    setSelected((prev) => (prev?.id === id ? { ...prev, is_active: true } : prev));
-    setWorkingId(null);
-    triggerNotification('FAQ item activated publicly.');
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12 text-slate-500 font-medium text-sm">
+      <div className="flex items-center justify-center py-12 text-slate-500 font-medium text-sm w-full">
         <div className="animate-spin h-5 w-5 border-2 border-slate-300 border-t-slate-600 rounded-full mr-3" />
-        Loading context question maps...
+        Resolving FAQ configuration database access mapping...
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 w-full">
+    <div className="space-y-6 w-full max-w-3xl mx-auto p-4 md:p-6 text-slate-900">
       
-      {/* Upper Section Title Readout */}
+      {/* Context Control Navigation Bar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-2 border-b border-slate-100">
         <div>
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight">Help Center FAQs</h1>
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight">Help Center & FAQs</h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Configure, deploy, and refine the knowledge base structures displayed to public accounts.
+            Add or modify core documentation, knowledge segments, and reference responses.
           </p>
         </div>
         <button
           onClick={() => router.push('/admin')}
-          className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-50 text-xs font-bold shadow-sm flex items-center gap-1.5 transition-all"
+          className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-50 text-xs font-bold shadow-sm flex items-center gap-1.5 transition-all w-full sm:w-auto justify-center"
         >
           <FiCornerUpLeft size={14} />
           Back to Dashboard
@@ -238,53 +132,80 @@ export default function AdminFaqsPage() {
         </div>
       )}
 
-      {successMessage && (
-        <div className="bg-emerald-50 border border-emerald-100 text-emerald-800 rounded-xl p-3.5 text-sm font-medium flex items-center gap-2 transition-all">
+      {success && (
+        <div className="bg-emerald-50 border border-emerald-100 text-emerald-800 rounded-xl p-3.5 text-sm font-medium flex items-center gap-2">
           <FiCheckCircle className="text-emerald-500 shrink-0" size={16} />
-          {successMessage}
+          Knowledge asset added to the reference database context index.
         </div>
       )}
 
-      {/* EXPANDABLE CREATION FORM COMPONENT */}
-      <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
-        <button
-          onClick={() => setIsAddingOpen(!isAddingOpen)}
-          className="w-full flex items-center justify-between px-4 py-3 bg-slate-50/50 hover:bg-slate-50 text-left transition-colors"
-        >
-          <div className="flex items-center gap-2">
-            <div className="p-1 bg-violet-50 text-violet-600 rounded-md border border-violet-100">
-              <FiPlus size={14} />
-            </div>
-            <span className="text-xs font-bold text-slate-800">Deploy New Knowledge Base Entry</span>
+      {/* Main Framework Interactive Form Wrapper */}
+      <div className="bg-white border border-slate-200 rounded-xl p-5 md:p-6 shadow-sm">
+        <form onSubmit={handlePublish} className="space-y-5">
+          
+          {/* Category Dropdown Selection */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-slate-700 block">Knowledge Block Classification</label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="w-full px-3 py-2 text-xs font-medium text-slate-800 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-slate-400 transition-all cursor-pointer"
+            >
+              <option value="General">General Inquiries</option>
+              <option value="Analysis">Motion & Analysis Support</option>
+              <option value="Accounts">Account & Security Structures</option>
+              <option value="Billing">Billing & Subscription</option>
+            </select>
           </div>
-          <span className="text-xs text-slate-400 font-bold">{isAddingOpen ? 'Collapse —' : 'Expand +'}</span>
-        </button>
 
-        {isAddingOpen && (
-          <div className="p-4 border-t border-slate-100 space-y-4 bg-white">
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700">Question Title Text</label>
-              <input
-                value={newQ}
-                onChange={(e) => setNewQ(e.target.value)}
-                className="w-full px-3 py-2 text-xs font-medium text-slate-800 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-slate-400 transition-all"
-                placeholder="What query statement are users selecting?"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700">Exploratory Solution Answer</label>
-              <textarea
-                value={newA}
-                onChange={(e) => setNewA(e.target.value)}
-                className="w-full px-3 py-2 text-xs font-medium text-slate-800 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-slate-400 transition-all font-sans leading-relaxed resize-none h-24"
-                placeholder="Provide direct, detailed answers here..."
-              />
-            </div>
-            <div className="flex justify-end pt-1">
-              <button
-                onClick={addFaq}
-                disabled={saving}
-                className="px-3 py-1.5 bg-slate-900 text-white font-bold text-xs rounded-lg hover:bg-slate-800 disabled:bg-slate-300 transition-colors shadow-xs"
-              >
-                {saving ? 'Processing Entry...' : 'Publish Knowledge Block'}
-              </button>
+          {/* Question Text String Input Field */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-slate-700 block">User Inquiry Text (Question)</label>
+            <input
+              type="text"
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              placeholder="e.g., How long do skeleton trace videos process inside tracking queues?"
+              className="w-full px-3 py-2 text-xs font-medium text-slate-800 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-slate-400 transition-all"
+            />
+          </div>
+
+          {/* Answer Rich Matrix Block Element */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-slate-700 block">Resolution Content Definition (Answer)</label>
+            <textarea
+              rows={5}
+              value={answer}
+              onChange={(e) => setAnswer(e.target.value)}
+              placeholder="Provide clean explicit instructional response layout formatting details..."
+              className="w-full px-3 py-2 text-xs font-medium text-slate-800 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-slate-400 transition-all resize-none leading-relaxed"
+            />
+          </div>
+
+          {/* Bottom Execution Trigger Action Row */}
+          <div className="pt-3 border-t border-slate-100 flex justify-end">
+            <button
+              type="submit"
+              disabled={saving}
+              className="w-full sm:w-auto px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 disabled:bg-slate-300 text-xs font-bold shadow-sm flex items-center justify-center gap-1.5 transition-all"
+            >
+              {saving ? (
+                <>
+                  <div className="animate-spin h-3.5 w-3.5 border-2 border-white/30 border-t-white rounded-full" />
+                  Processing Entry...
+                </>
+              ) : (
+                <>
+                  <FiSave size={14} />
+                  Publish Knowledge Block
+                </>
+              )}
+            </button>
+          </div>
+
+        </form>
+      </div>
+
+    </div>
+  );
+}
