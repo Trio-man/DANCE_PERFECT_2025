@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { createClient, User } from '@supabase/supabase-js';
+import { FiLogOut, FiLayout, FiFileText, FiHelpCircle, FiCpu, FiSettings, FiSliders, FiArrowLeft } from 'react-icons/fi';
+import { motion } from 'framer-motion';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -18,14 +20,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<string>('user');
 
+  // Navigation schema with matching context icons
   const nav = useMemo(
     () => [
-      { href: '/admin', label: 'Dashboard' },
-      { href: '/admin/pages', label: 'Content Pages' },
-      { href: '/admin/faqs', label: 'FAQs' },
-      { href: '/admin/analysis-settings', label: 'Analysis Settings' },
-      { href: '/admin/settings', label: 'System Settings' },
-      { href: '/admin/runs', label: 'Runs' },
+      { href: '/admin', label: 'Dashboard', icon: FiLayout },
+      { href: '/admin/pages', label: 'Content Pages', icon: FiFileText },
+      { href: '/admin/faqs', label: 'FAQs', icon: FiHelpCircle },
+      { href: '/admin/analysis-settings', label: 'Analysis Settings', icon: FiSliders },
+      { href: '/admin/settings', label: 'System Settings', icon: FiSettings },
+      { href: '/admin/runs', label: 'Runs', icon: FiCpu },
     ],
     []
   );
@@ -47,7 +50,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         .eq('id', data.user.id)
         .single();
 
-      const r = (myProfile?.role || 'user').toLowerCase();
+      const r = (myProfile?.role || 'user').toLowerCase().trim();
       setRole(r);
 
       const isAdmin = ['admin', 'super_admin', 'it_admin'].includes(r);
@@ -71,73 +74,99 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   };
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center">Loading admin…</div>;
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-[#d6c1ff] via-[#cde7ff] to-white antialiased">
+        <div className="text-center">
+          <div className="animate-spin h-10 w-10 rounded-full border-4 border-slate-200 border-t-violet-600 mx-auto mb-4" />
+          <p className="text-slate-700 font-bold text-sm tracking-wide">Loading secure admin environment...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#d6c1ff] via-[#cde7ff] to-white">
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        <div className="bg-white/70 backdrop-blur-lg border border-white/60 shadow-lg rounded-2xl overflow-hidden">
-{/* Top bar */}
-<div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-4 sm:px-6 py-4 border-b border-white/60 gap-3">
-  <div className="flex items-center gap-3">
-    <div className="h-9 w-9 rounded-xl bg-white/70 border border-white/60 flex items-center justify-center font-bold shrink-0">
-      DP
-    </div>
-    <div>
-      <div className="font-bold text-base sm:text-lg">DancePerfect Admin</div>
-      <div className="text-xs text-slate-600">
-        Signed in as {user?.email?.split('@')[0]} •{' '}
-        <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-black/5 border border-black/10">
-          {role}
-        </span>
-      </div>
-    </div>
-  </div>
+    <div className="min-h-screen flex flex-col items-center justify-start px-4 md:px-8 bg-gradient-to-br from-[#d6c1ff] via-[#cde7ff] to-white antialiased selection:bg-violet-200">
+      <div className="w-full max-w-7xl flex flex-col gap-6 py-6 md:py-10">
+        
+        {/* MASTER FROSTED FRAMEWORK CONTAINER */}
+        <div className="bg-white/80 backdrop-blur-xl border border-white shadow-xl shadow-slate-200/50 rounded-3xl overflow-hidden flex flex-col">
+          
+          {/* TOP BAR BRAND BAR */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-5 sm:px-8 py-5 border-b border-slate-100 bg-white/40 gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 text-white flex items-center justify-center font-black text-sm shadow-md shadow-violet-200 shrink-0 tracking-wider">
+                DP
+              </div>
+              <div>
+                <div className="font-black text-slate-800 text-lg tracking-tight">DancePerfect Hub</div>
+                <div className="text-xs font-medium text-slate-500 mt-0.5">
+                  Signed in as <span className="text-slate-700 font-bold">{user?.email?.split('@')[0]}</span> •{' '}
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-violet-50 border border-violet-100 text-violet-700 font-bold uppercase tracking-wide scale-90">
+                    {role}
+                  </span>
+                </div>
+              </div>
+            </div>
 
-  <div className="flex items-center gap-2 self-end sm:self-auto">
-    <button
-      onClick={() => router.push('/upload')}
-      className="px-3 py-2 rounded-lg border border-slate-200 bg-white/70 text-slate-700 hover:bg-white text-sm font-medium"
-    >
-      Go to Upload
-    </button>
-    <button
-      onClick={logout}
-      className="px-3 py-2 rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 text-sm"
-    >
-      Logout
-    </button>
-  </div>
-</div>
-{/* Body */}
-<div className="flex flex-col sm:flex-row">
-  {/* Sidebar - horizontal scroll on mobile, vertical on desktop */}
-  <aside className="sm:w-64 border-b sm:border-b-0 sm:border-r border-white/60 bg-white/40">
-    <nav className="flex sm:flex-col flex-row overflow-x-auto p-3 sm:p-4 gap-1 sm:space-y-1">
-      {nav.map((item) => {
-        const active = pathname === item.href;
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={[
-              'block px-3 py-2 rounded-lg border whitespace-nowrap shrink-0 text-sm',
-              active
-                ? 'bg-white/70 border-white/80 font-semibold'
-                : 'bg-transparent border-transparent hover:bg-white/50 hover:border-white/60',
-            ].join(' ')}
-          >
-            {item.label}
-          </Link>
-        );
-      })}
-    </nav>
-  </aside>
+            {/* ACTION TRIGGERS */}
+            <div className="flex items-center gap-2.5 self-end sm:self-auto">
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => router.push('/upload')}
+                className="px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-xs md:text-sm font-bold shadow-sm flex items-center gap-2 transition-all"
+              >
+                <FiArrowLeft size={16} className="text-violet-500" />
+                Go to Upload
+              </motion.button>
+              
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={logout}
+                className="px-4 py-2 rounded-xl border border-rose-200 bg-rose-50/80 text-rose-700 hover:bg-rose-100 text-xs md:text-sm font-bold shadow-sm flex items-center gap-2 transition-all"
+              >
+                <FiLogOut size={16} />
+                Logout
+              </motion.button>
+            </div>
+          </div>
 
-  {/* Content */}
-  <main className="flex-1 p-4 sm:p-6">{children}</main>
-</div>
+          {/* MAIN MANAGEMENT GRID PANELS */}
+          <div className="flex flex-col md:flex-row min-h-[600px]">
+            
+            {/* SIDEBAR NAVIGATION REGISTRY */}
+            <aside className="w-full md:w-64 border-b md:border-b-0 md:border-r border-slate-100 bg-white/20 shrink-0">
+              <nav className="flex md:flex-col flex-row overflow-x-auto p-4 gap-1.5 md:space-y-1 scrollbar-none">
+                {nav.map((item) => {
+                  const active = pathname === item.href;
+                  const Icon = item.icon;
+                  
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={[
+                        'flex items-center gap-2.5 px-4 py-2.5 rounded-xl border font-bold text-xs md:text-sm transition-all duration-200 shrink-0 select-none relative',
+                        active
+                          ? 'bg-white border-slate-200/80 text-violet-600 shadow-sm shadow-slate-100'
+                          : 'bg-transparent border-transparent text-slate-500 hover:bg-white/50 hover:border-slate-100 hover:text-slate-800',
+                      ].join(' ')}
+                    >
+                      <Icon size={16} className={active ? 'text-violet-600' : 'text-slate-400'} />
+                      <span>{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </nav>
+            </aside>
+
+            {/* NESTED CONTENT MOUNT DISPLAY BLOCK */}
+            <main className="flex-1 p-5 sm:p-8 bg-white/10 overflow-hidden">
+              {children}
+            </main>
+          </div>
+
         </div>
       </div>
     </div>
