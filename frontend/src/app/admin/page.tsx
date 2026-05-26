@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
-import { FiUsers, FiCpu, FiTrendingUp, FiShield, FiSearch, FiSliders, FiEye, FiAlertCircle } from 'react-icons/fi';
+import { FiUsers, FiCpu, FiTrendingUp, FiShield, FiSearch, FiEye, FiAlertCircle } from 'react-icons/fi';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -285,7 +285,6 @@ export default function AdminDashboardPage() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pb-2 border-b border-slate-100">
         <div>
           <h1 className="text-xl font-bold text-slate-900 tracking-tight">System Overview Dashboard</h1>
-          <p className="text-xs text-slate-500 mt-0.5">Real-time application metrics and direct access directory telemetry.</p>
         </div>
       </div>
 
@@ -296,7 +295,7 @@ export default function AdminDashboardPage() {
         </div>
       )}
 
-      {/* ─── KPI COUNTER METRICS BLOCK ─── */}
+      {/* KPI COUNTER METRICS BLOCK */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-slate-50/50 border border-slate-200/60 rounded-xl p-4 flex items-center justify-between">
           <div>
@@ -331,7 +330,7 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
-      {/* ─── RECENT ENGINE ANALYSIS TABLE ─── */}
+      {/* RECENT ENGINE ANALYSIS TABLE */}
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
         <div className="flex items-center justify-between px-4 py-3.5 border-b border-slate-100 bg-slate-50/50">
           <h2 className="text-sm font-bold text-slate-800">Recent Analysis Runs Logs</h2>
@@ -344,11 +343,11 @@ export default function AdminDashboardPage() {
           <table className="w-full text-xs text-left border-collapse min-w-[600px]">
             <thead>
               <tr className="text-slate-400 font-bold uppercase tracking-wider border-b border-slate-100 bg-slate-50/30">
-                <th className="py-2.5 px-4">Date Time Stamp</th>
+                <th className="py-2.5 px-4">Date & Time</th>
                 <th className="py-2.5 px-4">User Email</th>
                 <th className="py-2.5 px-4 text-center">Status</th>
-                <th className="py-2.5 px-4 text-center">Score Metric</th>
-                <th className="py-2.5 px-4 text-right pr-5">Intervention</th>
+                <th className="py-2.5 px-4 text-center">Score</th>
+                <th className="py-2.5 px-4 text-right pr-5">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-600 font-medium">
@@ -357,33 +356,39 @@ export default function AdminDashboardPage() {
                   <td className="py-6 text-center text-slate-400" colSpan={5}>No evaluation matrices recorded in cluster.</td>
                 </tr>
               ) : (
-                runs.map((r) => (
-                  <tr key={r.id} className="hover:bg-slate-50/40 transition-colors">
-                    <td className="py-3 px-4 text-slate-400 font-normal">{new Date(r.created_at).toLocaleString()}</td>
-                    <td className="py-3 px-4 text-slate-800 font-semibold">{getEmail(r)}</td>
-                    <td className="py-3 px-4 text-center">
-                      <Badge variant={r.status === 'completed' ? 'success' : r.status === 'failed' ? 'danger' : 'purple'}>
-                        {r.status || 'pending'}
-                      </Badge>
-                    </td>
-                    <td className="py-3 px-4 text-center font-bold text-slate-900">{r.score ?? '—'}</td>
-                    <td className="py-3 px-4 text-right pr-5">
-                      <button
-                        className="text-slate-600 hover:text-slate-900 inline-flex items-center gap-1 bg-white border border-slate-200 px-2 py-1 rounded-md shadow-sm transition-all text-[11px]"
-                        onClick={() => router.push(`/admin/runs/${r.id}`)}
-                      >
-                        <FiEye size={12} /> View File
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                runs.map((r) => {
+                  const statusNormalized = (r.status || 'pending').toLowerCase().trim();
+                  const isDone = statusNormalized === 'done' || statusNormalized === 'completed';
+                  const isFailed = statusNormalized === 'failed';
+
+                  return (
+                    <tr key={r.id} className="hover:bg-slate-50/40 transition-colors">
+                      <td className="py-3 px-4 text-slate-400 font-normal">{new Date(r.created_at).toLocaleString()}</td>
+                      <td className="py-3 px-4 text-slate-800 font-semibold">{getEmail(r)}</td>
+                      <td className="py-3 px-4 text-center">
+                        <Badge variant={isDone ? 'success' : isFailed ? 'danger' : 'purple'}>
+                          {r.status || 'pending'}
+                        </Badge>
+                      </td>
+                      <td className="py-3 px-4 text-center font-bold text-slate-900">{r.score ?? '—'}</td>
+                      <td className="py-3 px-4 text-right pr-5">
+                        <button
+                          className="text-slate-600 hover:text-slate-900 inline-flex items-center gap-1 bg-white border border-slate-200 px-2 py-1 rounded-md shadow-sm transition-all text-[11px]"
+                          onClick={() => router.push(`/admin/runs/${r.id}`)}
+                        >
+                          <FiEye size={12} /> View File
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* ─── DIRECTORY PROFILE REGISTRY ─── */}
+      {/* DIRECTORY PROFILE REGISTRY */}
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
         <div className="flex flex-col lg:flex-row lg:items-center gap-3 justify-between px-4 py-3.5 border-b border-slate-100 bg-slate-50/50">
           <h2 className="text-sm font-bold text-slate-800">Account Registry Directory</h2>
@@ -428,11 +433,11 @@ export default function AdminDashboardPage() {
           <table className="w-full text-xs text-left border-collapse min-w-[700px]">
             <thead>
               <tr className="text-slate-400 font-bold uppercase tracking-wider border-b border-slate-100 bg-slate-50/30">
-                <th className="py-2.5 px-4">Workspace Identity Email</th>
-                <th className="py-2.5 px-4">Authority Group</th>
-                <th className="py-2.5 px-4 text-center">Lifecycle</th>
-                <th className="py-2.5 px-4">Creation Date</th>
-                {canManageUsers && <th className="py-2.5 px-4 text-right pr-5">Administrative Intervention</th>}
+                <th className="py-2.5 px-4">User Email</th>
+                <th className="py-2.5 px-4">System Role</th>
+                <th className="py-2.5 px-4 text-center">Account Status</th>
+                <th className="py-2.5 px-4">Joined Date</th>
+                {canManageUsers && <th className="py-2.5 px-4 text-right pr-5">Actions</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-600 font-medium">
@@ -490,7 +495,7 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
-      {/* Minimal Overlay Dialog Popups */}
+      {/* Confirmatory Popups */}
       {confirm.open && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center px-4 z-50">
           <div className="w-full max-w-sm bg-white border border-slate-200 shadow-xl rounded-xl p-5">
@@ -499,8 +504,8 @@ export default function AdminDashboardPage() {
             </h3>
             <p className="text-xs text-slate-500 leading-normal mt-1.5">
               {confirm.nextActive
-                ? 'This profile token will recover direct functional authorization parameters immediately.'
-                : 'This action immediately revokes active browser tokens and terminates user initialization workflows.'}
+                ? 'This profile token will recover functional authorization parameters immediately.'
+                : 'This action immediately revokes active session configurations and terminates active authorization maps.'}
             </p>
             <div className="flex justify-end gap-2 mt-4 text-xs font-bold">
               <button
@@ -517,7 +522,7 @@ export default function AdminDashboardPage() {
                   await toggleUserActive(userId, nextActive);
                 }}
               >
-                Confirm Intervention
+                Confirm
               </button>
             </div>
           </div>
