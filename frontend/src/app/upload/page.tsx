@@ -80,10 +80,10 @@ function VideoUpload({ label, preview, setFile, loading }: VideoUploadProps) {
       initial={{ scale: 0.95, opacity: 0, y: 20 }}
       animate={{ scale: 1, opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
-      className="flex-1 flex flex-col items-center justify-center w-full h-36 md:h-80 border border-slate-300 rounded-lg cursor-pointer hover:border-gray-400"
+      className="flex-1 flex flex-col items-center justify-center w-full h-44 md:h-80 border border-slate-300 rounded-lg cursor-pointer hover:border-gray-400 transition-colors bg-white/40"
     >
-      <FiUploadCloud size={48} className="text-gray-400" />
-      <span className="mt-2 text-gray-600">Upload {label}</span>
+      <FiUploadCloud size={44} className="text-gray-400" />
+      <span className="mt-2 text-sm font-medium text-gray-600">Upload {label}</span>
       <input
         type="file"
         accept="video/*"
@@ -284,35 +284,17 @@ export default function UploadPage() {
             )}
           </AnimatePresence>
 
-          {/* ─── NEW RESPONSIVE ACTIONS NAVIGATION CONTAINER ─── */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-100 pb-4 mb-6">
-            {/* Left Side Navigation */}
-            <div className="flex items-center gap-3">
-              <button 
-                onClick={() => router.back()} 
-                className="text-gray-600 hover:text-gray-800 transition-colors p-1"
-                aria-label="Go back"
-              >
-                <FiArrowLeft size={24} />
-              </button>
-              
-              {/* Dynamic Logo & Title integration into flow */}
-              <div className="flex items-center gap-2">
-                {appSettings?.logo_url && (
-                  <img 
-                    src={appSettings.logo_url} 
-                    alt="System Logo" 
-                    className="h-8 w-8 rounded-lg object-contain border border-white/60 bg-white/60" 
-                  />
-                )}
-                <h1 className="text-2xl font-bold tracking-tight" style={{ color: primaryColor }}>
-                  {systemName}
-                </h1>
-              </div>
-            </div>
+          {/* ─── UTILITY NAV ROW (Absolute layout constraints handled gracefully) ─── */}
+          <div className="flex items-center justify-between mb-6 w-full">
+            <button 
+              onClick={() => router.back()} 
+              className="text-gray-600 hover:text-gray-800 transition-colors p-2 rounded-lg hover:bg-white/40"
+              aria-label="Go back"
+            >
+              <FiArrowLeft size={22} />
+            </button>
 
-            {/* Right Side Controls */}
-            <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
+            <div className="flex items-center gap-2.5">
               {isAdmin && (
                 <motion.button
                   whileTap={{ scale: 0.97 }}
@@ -325,17 +307,38 @@ export default function UploadPage() {
               )}
               <button 
                 onClick={handleLogout} 
-                className="text-red-600 hover:text-red-800 transition-colors flex items-center gap-1 p-1 text-sm font-medium ml-auto sm:ml-0"
+                className="text-red-600 hover:text-red-800 transition-colors p-2 rounded-lg hover:bg-red-50/50"
                 title="Logout"
               >
-                <span className="sm:hidden mr-1">Logout</span>
                 <FiLogOut size={22} />
               </button>
             </div>
           </div>
 
-          <p className="text-slate-600 text-center mb-6 font-medium">
-            Welcome, <span className="text-slate-800 font-semibold">{user?.email?.split('@')[0]}</span>
+          {/* ─── CENTERED HERO HERO BRANDING SECTION ─── */}
+          <div className="flex flex-col items-center text-center mt-2 mb-8">
+            <div className="flex items-center justify-center gap-3.5 mb-2.5">
+              {appSettings?.logo_url && (
+                <img 
+                  src={appSettings.logo_url} 
+                  alt="System Logo" 
+                  className="h-12 w-12 md:h-14 md:w-14 rounded-xl object-contain border border-white/80 bg-white/80 shadow-sm" 
+                />
+              )}
+              <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight" style={{ color: primaryColor }}>
+                {systemName}
+              </h1>
+            </div>
+            
+            {/* Catchy dynamic marketing tagline line */}
+            <p className="text-sm md:text-base text-slate-600 max-w-md font-medium leading-relaxed px-4">
+              Sync your moves. Perfect your rhythm. AI-powered motion capture feedback.
+            </p>
+          </div>
+
+          {/* User Welcome Label */}
+          <p className="text-xs md:text-sm text-slate-500 text-center mb-6 bg-slate-100/60 w-fit mx-auto px-3 py-1 rounded-full border border-slate-200/40">
+            Logged in as: <span className="text-slate-700 font-semibold">{user?.email?.split('@')[0]}</span>
           </p>
 
           <div className="flex flex-col md:flex-row gap-6 md:gap-8">
@@ -343,17 +346,17 @@ export default function UploadPage() {
             <VideoUpload label="Choreographer Video" preview={previewChoreo} setFile={setChoreoVideo} loading={loading} />
           </div>
 
-          {status && <p className="text-center text-gray-600 mt-4 font-medium">{status}</p>}
+          {status && <p className="text-center text-gray-600 mt-4 font-medium text-sm">{status}</p>}
 
-          <div className="flex flex-col md:flex-row gap-4 justify-center mt-6">
+          <div className="flex flex-col md:flex-row gap-4 justify-center mt-8">
             <motion.button
               whileTap={{ scale: 0.97 }}
               disabled={loading || !user}
               onClick={handleAnalyze}
-              className="text-white py-3 px-8 rounded-lg font-semibold transition shadow-md w-full sm:w-auto hover:opacity-90"
+              className="text-white py-3 px-10 rounded-xl font-bold transition shadow-md w-full sm:w-auto hover:brightness-95 text-base tracking-wide"
               style={{ backgroundColor: primaryColor }}
             >
-              Analyze 🎯
+              Analyze Performance 🎯
             </motion.button>
           </div>
         </motion.div>
@@ -365,8 +368,8 @@ export default function UploadPage() {
             <div className="space-y-3">
               {faqs.map((f) => (
                 <div key={f.id} className="border border-white/70 rounded-lg p-3 bg-white/50">
-                  <p className="font-semibold text-slate-800">{f.question}</p>
-                  <p className="text-slate-700 whitespace-pre-line mt-1 text-sm">{f.answer}</p>
+                  <p className="font-semibold text-slate-800 text-sm md:text-base">{f.question}</p>
+                  <p className="text-slate-700 whitespace-pre-line mt-1 text-xs md:text-sm">{f.answer}</p>
                 </div>
               ))}
             </div>
