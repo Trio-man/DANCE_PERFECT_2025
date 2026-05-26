@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
+import Image from 'next/image';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -115,18 +116,19 @@ export default function AdminSettingsPage() {
         <br />
 
         {row.logo_url && (
-          <div style={{ marginBottom: 10 }}>
-            <img
+          <div style={{ marginBottom: 10, position: 'relative', width: 120, height: 120 }}>
+            <Image
               src={row.logo_url}
               alt="Logo"
+              width={120}
+              height={120}
               style={{
-                width: 120,
-                height: 120,
                 objectFit: 'contain',
                 border: '1px solid #ccc',
                 padding: 10,
                 borderRadius: 10,
               }}
+              unoptimized // Keeps it direct from your Supabase storage CDN bucket seamlessly
             />
           </div>
         )}
@@ -168,8 +170,9 @@ export default function AdminSettingsPage() {
               });
 
               setSaving(false);
-            } catch (err: any) {
-              setError(err.message);
+            } catch (err) {
+              const errorMessage = err instanceof Error ? err.message : 'An unknown image storage fault occurred';
+              setError(errorMessage);
               setSaving(false);
             }
           }}
