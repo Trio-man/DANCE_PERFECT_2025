@@ -9,6 +9,7 @@ DancePerfect is a web-based dance performance analysis platform that uses comput
 * Automatic joint angle and kinematic analysis
 * Performance comparison against a reference choreography
 * Dynamic branding and CMS configuration through Supabase
+* Role-Based Access Control (RBAC) with dedicated admin management features
 
 ## Technology Stack
 
@@ -54,6 +55,7 @@ Create an `.env.local` file in the project root:
 ```env
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+
 ```
 
 ### Installation
@@ -63,6 +65,7 @@ git clone <your-repository-url>
 cd danceperfect
 npm install
 npm run dev
+
 ```
 
 Ensure the Flask backend is running before starting the frontend application.
@@ -73,6 +76,7 @@ For production deployment, infrastructure configuration, reverse proxy setup, pr
 
 ```text
 INFRASTRUCTURE.md
+
 ```
 
 ## Academic Context
