@@ -1,89 +1,93 @@
-DancePerfect
-============
+# DancePerfect
 
-DancePerfect is a web-based dance performance analysis system powered by AI-driven pose estimation and kinematic computation.
+DancePerfect is a web-based tool that helps dancers analyze their performance using AI. Instead of relying on expensive motion-capture gear, we use computer vision to turn standard dance videos into data-driven feedback.
 
-Dance evaluation is traditionally subjective and highly dependent on instructor observation. Professional motion capture systems capable of providing biomechanical data are often expensive, inaccessible, and require physical markers or specialized equipment. As a result, dancers and educators lack affordable, data-driven tools for objective performance analysis.
-
-DancePerfect addresses this gap by leveraging MediaPipe-based markerless motion capture to extract 33-point full-body landmarks from dance videos and transform them into measurable kinematic insights. The system bridges computer vision and performance science to provide scalable, accessible, and quantitative feedback for dancers, instructors, and researchers.
+The goal is to make biomechanical analysis accessible for dancers and instructors who want to see exactly what’s happening in their movement, frame by frame.
 
 ---
 
-Project Highlights
-------------------
+### What’s Under the Hood
 
-• Markerless motion capture using MediaPipe Pose  
-• 33-point full-body landmark detection  
-• Automated joint angle computation  
-• Frame-by-frame kinematic analysis  
-• Performance metric visualization dashboard  
-• Admin panel for managing analysis runs  
-• Built with a modern React + Vite frontend and Python backend  
+* **Pose Estimation:** We use MediaPipe to track 33 key body landmarks in every frame of your video.
 
----
-Core Features
--------------
 
-Pose Estimation  
-- 33 landmark detection per frame  
-- Real-time capable architecture  
+* **Kinematics:** The system automatically calculates joint angles (knees, hips, elbows, etc.) to highlight symmetry and consistency.
 
-Kinematic Analysis  
-- Shoulder, elbow, hip, and knee angle computation  
-- Symmetry analysis  
-- Movement consistency tracking  
-- Trajectory mapping  
 
-Dashboard & Management  
-- Analysis history tracking  
-- Run management interface  
-- Structured performance reporting  
+* **Dynamic Branding:** The app is modular; system name, logo, and brand colors are managed via a Supabase dashboard, allowing updates without code changes.
+
+
+* **Modern Stack:**
+* **Frontend:** Next.js (App Router) with Tailwind CSS and Framer Motion.
+
+
+* **Backend:** Python/Flask running on **Hetzner Cloud** for high-performance video processing.
+
+
+* **Database & Auth:** Supabase handles user logins, file storage, and CMS configurations.
+
+
+
+
 
 ---
 
-How It Works
-------------
+### How It Works
 
-1. A user uploads a dance performance video.
-2. The backend processes each frame using MediaPipe Pose.
-3. 33 body landmarks are detected per frame.
-4. Joint angles and kinematic metrics are computed.
-5. Processed data is stored and returned to the frontend.
-6. The dashboard visualizes movement trends and performance metrics.
+1. **Upload:** Drop your performance video and a reference choreography video into the dashboard.
 
----
 
-Tech Stack
-----------
+2. **Process:** The Flask backend analyzes both, tracking landmarks through the MediaPipe Pose pipeline.
 
-Frontend
-- React
-- Vite
-- TypeScript
-- Tailwind CSS
 
-Backend
-- Python
-- Flask
-- MediaPipe (Pose Estimation)
-- OpenCV
-- NumPy
+3. **Compare:** The system computes joint angles and movement metrics.
 
-Deployment
-- Render (Backend)
-- Vercel (Frontend)
+
+4. **Report:** View movement trends and performance metrics directly in your browser.
+
+
 
 ---
 
-System Architecture
--------------------
+### System Architecture
 
-Client (React Frontend)
-    → REST API (Flask Backend)
-        → Video Processing Pipeline
-            → MediaPipe Pose Estimation
-                → Landmark Extraction
-                    → Kinematic Computation
-                        → Metric Visualization
+* **Frontend**: Handles user experience, auth, and displays the processed metrics.
+
+
+* **Supabase**: The source of truth for user data, CMS, and app configuration.
+
+
+* **Hetzner Cloud**: Hosts the Flask backend, providing the dedicated compute resources required for MediaPipe and OpenCV processing.
+
+
 
 ---
+
+### Quick Start (Local Development)
+
+If you’re setting this up on your machine, you’ll need to link the frontend to your Supabase and Flask instances.
+
+**Requirements:**
+
+* `NEXT_PUBLIC_SUPABASE_URL`: Your project URL from Supabase.
+* `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Your project's anonymous API key.
+
+**Steps:**
+
+1. Clone the repo: `git clone [your-repo-url]`
+2. Install dependencies: `npm install`
+3. Create an `.env.local` file with the keys mentioned above.
+4. Run the frontend: `npm run dev`
+5. Ensure your Flask backend is running on its local port.
+
+---
+
+### More Details
+
+For technical details regarding production deployment, including reverse proxy configuration, process management, and automated maintenance tasks, please refer to the [INFRASTRUCTURE.md](https://www.google.com/search?q=INFRASTRUCTURE.md) file.
+
+---
+
+### Contributing
+
+We’re currently focused on improving the accuracy of joint angle computation and adding more visualization types for the dashboard. If you'd like to help, feel free to open a PR!
