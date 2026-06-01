@@ -98,4 +98,4 @@ If you’re setting this up on your machine, you’ll need to link the frontend 
 
 ### More Details
 
-For technical details regarding production deployment, including reverse proxy configuration, process management, and automated maintenance tasks, please refer to the [INFRASTRUCTURE.md]file.
+For technical details regarding production deployment, including reverse proxy configuration, process management, and automated maintenance tasks, please refer to the [INFRASTRUCTURE.md](https://www.google.com/search?q=INFRASTRUCTURE.md) file.
