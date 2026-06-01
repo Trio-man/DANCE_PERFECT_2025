@@ -76,8 +76,6 @@ For production deployment, infrastructure configuration, reverse proxy setup, pr
 
 * [INFRASTRUCTURE.md](INFRASTRUCTURE.md)
 
-```
-
 ## Academic Context
 
 DancePerfect was developed as a thesis project focused on applying markerless motion capture and biomechanical analysis to dance performance evaluation.
