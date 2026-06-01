@@ -74,8 +74,7 @@ Ensure the Flask backend is running before starting the frontend application.
 
 For production deployment, infrastructure configuration, reverse proxy setup, process management, and maintenance procedures, see:
 
-```text
-INFRASTRUCTURE.md
+* [INFRASTRUCTURE.md](INFRASTRUCTURE.md)
 
 ```
 
