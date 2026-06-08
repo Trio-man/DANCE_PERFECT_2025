@@ -15,6 +15,7 @@ DancePerfect is a web-based dance performance analysis platform that uses comput
 
 ### Frontend
 
+* TypeScript
 * Next.js (App Router)
 * Tailwind CSS
 * Framer Motion
