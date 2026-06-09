@@ -1,6 +1,3 @@
-You have duplicate FAQ and resources blocks left over from the old code. Here's the complete fixed file:
-
-```tsx
 'use client';
 
 import { useState, useEffect } from 'react';
