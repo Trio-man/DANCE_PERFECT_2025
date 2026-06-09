@@ -137,10 +137,12 @@ export default function AdminFAQsPage() {
               onChange={(e) => setCategory(e.target.value)}
               className="w-full px-3 py-2 text-xs font-medium text-slate-800 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-slate-400 transition-all cursor-pointer"
             >
-              <option value="General">General Inquiries</option>
-              <option value="Analysis">Motion & Analysis Support</option>
-              <option value="Accounts">Account & Security</option>
-              <option value="Billing">Billing & Subscriptions</option>
+                <option value="Uploading">Video Uploads</option>
+                <option value="Recording">Recording Guidelines</option>
+                <option value="Analysis">Motion Analysis</option>
+                <option value="Results">Results & Feedback</option>
+                <option value="Technical">Technical Issues</option>
+                <option value="General">General Information</option>
             </select>
           </div>
 
