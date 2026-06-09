@@ -10,23 +10,12 @@ import mediapipe as mp
 import imageio
 import re
 from flask import Flask, request, jsonify, send_from_directory
-from flask_cors import CORS  # ✅ Added for Cross-Origin Resource Sharing
 from fastdtw import fastdtw
 from scipy.spatial.distance import euclidean
 from supabase import create_client, Client  # ✅ Direct production database integration
 
 app = Flask(__name__)
 
-# =========================================================================
-# CORS MIDDLEWARE PIPELINE CONFIGURATION
-# =========================================================================
-# This explicitly allows your Vercel frontend and local development machine 
-# to securely access your backend endpoints and pass browser security checks.
-CORS(app, origins=[
-    "http://localhost:3000",
-    "https://danceperfect.vercel.app",
-    r"https://danceperfect-.*\.vercel\.app",
-], supports_credentials=True)
 # =========================================================================
 # CONFIGURATIONS & STORAGE CONSTANTS
 # =========================================================================
