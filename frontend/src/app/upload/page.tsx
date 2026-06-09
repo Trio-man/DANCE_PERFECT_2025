@@ -1,3 +1,6 @@
+You have duplicate FAQ and resources blocks left over from the old code. Here's the complete fixed file:
+
+```tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -7,17 +10,11 @@ import { createClient, User } from '@supabase/supabase-js';
 import { FiArrowLeft, FiLogOut, FiUploadCloud, FiX, FiChevronDown, FiFileText, FiInfo, FiHelpCircle, FiClock, FiSun, FiEye, FiUserX, FiVideo, FiSmartphone, FiPlayCircle, FiMonitor } from 'react-icons/fi';
 import { MdAdminPanelSettings } from 'react-icons/md';
 
-// ─────────────────────────────────────────────
-// SUPABASE CLIENT
-// ─────────────────────────────────────────────
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-// ─────────────────────────────────────────────
-// CMS TYPES
-// ─────────────────────────────────────────────
 type AppSettingsRow = {
   id: number;
   system_name: string;
@@ -48,9 +45,6 @@ type GuidelineItem = {
   body: string;
 };
 
-// ─────────────────────────────────────────────
-// GUIDELINE ICON MAP
-// ─────────────────────────────────────────────
 const ICON_MAP: Record<string, React.ReactNode> = {
   clock: <FiClock size={18} />,
   sun: <FiSun size={18} />,
@@ -66,19 +60,15 @@ const ICON_MAP: Record<string, React.ReactNode> = {
 const COLOR_MAP: Record<string, { bg: string; icon: string }> = {
   purple: { bg: 'bg-violet-100', icon: 'text-violet-600' },
   amber:  { bg: 'bg-amber-100',  icon: 'text-amber-700'  },
-  teal:   { bg: 'bg-emerald-100',icon: 'text-emerald-700'},
+  teal:   { bg: 'bg-emerald-100', icon: 'text-emerald-700' },
   coral:  { bg: 'bg-orange-100', icon: 'text-orange-600' },
 };
 
-// ─────────────────────────────────────────────
-// GUIDELINES BLOCK COMPONENT
-// ─────────────────────────────────────────────
 function GuidelinesBlock({ page }: { page: ContentPageRow }) {
   let items: GuidelineItem[] = [];
   try {
     items = JSON.parse(page.body);
   } catch {
-    // fallback to plain text if body is not JSON
     return (
       <div className="bg-white/70 border border-white shadow-sm rounded-2xl p-6">
         <div className="flex items-center gap-2 mb-3">
@@ -100,7 +90,7 @@ function GuidelinesBlock({ page }: { page: ContentPageRow }) {
         <FiFileText className="text-violet-500" size={20} />
         <h2 className="text-base md:text-lg font-bold text-slate-800">{page.title}</h2>
       </div>
-      <div className="flex flex-col gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {items.map((item, idx) => {
           const colors = COLOR_MAP[item.color] ?? COLOR_MAP.purple;
           return (
@@ -130,9 +120,6 @@ function GuidelinesBlock({ page }: { page: ContentPageRow }) {
   );
 }
 
-// ─────────────────────────────────────────────
-// INTERACTIVE FAQ ACCORDION COMPONENT
-// ─────────────────────────────────────────────
 function FaqItem({ faq }: { faq: FaqRow }) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -166,9 +153,6 @@ function FaqItem({ faq }: { faq: FaqRow }) {
   );
 }
 
-// ─────────────────────────────────────────────
-// PREMIUM VIDEO UPLOAD COMPONENT
-// ─────────────────────────────────────────────
 interface VideoUploadProps {
   label: string;
   file: File | null;
@@ -229,9 +213,6 @@ function VideoUpload({ label, file, preview, setFile, loading }: VideoUploadProp
   );
 }
 
-// ─────────────────────────────────────────────
-// MAIN UPLOAD PAGE HUB
-// ─────────────────────────────────────────────
 export default function UploadPage() {
   const router = useRouter();
 
@@ -470,50 +451,20 @@ export default function UploadPage() {
           </div>
         </motion.div>
 
-{/* ─── 2. RESOURCES GRID ─── */}
-<div className="flex flex-col gap-6">
+        {/* ─── 2. RESOURCES ─── */}
+        <div className="flex flex-col gap-6">
 
-  {/* GUIDELINES — full width, 2-col card grid */}
-  {guidelinesPage && <GuidelinesBlock page={guidelinesPage} />}
+          {/* GUIDELINES — full width, 2-col card grid */}
+          {guidelinesPage && <GuidelinesBlock page={guidelinesPage} />}
 
-  {/* FAQs — full width */}
-  {faqs.length > 0 && (
-    <div className="bg-white/70 border border-white shadow-sm rounded-2xl p-6 flex flex-col gap-4">
-      <div className="flex items-center gap-2 mb-1">
-        <FiHelpCircle className="text-violet-500" size={20} />
-        <h2 className="text-base md:text-lg font-bold text-slate-800">Frequently Asked Questions</h2>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-        {faqs.map((f) => (
-          <FaqItem key={f.id} faq={f} />
-        ))}
-      </div>
-    </div>
-  )}
-
-  {/* ABOUT — full width */}
-  {aboutPage && (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="bg-white/70 border border-white shadow-sm rounded-2xl p-6"
-    >
-      <div className="flex items-center gap-2 mb-3">
-        <FiInfo className="text-violet-500" size={20} />
-        <h2 className="text-base md:text-lg font-bold text-slate-800">{aboutPage.title}</h2>
-      </div>
-      <p className="text-slate-600 whitespace-pre-line text-xs md:text-sm leading-relaxed">{aboutPage.body}</p>
-    </motion.div>
-  )}
-
-</div>
+          {/* FAQs — full width, 2-col accordion */}
           {faqs.length > 0 && (
-            <div className="md:col-span-2 bg-white/70 border border-white shadow-sm rounded-2xl p-6 flex flex-col gap-4">
+            <div className="bg-white/70 border border-white shadow-sm rounded-2xl p-6 flex flex-col gap-4">
               <div className="flex items-center gap-2 mb-1">
                 <FiHelpCircle className="text-violet-500" size={20} />
                 <h2 className="text-base md:text-lg font-bold text-slate-800">Frequently Asked Questions</h2>
               </div>
-              <div className="space-y-2.5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                 {faqs.map((f) => (
                   <FaqItem key={f.id} faq={f} />
                 ))}
@@ -521,8 +472,24 @@ export default function UploadPage() {
             </div>
           )}
 
+          {/* ABOUT — full width */}
+          {aboutPage && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="bg-white/70 border border-white shadow-sm rounded-2xl p-6"
+            >
+              <div className="flex items-center gap-2 mb-3">
+                <FiInfo className="text-violet-500" size={20} />
+                <h2 className="text-base md:text-lg font-bold text-slate-800">{aboutPage.title}</h2>
+              </div>
+              <p className="text-slate-600 whitespace-pre-line text-xs md:text-sm leading-relaxed">{aboutPage.body}</p>
+            </motion.div>
+          )}
+
         </div>
       </div>
     </div>
   );
 }
+```
