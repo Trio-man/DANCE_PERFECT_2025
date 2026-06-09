@@ -224,6 +224,7 @@ export default function UploadPage() {
     return () => URL.revokeObjectURL(url);
   }, [dancerVideo]);
 
+  // Object Blob Cleaners
   useEffect(() => {
     if (!choreoVideo) { setPreviewChoreo(null); return; }
     const url = URL.createObjectURL(choreoVideo);
@@ -257,7 +258,9 @@ export default function UploadPage() {
       formData.append('user_motion_fps', '30');
       formData.append('user_id', user?.id ?? '');
 
-      const response = await fetch('/api/analyze', {
+      // Pull string dynamically from the Environment Variables setup
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || '';
+      const response = await fetch(`${backendUrl}/analyze`, {
         method: 'POST',
         body: formData,
       });
