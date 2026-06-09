@@ -45,11 +45,11 @@ const { data, error } = await supabase
 .select('*')
 .order('id', { ascending: false });
 
-```
+
 if (!error) {
   setFaqs((data ?? []) as FAQ[]);
 }
-```
+
 
 };
 
@@ -57,7 +57,6 @@ useEffect(() => {
 const checkAccess = async () => {
 setError(null);
 
-```
   try {
     const { data: authData } = await supabase.auth.getUser();
 
@@ -90,14 +89,14 @@ setError(null);
 };
 
 checkAccess();
-```
+
 
 }, [router]);
 
 const handlePublish = async (e: React.FormEvent) => {
 e.preventDefault();
 
-```
+
 if (!question.trim() || !answer.trim()) {
   setError('Please fill out both the question and the answer fields.');
   return;
@@ -154,7 +153,7 @@ try {
 } finally {
   setSaving(false);
 }
-```
+
 
 };
 
@@ -163,12 +162,12 @@ setQuestion(faq.question);
 setAnswer(faq.answer);
 setEditingId(faq.id);
 
-```
+
 window.scrollTo({
   top: 0,
   behavior: 'smooth',
 });
-```
+
 
 };
 
@@ -177,7 +176,7 @@ const confirmed = window.confirm(
 'Are you sure you want to delete this FAQ?'
 );
 
-```
+
 if (!confirmed) return;
 
 const { error } = await supabase
@@ -188,7 +187,7 @@ const { error } = await supabase
 if (!error) {
   await loadFaqs();
 }
-```
+
 
 };
 
@@ -200,7 +199,7 @@ Checking permissions... </div>
 
 return ( <div className="space-y-6 w-full max-w-3xl mx-auto p-4 md:p-6 text-slate-900">
 
-```
+
   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-2 border-b border-slate-100">
     <div>
       <h1 className="text-xl font-bold text-slate-900 tracking-tight">
@@ -332,3 +331,7 @@ return ( <div className="space-y-6 w-full max-w-3xl mx-auto p-4 md:p-6 text-slat
   </div>
 
 </div>
+
+
+);
+}
