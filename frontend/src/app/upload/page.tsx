@@ -470,28 +470,43 @@ export default function UploadPage() {
           </div>
         </motion.div>
 
-        {/* ─── 2. RESOURCES GRID ─── */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-6 items-start">
+{/* ─── 2. RESOURCES GRID ─── */}
+<div className="flex flex-col gap-6">
 
-          <div className="md:col-span-3 flex flex-col gap-6">
-            {/* GUIDELINES — rendered as cards if JSON, plain text fallback */}
-            {guidelinesPage && <GuidelinesBlock page={guidelinesPage} />}
+  {/* GUIDELINES — full width, 2-col card grid */}
+  {guidelinesPage && <GuidelinesBlock page={guidelinesPage} />}
 
-            {aboutPage && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="bg-white/70 border border-white shadow-sm rounded-2xl p-6"
-              >
-                <div className="flex items-center gap-2 mb-3">
-                  <FiInfo className="text-violet-500" size={20} />
-                  <h2 className="text-base md:text-lg font-bold text-slate-800">{aboutPage.title}</h2>
-                </div>
-                <p className="text-slate-600 whitespace-pre-line text-xs md:text-sm leading-relaxed">{aboutPage.body}</p>
-              </motion.div>
-            )}
-          </div>
+  {/* FAQs — full width */}
+  {faqs.length > 0 && (
+    <div className="bg-white/70 border border-white shadow-sm rounded-2xl p-6 flex flex-col gap-4">
+      <div className="flex items-center gap-2 mb-1">
+        <FiHelpCircle className="text-violet-500" size={20} />
+        <h2 className="text-base md:text-lg font-bold text-slate-800">Frequently Asked Questions</h2>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+        {faqs.map((f) => (
+          <FaqItem key={f.id} faq={f} />
+        ))}
+      </div>
+    </div>
+  )}
 
+  {/* ABOUT — full width */}
+  {aboutPage && (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="bg-white/70 border border-white shadow-sm rounded-2xl p-6"
+    >
+      <div className="flex items-center gap-2 mb-3">
+        <FiInfo className="text-violet-500" size={20} />
+        <h2 className="text-base md:text-lg font-bold text-slate-800">{aboutPage.title}</h2>
+      </div>
+      <p className="text-slate-600 whitespace-pre-line text-xs md:text-sm leading-relaxed">{aboutPage.body}</p>
+    </motion.div>
+  )}
+
+</div>
           {faqs.length > 0 && (
             <div className="md:col-span-2 bg-white/70 border border-white shadow-sm rounded-2xl p-6 flex flex-col gap-4">
               <div className="flex items-center gap-2 mb-1">
