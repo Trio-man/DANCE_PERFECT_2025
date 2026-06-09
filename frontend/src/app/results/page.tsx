@@ -133,12 +133,11 @@ function ResultsContent() {
                 className="bg-white/80 backdrop-blur-md rounded-2xl shadow-lg border border-white/60 overflow-hidden flex flex-col md:flex-row"
               >
                 {/* GIF Preview Section */}
-                <div className="w-full md:w-1/2 bg-black aspect-video flex items-center justify-center overflow-hidden">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img 
-                    src={gifUrl} 
-                    alt={`Moment Rank ${moment.rank}`}
-                    className="w-full h-full object-cover"
+            <div className="w-full md:w-1/2 bg-black flex items-center justify-center overflow-hidden">
+              <img 
+                src={gifUrl} 
+                alt={`Moment Rank ${moment.rank}`}
+                className="w-full h-auto object-contain max-h-[500px]"
                     loading="eager"
                     onError={(e) => {
                       e.currentTarget.src = 'https://placehold.co/600x400/7c3aed/ffffff?text=AI+Visual+Unavailable';
