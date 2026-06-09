@@ -270,20 +270,6 @@ export default function UploadPage() {
       if (response.ok) {
         localStorage.setItem('analysis_results', JSON.stringify(result));
 
-        const toDataUrl = (file: File): Promise<string> =>
-          new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result as string);
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-          });
-
-        const dancerDataUrl = await toDataUrl(dancerVideo);
-        const choreoDataUrl = await toDataUrl(choreoVideo);
-
-        sessionStorage.setItem('dp_dancer', dancerDataUrl);
-        sessionStorage.setItem('dp_choreo', choreoDataUrl);
-
         const { data: authData } = await supabase.auth.getSession();
         if (authData.session?.access_token) {
           sessionStorage.setItem('dp_token', authData.session.access_token);
