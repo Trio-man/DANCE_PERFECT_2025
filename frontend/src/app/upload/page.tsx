@@ -413,7 +413,7 @@ export default function UploadPage() {
               </h1>
             </div>
             <p className="text-sm md:text-base text-slate-500 font-medium max-w-sm">
-              Your personal dance buddy. 🕺✨
+              Your personal dance buddy.
             </p>
           </div>
 
