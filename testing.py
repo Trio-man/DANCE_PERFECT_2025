@@ -357,43 +357,43 @@ def process_videos_test():
         # ✅ Log run to Supabase
         try:
             supabase_admin.table("analysis_runs").insert({
-            "id": run_id,
-            "user_id": user_id,
-            "status": "done",
-            "score": analysis_results.get("dtw_similarity_score"),
-            "summary_feedback": analysis_results.get("summary_bad"),
-            "processing_time_seconds": processing_time_seconds,
-            "result_json": {
-                "dtw_distance": analysis_results.get("dtw_distance"),
+                "id": run_id,
+                "user_id": user_id,
+                "status": "done",
+                "score": analysis_results.get("dtw_similarity_score"),
+                "summary_feedback": analysis_results.get("summary_bad"),
                 "processing_time_seconds": processing_time_seconds,
-                "processing_time_display": processing_time_display,
-                "detected_deviations": [
-                    {
-                        "body_part": d.get("body_part"),
-                        "user_start_frame": d.get("user_start_frame"),
-                        "gif_path": deviation_moments_ui[i].get("gif_path") if i < len(deviation_moments_ui) else None
-                    }
-                    for i, d in enumerate(raw_deviations[:3])
-                ]
-            }
-        }).execute()
+                "result_json": {
+                    "dtw_distance": analysis_results.get("dtw_distance"),
+                    "processing_time_seconds": processing_time_seconds,
+                    "processing_time_display": processing_time_display,
+                    "detected_deviations": [
+                        {
+                            "body_part": d.get("body_part"),
+                            "user_start_frame": d.get("user_start_frame"),
+                            "gif_path": deviation_moments_ui[i].get("gif_path") if i < len(deviation_moments_ui) else None
+                        }
+                        for i, d in enumerate(raw_deviations[:3])
+                    ]
+                }
+            }).execute()
             logging.info(f"Run {run_id} logged to Supabase successfully.")
         except Exception as db_err:
             logging.warning(f"Failed to log run to Supabase: {db_err}")
-
-       return jsonify({
-        "status": "success",
-        "run_id": run_id,
-        "processing_time_seconds": processing_time_seconds,
-        "processing_time_display": processing_time_display,
-        "dtw_distance": analysis_results.get("dtw_distance", 0.0),
-        "dtw_similarity_score": analysis_results.get("dtw_similarity_score", 100.0),
-        "summaries": {
-            "what_went_well": analysis_results.get("summary_good"),
-            "where_to_improve": analysis_results.get("summary_bad")
-        },
-        "deviation_moments": deviation_moments_ui
-    }), 200
+            
+        return jsonify({
+            "status": "success",
+            "run_id": run_id,
+            "processing_time_seconds": processing_time_seconds,
+            "processing_time_display": processing_time_display,
+            "dtw_distance": analysis_results.get("dtw_distance", 0.0),
+            "dtw_similarity_score": analysis_results.get("dtw_similarity_score", 100.0),
+            "summaries": {
+                "what_went_well": analysis_results.get("summary_good"),
+                "where_to_improve": analysis_results.get("summary_bad")
+            },
+            "deviation_moments": deviation_moments_ui
+        }), 200
 
     except Exception as e:
         logging.error(f"Execution run failed: {str(e)}", exc_info=True)
