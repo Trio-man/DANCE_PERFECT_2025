@@ -1,3 +1,4 @@
+import time
 import os
 import uuid
 import glob
@@ -91,6 +92,15 @@ def _deviation_gif_clip_time_meta(path_segment, user_fps):
         "path_sample_start": int(min(user_frames)),
         "path_sample_end": int(max(user_frames))
     }
+
+def format_processing_time(seconds):
+    seconds = int(round(seconds))
+    minutes = seconds // 60
+    remaining_seconds = seconds % 60
+
+    if minutes > 0:
+        return f"{minutes} min {remaining_seconds} sec"
+    return f"{remaining_seconds} sec"
 
 # =========================================================================
 # PREMIUM 540P ANTI-ALIASED VISUALIZATION ENGINE (NO BARS, PERFECT SCALING)
@@ -280,6 +290,7 @@ def compare_motion_csvs_dtw(ref_video_path, user_video_path, ref_fps, user_fps):
 
 @app.route('/analyze', methods=['POST'])
 def process_videos_test():
+    start_time = time.perf_counter()
     run_id = str(uuid.uuid4())
     
     raw_ref_path = os.path.join(UPLOAD_FOLDER, f"{run_id}_ref_raw.mp4")
@@ -340,7 +351,9 @@ def process_videos_test():
 
         for path in [compressed_ref_path, compressed_user_path]:
             if os.path.exists(path): os.remove(path)
-
+        processing_time_seconds = round(time.perf_counter() - start_time, 2)
+        processing_time_display = format_processing_time(processing_time_seconds)
+        
         # ✅ Log run to Supabase
         try:
             supabase_admin.table("analysis_runs").insert({
