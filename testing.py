@@ -404,7 +404,7 @@ def serve_deviation_gifs(filename):
     return send_from_directory(DEVIATION_GIFS_FOLDER, filename, mimetype='image/gif')
 
 # =========================================================================
-# ADMIN MANAGEMENT ENDPOINTS (PRODUCTION DATABASE - NO MOCK CORES)
+# ADMIN MANAGEMENT ENDPOINTS (PRODUCTION DATABASE)
 # =========================================================================
 
 @app.route('/admin/users', methods=['GET'])
@@ -425,6 +425,59 @@ def get_admin_users():
     except Exception as e:
         logging.error(f"Live database profile fetch failed: {str(e)}")
         return jsonify({"status": "error", "message": f"Database interaction fault: {str(e)}"}), 500
+# =========================================================================
+# ADMIN USER ACCOUNT STATUS MANAGEMENT
+# =========================================================================
+
+@app.route('/admin/users/<user_id>/deactivate', methods=['PATCH'])
+def deactivate_user(user_id):
+    try:
+        auth_header = request.headers.get('Authorization', '')
+        token = auth_header.replace('Bearer ', '')
+
+        user_response = supabase_admin.auth.get_user(token)
+
+        if user_response.user and user_response.user.id == user_id:
+            return jsonify({
+                "status": "error",
+                "message": "You cannot deactivate your own account."
+            }), 403
+
+        supabase_admin.table("profiles").update({
+            "is_active": False
+        }).eq("id", user_id).execute()
+
+        return jsonify({
+            "status": "success",
+            "message": f"User {user_id} deactivated."
+        }), 200
+
+    except Exception as e:
+        logging.error(f"Failed to deactivate user {user_id}: {str(e)}")
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
+
+@app.route('/admin/users/<user_id>/activate', methods=['PATCH'])
+def activate_user(user_id):
+    try:
+        supabase_admin.table("profiles").update({
+            "is_active": True
+        }).eq("id", user_id).execute()
+
+        return jsonify({
+            "status": "success",
+            "message": f"User {user_id} activated."
+        }), 200
+
+    except Exception as e:
+        logging.error(f"Failed to activate user {user_id}: {str(e)}")
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
 
 # =========================================================================
 # RUN KICKSTART ENGINE
