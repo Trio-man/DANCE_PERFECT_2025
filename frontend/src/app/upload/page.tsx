@@ -303,6 +303,8 @@ export default function UploadPage() {
     }
     setLoading(true);
     setStatus('Compressing and syncing on server...');
+
+    localStorage.removeItem('analysis_results');
     try {
       const formData = new FormData();
       formData.append('user_video', dancerVideo);
