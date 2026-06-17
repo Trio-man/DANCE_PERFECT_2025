@@ -100,29 +100,19 @@ function ResultsContent() {
           <p className="text-slate-500 font-medium tracking-[0.2em] uppercase text-xs mt-4">
             Performance Breakdown
           </p>
-        </motion.div>
 
-        {/* Processing Time Panel */}
-        {processingTime && (
-          <motion.div
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-white/70 backdrop-blur-md border border-white/60 shadow-lg rounded-2xl p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
-          >
-            <div>
-              <h3 className="text-purple-700 font-bold flex items-center gap-2 mb-1">
-                <FiClock /> Processing Time
-              </h3>
-              <p className="text-slate-500 text-sm">
-                Total backend analysis duration
-              </p>
+          {processingTime && (
+            <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-purple-100 bg-white/70 px-4 py-2 shadow-sm">
+              <FiClock size={15} className="text-purple-600" />
+              <span className="text-xs font-semibold text-slate-500">
+                Processing Time:
+              </span>
+              <span className="text-sm font-bold text-slate-900">
+                {processingTime}
+              </span>
             </div>
-
-            <p className="text-2xl font-black text-slate-900">
-              {processingTime}
-            </p>
-          </motion.div>
-        )}
+          )}
+        </motion.div>
 
         {/* 2. Summaries */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
