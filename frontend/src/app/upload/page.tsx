@@ -56,9 +56,9 @@ const ICON_MAP: Record<string, React.ReactNode> = {
 
 const COLOR_MAP: Record<string, { bg: string; icon: string }> = {
   purple: { bg: 'bg-violet-100', icon: 'text-violet-600' },
-  amber:  { bg: 'bg-amber-100',  icon: 'text-amber-700'  },
-  teal:   { bg: 'bg-emerald-100', icon: 'text-emerald-700' },
-  coral:  { bg: 'bg-orange-100', icon: 'text-orange-600' },
+  amber: { bg: 'bg-amber-100', icon: 'text-amber-700' },
+  teal: { bg: 'bg-emerald-100', icon: 'text-emerald-700' },
+  coral: { bg: 'bg-orange-100', icon: 'text-orange-600' },
 };
 
 function GuidelinesBlock({ page }: { page: ContentPageRow }) {
@@ -244,22 +244,35 @@ export default function UploadPage() {
         setUserRole((profile?.role || 'user').toLowerCase().trim());
       }
     };
+
     checkUser();
+
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!session?.user) router.replace('/login');
       else setUser(session.user);
     });
+
     return () => listener.subscription.unsubscribe();
   }, [router]);
 
   useEffect(() => {
     const loadCms = async () => {
       setCmsError(null);
-      const { data: settingsRow, error: sErr } = await supabase.from('app_settings').select('id,system_name,logo_url,primary_color').single();
+
+      const { data: settingsRow, error: sErr } = await supabase
+        .from('app_settings')
+        .select('id,system_name,logo_url,primary_color')
+        .single();
+
       if (sErr) setCmsError(sErr.message);
       else setAppSettings(settingsRow as AppSettingsRow);
 
-      const { data: pages, error: pErr } = await supabase.from('content_pages').select('id,slug,title,body,is_active').in('slug', ['about', 'guidelines']).limit(2);
+      const { data: pages, error: pErr } = await supabase
+        .from('content_pages')
+        .select('id,slug,title,body,is_active')
+        .in('slug', ['about', 'guidelines'])
+        .limit(2);
+
       if (pErr) setCmsError((prev) => prev || pErr.message);
       else {
         const list = (pages ?? []) as ContentPageRow[];
@@ -267,22 +280,37 @@ export default function UploadPage() {
         setGuidelinesPage(list.find((x) => x.slug === 'guidelines' && x.is_active) ?? null);
       }
 
-      const { data: faqRows, error: fErr } = await supabase.from('faqs').select('id,question,answer,is_active').eq('is_active', true).order('id', { ascending: false }).limit(20);
+      const { data: faqRows, error: fErr } = await supabase
+        .from('faqs')
+        .select('id,question,answer,is_active')
+        .eq('is_active', true)
+        .order('id', { ascending: false })
+        .limit(20);
+
       if (fErr) setCmsError((prev) => prev || fErr.message);
       else setFaqs((faqRows ?? []) as FaqRow[]);
     };
+
     loadCms();
   }, []);
 
   useEffect(() => {
-    if (!dancerVideo) { setPreviewDancer(null); return; }
+    if (!dancerVideo) {
+      setPreviewDancer(null);
+      return;
+    }
+
     const url = URL.createObjectURL(dancerVideo);
     setPreviewDancer(url);
     return () => URL.revokeObjectURL(url);
   }, [dancerVideo]);
 
   useEffect(() => {
-    if (!choreoVideo) { setPreviewChoreo(null); return; }
+    if (!choreoVideo) {
+      setPreviewChoreo(null);
+      return;
+    }
+
     const url = URL.createObjectURL(choreoVideo);
     setPreviewChoreo(url);
     return () => URL.revokeObjectURL(url);
@@ -290,9 +318,11 @@ export default function UploadPage() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
+
     Object.keys(localStorage).forEach((key) => {
       if (key.startsWith('sb-')) localStorage.removeItem(key);
     });
+
     router.replace('/login');
   };
 
@@ -301,10 +331,12 @@ export default function UploadPage() {
       setStatus('Please upload both videos first.');
       return;
     }
+
     setLoading(true);
     setStatus('Compressing and syncing on server...');
 
     localStorage.removeItem('analysis_results');
+
     try {
       const formData = new FormData();
       formData.append('user_video', dancerVideo);
@@ -324,10 +356,12 @@ export default function UploadPage() {
 
       if (response.ok) {
         localStorage.setItem('analysis_results', JSON.stringify(result));
+
         const { data: authData } = await supabase.auth.getSession();
         if (authData.session?.access_token) {
           sessionStorage.setItem('dp_token', authData.session.access_token);
         }
+
         router.push('/results');
       } else {
         setStatus(`❌ Error: ${result.message || result.details || 'Backend processing error.'}`);
@@ -346,8 +380,11 @@ export default function UploadPage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-start px-4 md:px-8 bg-gradient-to-br from-[#d6c1ff] via-[#cde7ff] to-white antialiased selection:bg-violet-200">
       <div className="w-full max-w-5xl flex flex-col gap-8 py-8 md:py-12">
-
-        {cmsError && <p className="text-center text-xs bg-red-50 text-red-600 px-4 py-2 rounded-lg border border-red-100">{cmsError}</p>}
+        {cmsError && (
+          <p className="text-center text-xs bg-red-50 text-red-600 px-4 py-2 rounded-lg border border-red-100">
+            {cmsError}
+          </p>
+        )}
 
         {/* ─── 1. CORE ANALYSIS HUB CARD ─── */}
         <motion.div
@@ -367,17 +404,28 @@ export default function UploadPage() {
             )}
           </AnimatePresence>
 
-          <div className="flex items-center justify-between mb-8 w-full">
+          <div className="flex items-start justify-between gap-3 mb-8 w-full">
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => router.back()}
-              className="text-slate-500 hover:text-slate-800 transition-colors p-2 rounded-xl bg-slate-100/60 hover:bg-slate-100"
+              className="text-slate-500 hover:text-slate-800 transition-colors p-2 rounded-xl bg-slate-100/60 hover:bg-slate-100 flex-shrink-0"
               aria-label="Go back"
             >
               <FiArrowLeft size={20} />
             </motion.button>
-            <div className="flex items-center gap-3">
+
+            <div className="flex items-center justify-end gap-2 md:gap-3 flex-wrap">
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => router.push('/dashboard')}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-xs md:text-sm font-semibold shadow-sm transition-all"
+              >
+                <FiEye size={18} className="text-violet-500" />
+                My Dashboard
+              </motion.button>
+
               {isAdmin && (
                 <motion.button
                   whileHover={{ scale: 1.02 }}
@@ -389,6 +437,7 @@ export default function UploadPage() {
                   Admin Dashboard
                 </motion.button>
               )}
+
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
@@ -410,10 +459,12 @@ export default function UploadPage() {
                   className="h-12 w-12 rounded-xl object-contain shadow-sm border border-slate-100"
                 />
               )}
+
               <h1 className="text-3xl md:text-4xl font-black tracking-tight" style={{ color: primaryColor }}>
                 {systemName}
               </h1>
             </div>
+
             <p className="text-sm md:text-base text-slate-500 font-medium max-w-sm">
               Your personal dance buddy.
             </p>
@@ -452,17 +503,15 @@ export default function UploadPage() {
 
         {/* ─── 2. RESOURCES ─── */}
         <div className="flex flex-col gap-6">
-
-          {/* GUIDELINES — full width, 2-col card grid */}
           {guidelinesPage && <GuidelinesBlock page={guidelinesPage} />}
 
-          {/* FAQs — full width, 2-col accordion */}
           {faqs.length > 0 && (
             <div className="bg-white/70 border border-white shadow-sm rounded-2xl p-6 flex flex-col gap-4">
               <div className="flex items-center gap-2 mb-1">
                 <FiHelpCircle className="text-violet-500" size={20} />
                 <h2 className="text-base md:text-lg font-bold text-slate-800">Frequently Asked Questions</h2>
               </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                 {faqs.map((f) => (
                   <FaqItem key={f.id} faq={f} />
@@ -471,7 +520,6 @@ export default function UploadPage() {
             </div>
           )}
 
-          {/* ABOUT — full width */}
           {aboutPage && (
             <motion.div
               initial={{ opacity: 0 }}
@@ -482,10 +530,10 @@ export default function UploadPage() {
                 <FiInfo className="text-violet-500" size={20} />
                 <h2 className="text-base md:text-lg font-bold text-slate-800">{aboutPage.title}</h2>
               </div>
+
               <p className="text-slate-600 whitespace-pre-line text-xs md:text-sm leading-relaxed">{aboutPage.body}</p>
             </motion.div>
           )}
-
         </div>
       </div>
     </div>
