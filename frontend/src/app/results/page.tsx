@@ -101,18 +101,17 @@ function ResultsContent() {
             Performance Breakdown
           </p>
 
-          {processingTime && (
-            <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-purple-100 bg-white/70 px-4 py-2 shadow-sm">
-              <FiClock size={15} className="text-purple-600" />
-              <span className="text-xs font-semibold text-slate-500">
-                Processing Time:
-              </span>
-              <span className="text-sm font-bold text-slate-900">
-                {processingTime}
-              </span>
-            </div>
-          )}
-        </motion.div>
+         {processingTime && (
+          <div className="mt-4 flex items-center justify-center gap-2 text-slate-500">
+           <FiClock size={14} className="text-purple-500/70" />
+           <span className="text-xs font-medium tracking-wide">
+             Processing Time:
+          </span>
+          <span className="text-xs font-bold text-slate-700">
+            {processingTime}
+          </span>
+        </div>
+       )}
 
         {/* 2. Summaries */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
