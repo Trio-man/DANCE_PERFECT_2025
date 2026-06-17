@@ -11,7 +11,6 @@ import {
   FiClock,
 } from 'react-icons/fi';
 
-// Reads your Vercel environment configuration dynamically
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 interface DeviationMoment {
@@ -74,7 +73,6 @@ function ResultsContent() {
   return (
     <div className="min-h-screen py-10 px-4 bg-gradient-to-br from-[#d6c1ff] via-[#cde7ff] to-white">
       <div className="max-w-5xl mx-auto space-y-8">
-
         {/* Header Navigation */}
         <button
           onClick={() => router.push('/upload')}
@@ -101,17 +99,18 @@ function ResultsContent() {
             Performance Breakdown
           </p>
 
-         {processingTime && (
-          <div className="mt-4 flex items-center justify-center gap-2 text-slate-500">
-           <FiClock size={14} className="text-purple-500/70" />
-           <span className="text-xs font-medium tracking-wide">
-             Processing Time:
-          </span>
-          <span className="text-xs font-bold text-slate-700">
-            {processingTime}
-          </span>
-        </div>
-       )}
+          {processingTime && (
+            <div className="mt-4 flex items-center justify-center gap-2 text-slate-500">
+              <FiClock size={14} className="text-purple-500/70" />
+              <span className="text-xs font-medium tracking-wide">
+                Processing Time:
+              </span>
+              <span className="text-xs font-bold text-slate-700">
+                {processingTime}
+              </span>
+            </div>
+          )}
+        </motion.div>
 
         {/* 2. Summaries */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
