@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient, User } from '@supabase/supabase-js';
 import { motion } from 'framer-motion';
@@ -19,6 +19,38 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
+type DeviationMoment = {
+  rank: number;
+  issue: string;
+  recommendation: string;
+  user_time_clip_label: string;
+  gif_path: string;
+  path_sample_start?: number;
+  path_sample_end?: number;
+};
+
+type DetectedDeviation = {
+  body_part?: string | null;
+  user_start_frame?: number | string | null;
+  user_time_clip_label?: string | null;
+  gif_path?: string | null;
+};
+
+type ResultJson = {
+  dtw_distance?: number | string | null;
+  dtw_similarity_score?: number | string | null;
+  processing_time_seconds?: number | string | null;
+  processing_time_display?: string | null;
+  deviation_moments?: DeviationMoment[];
+  detected_deviations?: DetectedDeviation[];
+  summaries?: {
+    what_went_well?: string | null;
+    where_to_improve?: string | null;
+  };
+  summary_good?: string | null;
+  summary_bad?: string | null;
+};
+
 type AnalysisRow = {
   id: string;
   user_id: string;
@@ -27,7 +59,7 @@ type AnalysisRow = {
   score: number | null;
   summary_feedback: string | null;
   processing_time_seconds: number | null;
-  result_json: any;
+  result_json: ResultJson | null;
 };
 
 function formatDate(dateString: string) {
@@ -40,10 +72,15 @@ function formatDate(dateString: string) {
   });
 }
 
-function formatProcessingTime(seconds: number | null | undefined) {
+function toNumber(value: unknown, fallback = 0) {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue : fallback;
+}
+
+function formatProcessingTime(seconds: number | string | null | undefined) {
   if (seconds === null || seconds === undefined) return 'N/A';
 
-  const rounded = Math.round(seconds);
+  const rounded = Math.round(toNumber(seconds));
   const minutes = Math.floor(rounded / 60);
   const remainingSeconds = rounded % 60;
 
@@ -63,7 +100,7 @@ export default function UserDashboardPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const loadRuns = async () => {
+  const loadRuns = useCallback(async () => {
     setLoading(true);
     setError(null);
 
@@ -76,7 +113,7 @@ export default function UserDashboardPage() {
 
     setUser(authData.user);
 
-    const { data, error } = await supabase
+    const { data, error: fetchError } = await supabase
       .from('analysis_runs')
       .select(
         'id,user_id,created_at,status,score,summary_feedback,processing_time_seconds,result_json'
@@ -84,46 +121,52 @@ export default function UserDashboardPage() {
       .eq('user_id', authData.user.id)
       .order('created_at', { ascending: false });
 
-    if (error) {
-      setError(error.message);
+    if (fetchError) {
+      setError(fetchError.message);
       setRuns([]);
     } else {
       setRuns((data ?? []) as AnalysisRow[]);
     }
 
     setLoading(false);
-  };
+  }, [router]);
 
   useEffect(() => {
-    loadRuns();
-  }, []);
+    void loadRuns();
+  }, [loadRuns]);
 
   const handleViewResult = (run: AnalysisRow) => {
     const json = run.result_json ?? {};
 
-    const deviationMoments = Array.isArray(json.deviation_moments)
+    const deviationMoments: DeviationMoment[] = Array.isArray(json.deviation_moments)
       ? json.deviation_moments
       : Array.isArray(json.detected_deviations)
-        ? json.detected_deviations.map((item: any, index: number) => ({
-            rank: index + 1,
-            issue: `Incorrect ${item.body_part ?? 'Body Joint'} position sequence.`,
-            recommendation: `Review and adjust ${item.body_part ?? 'this movement'} based on the reference guide.`,
-            user_time_clip_label:
-              item.user_time_clip_label ?? `Frame ${item.user_start_frame ?? 'N/A'}`,
-            gif_path: item.gif_path ?? '',
-          }))
+        ? json.detected_deviations.map((item, index) => {
+            const bodyPart = item.body_part ?? 'Body Joint';
+            const startFrame = item.user_start_frame ?? 'N/A';
+
+            return {
+              rank: index + 1,
+              issue: `Incorrect ${bodyPart} position sequence.`,
+              recommendation: `Review and adjust ${bodyPart} based on the reference guide.`,
+              user_time_clip_label:
+                item.user_time_clip_label ?? `Frame ${startFrame}`,
+              gif_path: item.gif_path ?? '',
+            };
+          })
         : [];
+
+    const processingSeconds =
+      run.processing_time_seconds ?? json.processing_time_seconds ?? null;
 
     const resultForResultsPage = {
       status: run.status ?? 'done',
       run_id: run.id,
-      processing_time_seconds:
-        run.processing_time_seconds ?? json.processing_time_seconds ?? null,
+      processing_time_seconds: processingSeconds,
       processing_time_display:
-        json.processing_time_display ??
-        formatProcessingTime(run.processing_time_seconds ?? json.processing_time_seconds),
-      dtw_distance: json.dtw_distance ?? 0,
-      dtw_similarity_score: Number(run.score ?? json.dtw_similarity_score ?? 0),
+        json.processing_time_display ?? formatProcessingTime(processingSeconds),
+      dtw_distance: toNumber(json.dtw_distance, 0),
+      dtw_similarity_score: toNumber(run.score ?? json.dtw_similarity_score, 0),
       summaries: {
         what_went_well:
           json.summaries?.what_went_well ??
@@ -154,14 +197,14 @@ export default function UserDashboardPage() {
     setDeletingId(runId);
     setError(null);
 
-    const { error } = await supabase
+    const { error: deleteError } = await supabase
       .from('analysis_runs')
       .delete()
       .eq('id', runId)
       .eq('user_id', user.id);
 
-    if (error) {
-      setError(error.message);
+    if (deleteError) {
+      setError(deleteError.message);
     } else {
       setRuns((prev) => prev.filter((run) => run.id !== runId));
     }
@@ -225,7 +268,9 @@ export default function UserDashboardPage() {
         {loading ? (
           <div className="bg-white/70 border border-white/60 rounded-3xl p-10 text-center shadow-lg">
             <div className="animate-spin h-10 w-10 rounded-full border-4 border-slate-200 border-t-slate-800 mx-auto mb-4" />
-            <p className="text-slate-600 font-semibold">Loading analysis history...</p>
+            <p className="text-slate-600 font-semibold">
+              Loading analysis history...
+            </p>
           </div>
         ) : runs.length === 0 ? (
           <div className="bg-white/70 border border-white/60 rounded-3xl p-10 text-center shadow-lg">
@@ -268,7 +313,7 @@ export default function UserDashboardPage() {
 
                     <div>
                       <h2 className="text-2xl font-black text-slate-900">
-                        Score: {Number(run.score ?? 0).toFixed(1)}
+                        Score: {toNumber(run.score, 0).toFixed(1)}
                       </h2>
                       <p className="text-sm text-slate-500 mt-1">
                         {run.summary_feedback ?? 'Analysis completed.'}
