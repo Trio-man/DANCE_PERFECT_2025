@@ -3,7 +3,7 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { FiArrowLeft, FiActivity, FiAward, FiCheckCircle } from 'react-icons/fi';
+import { FiArrowLeft, FiActivity, FiAward, FiCheckCircle, FiClock } from 'react-icons/fi';
 
 // Reads your Vercel environment configuration dynamically
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
@@ -21,6 +21,8 @@ interface DeviationMoment {
 interface AnalysisData {
   status: string;
   run_id: string;
+  processing_time_seconds?: number;
+  processing_time_display?: string;
   ref_effective_fps: number;
   user_effective_fps: number;
   ref_sequence_length: number;
@@ -60,6 +62,7 @@ function ResultsContent() {
   const score = data.dtw_similarity_score ?? 0;
   const summaries = data.summaries;
   const moments = data.deviation_moments ?? [];
+  const processingTime = data.processing_time_display || null;
 
   return (
     <div className="min-h-screen py-10 px-4 bg-gradient-to-br from-[#d6c1ff] via-[#cde7ff] to-white">
@@ -89,7 +92,30 @@ function ResultsContent() {
             Performance Breakdown
           </p>
         </motion.div>
+  {/* Processing Time Panel */}
+  {processingTime && (
+    <motion.div
+      initial={{ opacity: 0, y: 15 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-white/70 backdrop-blur-md border border-white/60 shadow-lg rounded-2xl p-6 flex items-center justify-between"
+    >
+      <div>
+        <h3 className="text-purple-700 font-bold flex items-center gap-2 mb-1">
+          <FiClock /> Processing Time
+        </h3>
+        <p className="text-slate-500 text-sm">
+          Total backend analysis duration
+        </p>
+      </div>
+  
+      <p className="text-2xl font-black text-slate-900">
+        {processingTime}
+      </p>
+    </motion.div>
+  )}
 
+{/* 2. Summaries */}
+<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* 2. Summaries */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <motion.div 
