@@ -19,17 +19,7 @@ from report_pdf import generate_dance_analysis_report_pdf
 
 app = Flask(__name__)
 
-CORS(app, resources={
-    r"/*": {
-        "origins": [
-            "https://danceperfect.vercel.app",
-            "https://*.vercel.app",
-            "http://localhost:3000"
-        ],
-        "methods": ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization"]
-    }
-})
+CORS(app)
 # =========================================================================
 # CONFIGURATIONS & STORAGE CONSTANTS
 # =========================================================================
