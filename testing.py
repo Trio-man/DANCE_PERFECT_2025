@@ -11,15 +11,12 @@ import mediapipe as mp
 import imageio
 import re
 from flask import Flask, request, jsonify, send_from_directory, send_file
-from flask_cors import CORS
 from fastdtw import fastdtw
 from scipy.spatial.distance import euclidean
 from supabase import create_client, Client
 from report_pdf import generate_dance_analysis_report_pdf
 
 app = Flask(__name__)
-
-CORS(app)
 # =========================================================================
 # CONFIGURATIONS & STORAGE CONSTANTS
 # =========================================================================
