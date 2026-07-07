@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
-import { FiSearch, FiEye, FiTrash2, FiAlertCircle, FiActivity } from 'react-icons/fi';
+import { FiSearch, FiEye, FiTrash2, FiAlertCircle, FiActivity, FiDownload } from 'react-icons/fi';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -29,6 +29,7 @@ export default function AdminRunsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [q, setQ] = useState('');
 
@@ -108,6 +109,39 @@ export default function AdminRunsPage() {
       setError(e instanceof Error ? e.message : 'Delete failed');
     } finally {
       setDeletingId(null);
+    }
+  };
+  
+  const handleDownloadReport = async (runId: string) => {
+    try {
+      setDownloadingId(runId);
+      setError(null);
+  
+      const res = await fetch(`${BACKEND_URL}/runs/${runId}/report`, {
+        method: 'GET',
+      });
+  
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        setError(payload.message || `Download failed (${res.status})`);
+        return;
+      }
+  
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+  
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `danceperfect_report_${runId}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+  
+      window.URL.revokeObjectURL(url);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Download failed');
+    } finally {
+      setDownloadingId(null);
     }
   };
 
@@ -213,6 +247,14 @@ export default function AdminRunsPage() {
                           title="View Details"
                         >
                           <FiEye size={13} />
+                        </button>
+                        <button
+                          onClick={() => handleDownloadReport(r.id)}
+                          disabled={downloadingId === r.id}
+                          className="p-1.5 rounded-lg border border-purple-100 bg-purple-50 text-purple-600 hover:text-purple-800 hover:bg-purple-100 disabled:opacity-40 transition-all"
+                          title="Download PDF Report"
+                        >
+                          <FiDownload size={13} />
                         </button>
                         <button
                           onClick={() => setConfirmDelete(r.id)}
