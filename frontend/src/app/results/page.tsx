@@ -158,10 +158,10 @@ function ResultsContent() {
           <button
             onClick={handleExportPdf}
             disabled={isExporting}
-            className="mt-6 inline-flex items-center justify-center gap-2 rounded-full bg-purple-600 px-6 py-3 text-sm font-bold text-white shadow-lg transition-all hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-5 inline-flex items-center justify-center gap-1.5 rounded-full bg-purple-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <FiDownload size={16} />
-            {isExporting ? 'Generating PDF...' : 'Export PDF Report'}
+            <FiDownload size={14} />
+            {isExporting ? 'Generating PDF...' : 'Download PDF Report'}
           </button>
         </motion.div>
 
