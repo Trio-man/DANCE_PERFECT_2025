@@ -10,10 +10,11 @@ import pandas as pd
 import mediapipe as mp
 import imageio
 import re
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, send_file
 from fastdtw import fastdtw
 from scipy.spatial.distance import euclidean
-from supabase import create_client, Client  # ✅ Direct production database integration
+from supabase import create_client, Client
+from report_pdf import generate_dance_analysis_report_pdf
 
 app = Flask(__name__)
 
@@ -24,11 +25,13 @@ UPLOAD_FOLDER = "./uploads"
 OUTPUT_FOLDER = "./output"
 LOG_FOLDER = "./logs"
 DEVIATION_GIFS_FOLDER = "/var/www/danceperfect/deviation_gifs"
+REPORTS_FOLDER = "/var/www/danceperfect/reports"
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 os.makedirs(LOG_FOLDER, exist_ok=True)
 os.makedirs(DEVIATION_GIFS_FOLDER, exist_ok=True)
+os.makedirs(REPORTS_FOLDER, exist_ok=True)
 
 logging.basicConfig(
     level=logging.INFO, 
@@ -341,6 +344,7 @@ def process_videos_test():
             
             deviation_moments_ui.append({
                 "rank": idx + 1,
+                "body_part": body_part,
                 "issue": f"Incorrect {body_part} position sequence.",
                 "recommendation": f"Adjust your {body_part} tracking to match the reference guide.",
                 "user_time_clip_label": dynamic_label,
