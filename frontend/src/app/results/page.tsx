@@ -9,6 +9,7 @@ import {
   FiAward,
   FiCheckCircle,
   FiClock,
+  FiDownload,
 } from 'react-icons/fi';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
@@ -43,6 +44,7 @@ interface AnalysisData {
 
 function ResultsContent() {
   const [data, setData] = useState<AnalysisData | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -69,6 +71,49 @@ function ResultsContent() {
   const summaries = data.summaries;
   const moments = data.deviation_moments ?? [];
   const processingTime = data.processing_time_display || null;
+  const handleExportPdf = async () => {
+  if (!data.run_id) {
+    alert('No analysis run found.');
+    return;
+  }
+
+  if (!API_BASE_URL) {
+    alert('Backend API URL is not configured.');
+    return;
+  }
+
+  try {
+    setIsExporting(true);
+
+    const response = await fetch(
+      `${API_BASE_URL}/runs/${data.run_id}/report`,
+      {
+        method: 'GET',
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error('Failed to generate PDF report.');
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `danceperfect_report_${data.run_id}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error('PDF export failed:', error);
+    alert('Failed to export PDF report.');
+  } finally {
+    setIsExporting(false);
+  }
+};
 
   return (
     <div className="min-h-screen py-10 px-4 bg-gradient-to-br from-[#d6c1ff] via-[#cde7ff] to-white">
@@ -110,6 +155,14 @@ function ResultsContent() {
               </span>
             </div>
           )}
+          <button
+            onClick={handleExportPdf}
+            disabled={isExporting}
+            className="mt-6 inline-flex items-center justify-center gap-2 rounded-full bg-purple-600 px-6 py-3 text-sm font-bold text-white shadow-lg transition-all hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <FiDownload size={16} />
+            {isExporting ? 'Generating PDF...' : 'Export PDF Report'}
+          </button>
         </motion.div>
 
         {/* 2. Summaries */}
