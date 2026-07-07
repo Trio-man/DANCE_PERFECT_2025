@@ -12,12 +12,15 @@ import {
   FiActivity,
   FiCalendar,
   FiRefreshCw,
+  FiDownload,
 } from 'react-icons/fi';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
+
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL 
 
 type DeviationMoment = {
   rank: number;
@@ -98,6 +101,7 @@ export default function UserDashboardPage() {
   const [runs, setRuns] = useState<AnalysisRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const loadRuns = useCallback(async () => {
@@ -211,7 +215,36 @@ export default function UserDashboardPage() {
 
     setDeletingId(null);
   };
-
+  const handleDownloadReport = async (runId: string) => {
+    try {
+      setDownloadingId(runId);
+      setError(null);
+  
+      const response = await fetch(`${BACKEND_URL}/runs/${runId}/report`, {
+        method: 'GET',
+      });
+  
+      if (!response.ok) {
+        throw new Error(`Failed to download PDF report (${response.status})`);
+      }
+  
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+  
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `danceperfect_report_${runId}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+  
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Failed to download PDF report.');
+    } finally {
+      setDownloadingId(null);
+    }
+  };
   return (
     <div className="min-h-screen px-4 py-10 bg-gradient-to-br from-[#d6c1ff] via-[#cde7ff] to-white">
       <div className="max-w-6xl mx-auto space-y-8">
@@ -337,6 +370,15 @@ export default function UserDashboardPage() {
                       <FiEye />
                       View Results
                     </button>
+                    
+                      <button
+                        onClick={() => handleDownloadReport(run.id)}
+                        disabled={downloadingId === run.id}
+                        className="flex items-center justify-center gap-2 rounded-xl bg-purple-600 text-white px-5 py-3 text-sm font-bold hover:bg-purple-700 transition disabled:opacity-60"
+                      >
+                        <FiDownload />
+                        {downloadingId === run.id ? 'Downloading...' : 'Download Report'}
+                      </button>
 
                     <button
                       onClick={() => handleDelete(run.id)}
