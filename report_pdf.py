@@ -231,8 +231,8 @@ def generate_dance_analysis_report_pdf(
     try:
         for moment in moments[:3]:
             rank = moment.get("rank", "?")
-            body_part = moment.get("body_part") or moment.get("issue") or "Deviation"
-            clip_label = moment.get("user_time_clip_label") or "N/A"
+            body_part = _safe_text(moment.get("body_part") or moment.get("issue"), "Deviation")
+            clip_label = _safe_text(moment.get("user_time_clip_label"), "N/A")
             issue = _safe_text(moment.get("issue"))
             recommendation = _safe_text(moment.get("recommendation"))
 
