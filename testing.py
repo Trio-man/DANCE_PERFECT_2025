@@ -368,9 +368,18 @@ def process_videos_test():
                 "summary_feedback": analysis_results.get("summary_bad"),
                 "processing_time_seconds": processing_time_seconds,
                 "result_json": {
+                    "run_id": run_id,
                     "dtw_distance": analysis_results.get("dtw_distance"),
+                    "dtw_similarity_score": analysis_results.get("dtw_similarity_score"),
+                    "ref_sequence_length": analysis_results.get("ref_sequence_length"),
+                    "user_sequence_length": analysis_results.get("user_sequence_length"),
                     "processing_time_seconds": processing_time_seconds,
                     "processing_time_display": processing_time_display,
+                    "summaries": {
+                        "what_went_well": analysis_results.get("summary_good"),
+                        "where_to_improve": analysis_results.get("summary_bad")
+                    },
+                    "deviation_moments": deviation_moments_ui,
                     "detected_deviations": [
                         {
                             "body_part": d.get("body_part"),
@@ -406,6 +415,54 @@ def process_videos_test():
 @app.route('/deviation_gifs/<path:filename>')
 def serve_deviation_gifs(filename):
     return send_from_directory(DEVIATION_GIFS_FOLDER, filename, mimetype='image/gif')
+
+@app.route('/runs/<run_id>/report', methods=['GET'])
+def download_run_report(run_id):
+    try:
+        # Get run from Supabase
+        response = supabase_admin.table("analysis_runs").select("*").eq("id", run_id).single().execute()
+        run = response.data
+
+        if not run:
+            return jsonify({
+                "status": "error",
+                "message": "Analysis run not found."
+            }), 404
+
+        # Get saved result_json
+        result_json = run.get("result_json") or {}
+
+        # Add fallback top-level fields
+        result_json["run_id"] = run.get("id")
+        result_json["dtw_similarity_score"] = result_json.get("dtw_similarity_score") or run.get("score")
+        result_json["processing_time_seconds"] = result_json.get("processing_time_seconds") or run.get("processing_time_seconds")
+
+        # Generate report path
+        report_filename = f"{run_id}_dance_report.pdf"
+        report_path = os.path.join(REPORTS_FOLDER, report_filename)
+
+        # Generate PDF
+        generate_dance_analysis_report_pdf(
+            result_json,
+            report_path,
+            run_id=run_id,
+            gifs_folder=DEVIATION_GIFS_FOLDER
+        )
+
+        # Send PDF to frontend/user
+        return send_file(
+            report_path,
+            mimetype="application/pdf",
+            as_attachment=True,
+            download_name=report_filename
+        )
+
+    except Exception as e:
+        logging.error(f"Failed to generate PDF report for run {run_id}: {str(e)}", exc_info=True)
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
 
 # =========================================================================
 # ADMIN MANAGEMENT ENDPOINTS (PRODUCTION DATABASE)
